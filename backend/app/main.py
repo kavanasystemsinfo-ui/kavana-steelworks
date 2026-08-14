@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.routers import auth as auth_router
+from app.routers import stock as stock_router
 from app.services.events import broker
 
 settings = get_settings()
@@ -25,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router.router)
+app.include_router(stock_router.router)
 
 
 @app.get("/health")

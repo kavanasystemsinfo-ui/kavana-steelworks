@@ -8,12 +8,34 @@ Flujo estándar de industria adaptado (decisión Jorge 2026-08-14):
 """
 
 import json
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Material, MaterialTransaction, StockItem
+
+
+def _system_user(db: Session, tenant_id) -> uuid.UUID:
+    """Usuario 'system' para movimientos automáticos (patrón del v2)."""
+    from app.models import User
+
+    user = db.scalar(
+        select(User).where(User.tenant_id == tenant_id, User.email == "system@kavana.local")
+    )
+    if user is None:
+        user = User(
+            tenant_id=tenant_id,
+            email="system@kavana.local",
+            name="System",
+            password_hash="!disabled",
+            role="admin",
+        )
+        db.add(user)
+        db.flush()
+    return user.id
 
 
 def receive_coil(
@@ -36,7 +58,11 @@ def receive_coil(
     """Da de alta una bobina recibida y registra su entrada en Kardex.
 
     Devuelve el StockItem creado. La bobina entra activa (entrada directa).
+    Si user_id es None, el movimiento se atribuye al usuario 'system'.
     """
+    if user_id is None:
+        user_id = _system_user(db, tenant_id)
+
     material = db.get(Material, material_id)
     if material is None:
         raise ValueError(f"Material {material_id} no existe")

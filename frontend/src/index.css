@@ -1,0 +1,52 @@
+/* KAVANA Design System: Brutalismo Industrial
+   Tokens extraídos de KAVANA_DESIGN.md (v2 legacy) + directriz UX de Jorge
+   (2026-08-14): esencia brutalista pero jerarquía clara, sin abrumar.
+
+   Paleta:
+   - Deep Black  #050505  (fondo global, reduce fatiga visual)
+   - Surface     #0A0A0B  (tarjetas/módulos)
+   - Kavana Orange #E56B2E (acción/accento, solo puntos clave)
+   - Texto primario blanco 0.9, secundario 0.5
+   - Borders rgba(255,255,255,0.1)
+
+   Tipografía: Montserrat (headers uppercase tracking-widest),
+   monoespaciada para toda métrica física (kg, mm, OEE).
+*/
+@import 'tailwindcss';
+
+@theme {
+  --color-kavana-dark: #050505;
+  --color-kavana-surface: #0a0a0b;
+  --color-kavana-panel: #101013;
+  --color-kavana-orange: #e56b2e;
+  --color-kavana-steel: #4b5563;
+  --color-kavana-text: rgba(255, 255, 255, 0.9);
+  --color-kavana-text-dim: rgba(255, 255, 255, 0.5);
+  --color-kavana-border: rgba(255, 255, 255, 0.1);
+  --color-kavana-ok: #10b981;
+  --color-kavana-warn: #f59e0b;
+  --color-kavana-danger: #ef4444;
+
+  --font-display: 'Montserrat', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Regla de oro: todo número físico en monoespacio */
+.mono-data {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Etiqueta industrial: uppercase + tracking amplio */
+.label-industrial {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+/* Guía de acción: el siguiente paso siempre identificable */
+.step-guide {
+  border-left: 3px solid var(--color-kavana-orange);
+  padding-left: 0.75rem;
+}

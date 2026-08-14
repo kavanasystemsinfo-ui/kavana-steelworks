@@ -83,3 +83,26 @@ secciones 3.3 y D).
   endpoint GET /api/v1/events/{tenant_id} para polling; WebSocket completo
   en la Fase 3.
 - **Verificación:** 3 tests nuevos (23 total verdes); CI success.
+
+## 2026-08-14 — Fase 3 (hito 1): Frontend React+TS con design system KAVANA
+
+### Added: Frontend con directriz UX de Jorge
+- **Problema:** no existía interfaz; había que aplicar la directriz "esencia
+  brutalista pero sin abrumar al operario".
+- **Solución:** Vite + React 19 + TS + Tailwind v4 con tokens del design
+  system v2 (deep black #050505, orange #E56B2E, Montserrat uppercase, mono
+  para datos físicos, botones táctiles ≥48px, step-guide de acción).
+  Páginas: Login (JWT), Operario (escaneo con guía de acción y datos
+  colapsados), Materias Primas (recepción spec 06), Supervisor (KPIs).
+  PWA offline-first (network-first navigation).
+- **Verificación:** 5 tests vitest sobre la directriz UX; build 263KB/82KB
+  gzip; CI con job frontend verde.
+
+### Added: Routers de la API (backend)
+- **Problema:** el frontend llamaba a endpoints que no existían.
+- **Solución:** POST /api/v1/auth/login y /logout (JWT 8h), POST/GET
+  /api/v1/stock-items (receive_coil + listado). Usuario 'system' para
+  movimientos automáticos. Seed de demo (operario@demo.local/kavana123).
+- **Verificación:** E2E contra PostgreSQL real: login 200, recepción 200,
+  listado 200.
+

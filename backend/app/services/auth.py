@@ -33,6 +33,10 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+def find_user_by_email(db: Session, email: str) -> User | None:
+    return db.scalar(select(User).where(User.email == email))
+
+
 def login(db: Session, tenant_id: uuid.UUID, email: str, password: str) -> str:
     """Autentica y devuelve un JWT de 8 horas. Crea el turno activo."""
     user = db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == email))
