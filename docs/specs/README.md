@@ -2,7 +2,8 @@
 
 Resultado de la Fase 1: especificaciones extraídas del código legacy v2.
 Cada spec documenta el contrato de comportamiento que la reconstrucción
-(Fase 2, backend) debe implementar y testear.
+(Fase 2, backend) debe implementar y testear. Los subagentes que las
+extrajeron no modificaron el código legacy.
 
 ## Índice
 
