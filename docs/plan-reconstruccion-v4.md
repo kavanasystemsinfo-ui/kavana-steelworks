@@ -1,4 +1,4 @@
-# PLAN — Reconstrucción KAVANA MES v2 → v4 (Pieza estrella metalúrgica)
+# PLAN: Reconstrucción KAVANA MES v2 → v4 (Pieza estrella metalúrgica)
 
 Fecha: 2026-08-14
 Estado: Aprobado por Jorge (stack + rol). En ejecución por fases.
@@ -45,35 +45,35 @@ industrial, OEE, mermas) que NO existe en el v3 (`kavana-manufacturing`).
 
 ## Fases
 
-### Fase 0 — Saneamiento y seguridad
+### Fase 0: Saneamiento y seguridad
 - Backup de basura a /tmp (nunca rm a ciegas)
 - Rotar credenciales MongoDB expuestas + purgar del historial git
 - Decidir repo destino (nuevo repo limpio vs rama)
 - Documento de auditoría archivo por archivo
 
-### Fase 1 — Especificación del dominio (context-first)
+### Fase 1: Especificación del dominio (context-first)
 - Extraer specs de los services: FIFO, reconciliación, OEE, costes, turnos
 - Documentar contratos de datos (modelos → esquemas)
 - ADR del nuevo stack y de cada decisión de portado
 
-### Fase 2 — Backend FastAPI
+### Fase 2: Backend FastAPI
 - Esquemas PostgreSQL + migraciones
 - Servicios portados con TDD estricto (pytest)
 - WebSockets para eventos dashboard ↔ puesto
 - Auth JWT, multi-tenant por tenantId
 
-### Fase 3 — Frontend React + TS
+### Fase 3: Frontend React + TS
 - Paneles: Operario (tablet, escaneo), Supervisor (un vistazo, OEE), Admin
 - PWA offline-first (como RouteAI)
 - Portar Design System KAVANA (brutalismo industrial)
 
-### Fase 4 — Despliegue y CI/CD
+### Fase 4: Despliegue y CI/CD
 - Docker multi-stage + docker-compose
 - GitHub Actions: tests + build + deploy
 - Servicio cloud (a decidir: Railway/Fly.io/VPS k3s) + dominio
 - Verificación de despliegue real
 
-### Fase 5 — Portfolio
+### Fase 5: Portfolio
 - README honesto con métricas reales
 - ADRs + DECISIONS.md
 - Landing/case study del proyecto

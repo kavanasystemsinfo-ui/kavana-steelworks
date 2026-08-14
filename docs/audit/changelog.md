@@ -1,10 +1,10 @@
-# Changelog de trabajo — KAVANA MES/MOM
+# Changelog de trabajo: KAVANA MES/MOM
 
 Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
-## 2026-08-14 — Fase 0 (inicio): Estructura de documentación y clasificación
+## 2026-08-14: Fase 0 (inicio): Estructura de documentación y clasificación
 
 ### Added: Clasificación del sistema (ADR-001)
 - **Problema:** No estaba definido qué es el sistema (MES, MOM, ERP), y eso

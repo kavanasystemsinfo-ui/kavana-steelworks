@@ -1,4 +1,4 @@
-# ADR-NNN — Título de la decisión
+# ADR-NNN: Título de la decisión
 
 Estado: Propuesto | Aceptado | Reemplazado
 Fecha: YYYY-MM-DD

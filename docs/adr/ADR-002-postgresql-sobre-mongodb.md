@@ -1,4 +1,4 @@
-# ADR-002 — Motor de base de datos: PostgreSQL sobre MongoDB
+# ADR-002: Motor de base de datos: PostgreSQL sobre MongoDB
 
 Estado: Aceptado
 Fecha: 2026-08-14

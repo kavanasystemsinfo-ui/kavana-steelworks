@@ -1,4 +1,4 @@
-# ADR-001 — Clasificación del sistema: MES/MOM especializado en metalurgia
+# ADR-001: Clasificación del sistema: MES/MOM especializado en metalurgia
 
 Estado: Aceptado
 Fecha: 2026-08-14

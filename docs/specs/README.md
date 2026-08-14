@@ -1,4 +1,4 @@
-# Specs del dominio — KAVANA Steelworks
+# Specs del dominio: KAVANA Steelworks
 
 Resultado de la Fase 1: especificaciones extraídas del código legacy v2.
 Cada spec documenta el contrato de comportamiento que la reconstrucción

@@ -1,4 +1,4 @@
-# Principios visuales — KAVANA Steelworks
+# Principios visuales: KAVANA Steelworks
 
 Estado: Borrador aprobado por Jorge (2026-08-14), aplicable en Fase 3
 (frontend).
