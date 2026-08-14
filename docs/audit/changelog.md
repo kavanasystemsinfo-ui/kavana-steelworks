@@ -132,8 +132,9 @@ secciones 3.3 y D).
   lote e inexistente), CI verde.
 
 ### Added: Fin de bobina con reconciliación de merma (spec 01 3.9)
-- **Problema:** faltaba el cierre del flujo del operario: medir la carne
-  restante y calcular la merma real (la visión de Jorge).
+- **Problema:** faltaba el cierre del flujo del operario: medir los
+  milímetros de radio restantes de la bobina y calcular la merma real
+  (la visión de Jorge).
 - **Solución:** `create_retal`: el operario mide los kg físicos, el sistema
   compara con lo que el FIFO cree que queda; la diferencia es merma
   invisible (MaterialConsumo merma_puntas con reconciliation ISO 9001); el

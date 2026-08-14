@@ -267,7 +267,7 @@ def create_retal(
     order_id,
     line_id,
 ) -> dict:
-    """Fin de bobina (spec 01 3.9): mide la carne restante y reconcilia.
+    """Fin de bobina (spec 01 3.9): mide los milímetros de radio restantes y reconcilia.
 
     El operario mide el peso físico que queda (remaining_weight). El sistema
     compara con lo que el FIFO cree que queda (cantidad_disponible): la

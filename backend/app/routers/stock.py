@@ -206,7 +206,7 @@ class FinBobinaRequest(BaseModel):
 
 @router.post("/fin-bobina")
 def fin_bobina(body: FinBobinaRequest, db: DbDep):
-    """Fin de bobina: mide la carne restante y reconcilia la merma."""
+    """Fin de bobina: mide los milímetros de radio restantes y reconcilia la merma."""
     from app.services.inventory import create_retal
 
     try:

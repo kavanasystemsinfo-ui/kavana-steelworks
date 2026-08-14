@@ -1,6 +1,6 @@
 """Tests TDD del fin de bobina (spec 01, sección 3.9 createRetal).
 
-Contrato (la visión de Jorge: medir la carne restante):
+Contrato (la visión de Jorge: medir los milímetros de radio restantes):
 - El sistema cree que quedan X kg (FIFO); el operario mide Y kg reales.
 - Si Y < X: la diferencia es merma invisible (hiddenMerma) y se registra.
 - El sobrante REAL vuelve a inventario como retal (ubicación 'Retales').

@@ -203,7 +203,7 @@ export function OperarioPage() {
             </p>
           )}
 
-          {/* Fin de bobina: medir la carne restante (visión Jorge) */}
+          {/* Fin de bobina: medir los milímetros de radio restantes (visión Jorge) */}
           <form
             onSubmit={handleFinBobina}
             className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"

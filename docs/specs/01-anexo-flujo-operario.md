@@ -31,8 +31,8 @@ Entra en su puesto de trabajo y ejecuta el flujo descrito abajo.
    jornada. Registra cada una; el sistema va consumiendo los kg por FIFO.
    El total de piezas NO se revisa hasta el final del turno.
 4. **Fin de bobina**: cuando una bobina queda a medias, antes de registrar la
-   producción usa el flujo de fin de bobina: se miden los kg restantes
-   ("la carne que queda") y el sistema calcula la realidad:
+   producción usa el flujo de fin de bobina: se miden los milímetros de
+   radio restantes y el sistema calcula la realidad:
    piezas fabricadas VS kg consumidos.
 5. **Cierre de turno**: se reconcilia el total. Es normal dejar una bobina
    empezada y no gastada; la usará el siguiente turno (queda como pico/retal
