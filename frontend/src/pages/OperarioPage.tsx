@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api, getTenantId, type EventData } from '../lib/api'
 
 /** Panel de Operario (tablet): una acción principal a la vez.
  *  Directriz Jorge: no abrumar, guía de acción visible, sin perder
@@ -7,6 +8,20 @@ import { useState } from 'react'
 export function OperarioPage() {
   const [coilId, setCoilId] = useState('')
   const [vinculada, setVinculada] = useState(false)
+  const [events, setEvents] = useState<EventData[]>([])
+
+  // Polling ligero de eventos del tenant (WebSocket completo en Fase 4)
+  useEffect(() => {
+    const tenantId = getTenantId()
+    if (!tenantId) return
+    const timer = setInterval(() => {
+      api
+        .getEvents(tenantId)
+        .then((r) => setEvents(r.events.slice(-3)))
+        .catch(() => {})
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [])
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,6 +93,27 @@ export function OperarioPage() {
           Aquí se mostrará material, dimensiones, peso y piezas objetivo.
         </p>
       </details>
+
+      {/* Sugerencias y alertas del almacén (idea Jorge: mostrar picos
+          registrados para aconsejar su uso antes de abrir bobina nueva) */}
+      {events.length > 0 && (
+        <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
+          <p className="label-industrial text-xs text-kavana-text-dim">
+            Alertas de almacén
+          </p>
+          {events.map((ev) => (
+            <div
+              key={ev.id}
+              className="flex items-start justify-between gap-3 text-sm border-l-2 border-kavana-orange pl-3"
+            >
+              <span className="mono-data">{ev.tipo}</span>
+              <span className="text-kavana-text-dim">
+                {JSON.stringify(ev.data)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

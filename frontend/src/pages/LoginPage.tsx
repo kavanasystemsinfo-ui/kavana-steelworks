@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { api } from '../lib/api'
 
 /** Login industrial: tarjeta única, un solo campo a la vez (no abrumar). */
 export function LoginPage() {
@@ -12,16 +13,7 @@ export function LoginPage() {
     e.preventDefault()
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Credenciales incorrectas')
-      }
-      const data = await res.json()
+      const data = await api.login(email, password)
       sessionStorage.setItem('kavana_token', data.access_token)
       navigate('/operario')
     } catch (err) {

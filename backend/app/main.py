@@ -3,6 +3,7 @@
 Fase 2: core con auth JWT, health, y endpoints base. Los routers de
 inventario/recepción se exponen en la Fase 3 (frontend) o según necesidad.
 """
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

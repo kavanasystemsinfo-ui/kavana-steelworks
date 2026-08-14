@@ -114,6 +114,20 @@ def receive_coil(
     # Stock agregado del material
     material.stock_current = (material.stock_current or Decimal("0")) + peso_dec
 
+    # Evento de planta: recepción visible para el panel del operario
+    from app.services.events import broker
+
+    broker.publish(
+        tenant_id=tenant_id,
+        tipo="recepcion_material",
+        data={
+            "coil_id": bobina.coil_id,
+            "lote": lote,
+            "peso_kg": float(peso_dec),
+            "material": material.code,
+        },
+    )
+
     db.commit()
     db.refresh(bobina)
     return bobina

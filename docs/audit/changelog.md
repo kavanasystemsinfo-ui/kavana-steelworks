@@ -106,3 +106,16 @@ secciones 3.3 y D).
 - **Verificación:** E2E contra PostgreSQL real: login 200, recepción 200,
   listado 200.
 
+### Added: Frontend conectado a la API (f3-4)
+- **Problema:** los paneles usaban datos simulados; no hablaban con el backend.
+- **Solución:** cliente API tipado (`lib/api.ts`) con decodificación del JWT
+  para tenant_id; LoginPage real; MateriasPrimasPage carga materiales y
+  registra bobinas; OperarioPage hace polling de eventos (WebSocket completo
+  en Fase 4) y muestra "Alertas de almacén". Endpoints nuevos: materiales
+  activos y sugerencia de picos (`GET /stock-items/picos`), que implementa la
+  idea de Jorge: aconsejar usar picos del almacén antes de abrir bobina
+  nueva, como sugerencia visible y nunca imposición.
+- **Verificación:** E2E extendido (login, materiales, recepción, picos con 1
+  sugerencia real, evento recepcion_material visible); CI verde con los dos
+  jobs.
+

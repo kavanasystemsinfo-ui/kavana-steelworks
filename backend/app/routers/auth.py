@@ -1,4 +1,5 @@
 """Router de autenticación: login y logout."""
+
 import uuid
 from typing import Annotated
 
