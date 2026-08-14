@@ -73,6 +73,43 @@ export function OperarioPage() {
     }
   }
 
+  const [pesoRestante, setPesoRestante] = useState('')
+  const [finBobinaMsg, setFinBobinaMsg] = useState('')
+
+  const handleFinBobina = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFinBobinaMsg('')
+    if (!scan) return
+    try {
+      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
+      const res = await fetch('/api/v1/stock-items/fin-bobina', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stock_item_id: scan.id,
+          order_id: '00000000-0000-0000-0000-000000000000',
+          line_id: '00000000-0000-0000-0000-000000000000',
+          remaining_weight: Number(pesoRestante),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error en fin de bobina')
+      }
+      const data = await res.json()
+      setFinBobinaMsg(
+        `${data.msg}: ${data.merma_kg} kg de merma (${data.merma_cost} €)`,
+      )
+      setVinculada(false)
+      setScan(null)
+      setCoilId('')
+    } catch (err) {
+      setFinBobinaMsg(
+        err instanceof Error ? err.message : 'Error al cerrar bobina',
+      )
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       {/* Guía de acción: el siguiente paso siempre identificable */}
@@ -153,13 +190,48 @@ export function OperarioPage() {
         </form>
       ) : (
         <div className="bg-kavana-surface border border-kavana-border rounded-sm p-6 text-center space-y-4">
-          <p className="mono-data text-2xl text-kavana-ok">COIL-{coilId}</p>
+          <p className="mono-data text-2xl text-kavana-ok">
+            {scan?.coil_id ?? `COIL-${coilId}`}
+          </p>
           <p className="text-kavana-text-dim">
             Bobina vinculada a la orden. Registra producción para consumir kg.
           </p>
+
+          {finBobinaMsg && (
+            <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
+              {finBobinaMsg}
+            </p>
+          )}
+
+          {/* Fin de bobina: medir la carne restante (visión Jorge) */}
+          <form
+            onSubmit={handleFinBobina}
+            className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
+          >
+            <p className="label-industrial text-xs text-kavana-text-dim">
+              Fin de bobina: mide los kg que quedan
+            </p>
+            <input
+              type="number"
+              step="0.001"
+              value={pesoRestante}
+              onChange={(e) => setPesoRestante(e.target.value)}
+              placeholder="Peso restante (kg)"
+              className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+            >
+              🏁 Cerrar bobina (merma real)
+            </button>
+          </form>
+
           <button
             onClick={() => {
               setVinculada(false)
+              setScan(null)
               setCoilId('')
             }}
             className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"

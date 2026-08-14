@@ -197,6 +197,32 @@ def link(body: LinkCoilRequest, db: DbDep):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class FinBobinaRequest(BaseModel):
+    stock_item_id: uuid.UUID
+    order_id: uuid.UUID
+    line_id: uuid.UUID
+    remaining_weight: float = Field(ge=0)
+
+
+@router.post("/fin-bobina")
+def fin_bobina(body: FinBobinaRequest, db: DbDep):
+    """Fin de bobina: mide la carne restante y reconcilia la merma."""
+    from app.services.inventory import create_retal
+
+    try:
+        return create_retal(
+            db,
+            tenant_id=None,  # TODO: tenant desde el token JWT
+            user_id=None,
+            stock_item_id=body.stock_item_id,
+            remaining_weight=body.remaining_weight,
+            order_id=body.order_id,
+            line_id=body.line_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("", response_model=list[StockItemOut])
 def list_stock(db: DbDep):
     """Lista bobinas (para el panel de Materias Primas)."""

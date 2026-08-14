@@ -131,3 +131,16 @@ secciones 3.3 y D).
   flujo escaneo→ficha, E2E contra PostgreSQL real (scan por coil_id, por
   lote e inexistente), CI verde.
 
+### Added: Fin de bobina con reconciliación de merma (spec 01 3.9)
+- **Problema:** faltaba el cierre del flujo del operario: medir la carne
+  restante y calcular la merma real (la visión de Jorge).
+- **Solución:** `create_retal`: el operario mide los kg físicos, el sistema
+  compara con lo que el FIFO cree que queda; la diferencia es merma
+  invisible (MaterialConsumo merma_puntas con reconciliation ISO 9001); el
+  sobrante real vuelve a inventario como retal en 'Retales' o agota la
+  bobina; reembolso a la línea y merma a scrap. Endpoint POST
+  /stock-items/fin-bobina y formulario en el panel del operario.
+- **Verificación:** 5 tests nuevos (37 total), E2E contra PostgreSQL real:
+  bobina de 800 kg, operario mide 420 → 380 kg de merma (399 €), retal en
+  'Retales', línea con scrap y sin bobina activa. CI verde.
+

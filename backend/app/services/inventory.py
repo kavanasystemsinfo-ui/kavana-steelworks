@@ -257,6 +257,127 @@ def find_coil(
     }
 
 
+def create_retal(
+    db: Session,
+    tenant_id,
+    user_id,
+    *,
+    stock_item_id,
+    remaining_weight: float,
+    order_id,
+    line_id,
+) -> dict:
+    """Fin de bobina (spec 01 3.9): mide la carne restante y reconcilia.
+
+    El operario mide el peso físico que queda (remaining_weight). El sistema
+    compara con lo que el FIFO cree que queda (cantidad_disponible): la
+    diferencia es merma invisible. El sobrante real vuelve a inventario
+    como retal (ubicación 'Retales').
+    """
+    from decimal import Decimal
+
+    from app.models import MaterialConsumo, MaterialTransaction, Order, OrderLine
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None:
+        raise ValueError("Bobina no encontrada")
+
+    if tenant_id is None:
+        tenant_id = bobina.tenant_id
+    if user_id is None:
+        from app.services.receiving import _system_user
+
+        user_id = _system_user(db, tenant_id)
+
+    order = db.get(Order, order_id)
+    if order is None:
+        raise ValueError(f"Orden {order_id} no existe")
+    linea = db.get(OrderLine, line_id)
+    if linea is None or linea.order_id != order.id:
+        raise ValueError("Línea no encontrada para la orden")
+
+    system_remaining = bobina.cantidad_disponible
+    real_remaining = max(Decimal("0"), Decimal(str(remaining_weight)))
+    hidden_merma = max(Decimal("0"), system_remaining - real_remaining)
+    merma_cost = hidden_merma * bobina.coste_por_unidad
+    coste_reembolso = real_remaining * bobina.coste_por_unidad
+
+    # 1) Merma invisible (reconciliación ISO 9001)
+    if hidden_merma > Decimal("0.01"):
+        db.add(
+            MaterialConsumo(
+                tenant_id=tenant_id,
+                order_id=order_id,
+                order_line_id=line_id,
+                workstation_id="reconciliacion",
+                material_id=bobina.material_id,
+                stock_item_id=bobina.id,
+                lote=bobina.lote,
+                consumed_quantity=hidden_merma,
+                unit=bobina.unit or "kg",
+                produced_quantity=Decimal("0"),
+                kg_por_pieza=Decimal("0"),
+                calculation_method="coil_end_scrap",
+                cost_per_unit=bobina.coste_por_unidad,
+                total_cost=merma_cost,
+                tipo="merma_puntas",
+                observaciones=(
+                    f"Merma de Fin de Bobina: {bobina.lote}. "
+                    f"Sistema: {system_remaining}kg → Real: {real_remaining}kg. "
+                    f"Diferencia: {hidden_merma}kg ({merma_cost:.2f}€)"
+                ),
+                operator_id=user_id,
+            )
+        )
+
+    # 2) Actualizar la bobina física
+    bobina.cantidad_disponible = real_remaining
+    if real_remaining > 0:
+        bobina.estado = "pico"  # retal: menos del 10% original o sobrante
+        bobina.es_pico = True
+        bobina.ubicacion = "Retales"
+    else:
+        bobina.estado = "agotado"
+        bobina.es_pico = False
+
+    # 3) Kardex de ajuste de inventario
+    db.add(
+        MaterialTransaction(
+            tenant_id=tenant_id,
+            material_id=bobina.material_id,
+            stock_item_id=bobina.id,
+            tipo="ajuste_inventario",
+            cantidad=real_remaining,
+            cantidad_anterior=system_remaining,
+            cantidad_nueva=real_remaining,
+            motivo=(
+                f"Fin de Bobina (Retal). Devuelto: {real_remaining}kg. "
+                f"Merma detectada: {hidden_merma}kg ({merma_cost:.2f}€)."
+            ),
+            realizado_por=user_id,
+        )
+    )
+
+    # 4) Reembolsar a la línea lo devuelto + mover merma a scrap
+    linea.real_material_qty = (linea.real_material_qty or Decimal("0")) - real_remaining
+    linea.real_cost = (linea.real_cost or Decimal("0")) - coste_reembolso
+    order.real_total_cost = (order.real_total_cost or Decimal("0")) - coste_reembolso
+    if hidden_merma > Decimal("0.01"):
+        linea.scrap_material_qty = (linea.scrap_material_qty or Decimal("0")) + hidden_merma
+    linea.active_coil_id = None
+    linea.active_coil_code = None
+
+    db.commit()
+    db.refresh(bobina)
+    db.refresh(linea)
+    return {
+        "success": True,
+        "merma_kg": float(hidden_merma),
+        "merma_cost": float(merma_cost),
+        "msg": ("Retal devuelto a inventario" if real_remaining > 0 else "Bobina agotada"),
+    }
+
+
 def link_coil(
     db,
     tenant_id,
@@ -270,6 +391,11 @@ def link_coil(
     from sqlalchemy import select
 
     from app.models import MaterialTransaction, Order, OrderLine, StockItem
+
+    if user_id is None:
+        from app.services.receiving import _system_user
+
+        user_id = _system_user(db, tenant_id)
 
     bobina = db.get(StockItem, stock_item_id)
     if bobina is None or bobina.estado not in ("activo", "pico"):
