@@ -1,4 +1,5 @@
 """Modelos de transacciones de material: Kardex inmutable y consumos por orden."""
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -34,11 +35,7 @@ class MaterialTransaction(UUIDMixin, TimestampMixin, Base):
     """Kardex de material. INMUTABLE: sin UPDATE ni DELETE (auditoría ISO 9001)."""
 
     __tablename__ = "material_transactions"
-    __table_args__ = (
-        CheckConstraint(
-            f"tipo IN {TIPOS_TRANSACCION}", name="ck_transaction_tipo"
-        ),
-    )
+    __table_args__ = (CheckConstraint(f"tipo IN {TIPOS_TRANSACCION}", name="ck_transaction_tipo"),)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
@@ -50,18 +47,10 @@ class MaterialTransaction(UUIDMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("stock_items.id"), nullable=False
     )
     tipo: Mapped[str] = mapped_column(String(20), nullable=False)
-    cantidad: Mapped[Decimal] = mapped_column(
-        Numeric(14, 4), nullable=False
-    )
-    cantidad_anterior: Mapped[Decimal] = mapped_column(
-        Numeric(14, 4), nullable=False
-    )
-    cantidad_nueva: Mapped[Decimal] = mapped_column(
-        Numeric(14, 4), nullable=False
-    )
-    orden_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("orders.id")
-    )
+    cantidad: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    cantidad_anterior: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    cantidad_nueva: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    orden_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("orders.id"))
     linea_orden_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("order_lines.id")
     )
@@ -106,9 +95,7 @@ class MaterialConsumo(UUIDMixin, TimestampMixin, Base):
             f"calculation_method IN {METODOS_CALCULO}",
             name="ck_consumo_calculation_method",
         ),
-        CheckConstraint(
-            f"tipo IN {TIPOS_CONSUMO}", name="ck_consumo_tipo"
-        ),
+        CheckConstraint(f"tipo IN {TIPOS_CONSUMO}", name="ck_consumo_tipo"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -130,9 +117,7 @@ class MaterialConsumo(UUIDMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("stock_items.id")
     )
     lote: Mapped[str | None] = mapped_column(String(100))
-    consumed_quantity: Mapped[Decimal] = mapped_column(
-        Numeric(14, 4), nullable=False
-    )
+    consumed_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     unit: Mapped[str] = mapped_column(String(10), nullable=False, default="m")
     produced_quantity: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
@@ -141,18 +126,14 @@ class MaterialConsumo(UUIDMixin, TimestampMixin, Base):
     kg_por_pieza: Mapped[Decimal] = mapped_column(
         Numeric(14, 6), nullable=False, default=Decimal("0")
     )
-    calculation_method: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="none"
-    )
+    calculation_method: Mapped[str] = mapped_column(String(30), nullable=False, default="none")
     cost_per_unit: Mapped[Decimal] = mapped_column(
         Numeric(14, 6), nullable=False, default=Decimal("0")
     )
     total_cost: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )
-    tipo: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="automatico"
-    )
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="automatico")
     observaciones: Mapped[str | None] = mapped_column(Text)
     operator_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id")

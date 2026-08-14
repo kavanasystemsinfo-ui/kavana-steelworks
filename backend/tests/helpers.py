@@ -1,4 +1,5 @@
 """Helpers para tests del motor FIFO de bobinas."""
+
 from datetime import UTC, datetime
 
 from app.models import CoilLink, Material, Order, OrderLine, StockItem
@@ -19,9 +20,18 @@ def make_material(db, tenant, code="ACERO-01", cost=1.0, density=7850):
     return m
 
 
-def make_stock_item(db, tenant, material, cantidad=100.0, lote="L1",
-                    fecha_entrada=None, coil_id=None, coste=None,
-                    ubicacion="LINEA-1", estado="activo"):
+def make_stock_item(
+    db,
+    tenant,
+    material,
+    cantidad=100.0,
+    lote="L1",
+    fecha_entrada=None,
+    coil_id=None,
+    coste=None,
+    ubicacion="LINEA-1",
+    estado="activo",
+):
     si = StockItem(
         tenant_id=tenant.id,
         material_id=material.id,

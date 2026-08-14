@@ -1,4 +1,5 @@
 """Modelos de identidad: Tenant y User."""
+
 import uuid
 from datetime import datetime
 

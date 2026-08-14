@@ -4,6 +4,7 @@ Mejora estructural del v4: el legacy derivaba la burbuja escaneando
 MaterialTransaction; aquí se modela como tabla propia con UNIQUE para
 garantizar idempotencia de linkCoil.
 """
+
 import uuid
 
 from sqlalchemy import CheckConstraint, ForeignKey, String, UniqueConstraint, Uuid
@@ -25,9 +26,7 @@ class CoilLink(UUIDMixin, TimestampMixin, Base):
             "order_line_id",
             name="uq_coillink_burbuja",
         ),
-        CheckConstraint(
-            f"estado IN {ESTADOS_COIL_LINK}", name="ck_coillink_estado"
-        ),
+        CheckConstraint(f"estado IN {ESTADOS_COIL_LINK}", name="ck_coillink_estado"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -42,6 +41,4 @@ class CoilLink(UUIDMixin, TimestampMixin, Base):
     order_line_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("order_lines.id"), nullable=False
     )
-    estado: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="vinculada"
-    )
+    estado: Mapped[str] = mapped_column(String(12), nullable=False, default="vinculada")

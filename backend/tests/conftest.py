@@ -1,4 +1,5 @@
 """Fixtures de test: BD SQLite en memoria + sesión + datos base."""
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

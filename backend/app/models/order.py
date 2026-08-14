@@ -1,4 +1,5 @@
 """Modelos de órdenes de producción y sus líneas."""
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -25,19 +26,13 @@ class Order(UUIDMixin, TimestampMixin, Base):
     """Orden de fabricación. Ciclo: draft → active → completed/cancelled."""
 
     __tablename__ = "orders"
-    __table_args__ = (
-        CheckConstraint(
-            f"estado IN {ESTADOS_ORDEN}", name="ck_order_estado"
-        ),
-    )
+    __table_args__ = (CheckConstraint(f"estado IN {ESTADOS_ORDEN}", name="ck_order_estado"),)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
     )
     numero: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    estado: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="draft"
-    )
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     cliente: Mapped[str | None] = mapped_column(String(255))
     fecha_entrega: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notas: Mapped[str | None] = mapped_column(String(2000))
@@ -63,12 +58,8 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "order_lines"
     __table_args__ = (
-        CheckConstraint(
-            f"estado IN {ESTADOS_LINEA}", name="ck_orderline_estado"
-        ),
-        UniqueConstraint(
-            "order_id", "linea_numero", name="uq_orderline_numero"
-        ),
+        CheckConstraint(f"estado IN {ESTADOS_LINEA}", name="ck_orderline_estado"),
+        UniqueConstraint("order_id", "linea_numero", name="uq_orderline_numero"),
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(
@@ -78,9 +69,7 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
     product_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     modelo_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     workstation_id: Mapped[str | None] = mapped_column(String(100))
-    estado: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending"
-    )
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 
     # Cantidades y objetivos
     total_quantity: Mapped[Decimal] = mapped_column(
@@ -100,9 +89,7 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
     real_material_cost: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )
-    real_cost: Mapped[Decimal] = mapped_column(
-        Numeric(14, 4), nullable=False, default=Decimal("0")
-    )
+    real_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False, default=Decimal("0"))
     scrap_material_qty: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )

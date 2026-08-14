@@ -5,6 +5,7 @@ vinculadas explícitamente a la orden (coil_links) + la prioritaria son
 elegibles. Las bobinas fantasma (restos de turnos anteriores en el puesto)
 NO se consumen, aunque sean más antiguas.
 """
+
 from datetime import UTC, datetime, timedelta
 
 from tests.helpers import (
@@ -21,13 +22,23 @@ def test_bobina_fantasma_no_se_consume_en_auditoria(db_session, tenant, user):
     material = make_material(db_session, tenant, cost=2.0)
     t0 = datetime.now(UTC)
     fantasma = make_stock_item(
-        db_session, tenant, material, cantidad=100, lote="FANTASMA",
-        fecha_entrada=t0 - timedelta(days=30), coste=1.0,
+        db_session,
+        tenant,
+        material,
+        cantidad=100,
+        lote="FANTASMA",
+        fecha_entrada=t0 - timedelta(days=30),
+        coste=1.0,
         ubicacion="LINEA-1",
     )
     vinculada = make_stock_item(
-        db_session, tenant, material, cantidad=50, lote="VINCULADA",
-        fecha_entrada=t0 - timedelta(days=1), coste=2.0,
+        db_session,
+        tenant,
+        material,
+        cantidad=50,
+        lote="VINCULADA",
+        fecha_entrada=t0 - timedelta(days=1),
+        coste=2.0,
         ubicacion="LINEA-1",
     )
     order = make_order(db_session, tenant)
@@ -37,7 +48,9 @@ def test_bobina_fantasma_no_se_consume_en_auditoria(db_session, tenant, user):
     from app.services.inventory import consume_stock_fifo
 
     consume_stock_fifo(
-        db_session, tenant.id, user.id,
+        db_session,
+        tenant.id,
+        user.id,
         material_id=material.id,
         cantidad_requerida=30,
         order_id=order.id,
@@ -57,13 +70,23 @@ def test_bobina_prioritaria_siempre_elegible(db_session, tenant, user):
     material = make_material(db_session, tenant, cost=2.0)
     t0 = datetime.now(UTC)
     fantasma = make_stock_item(
-        db_session, tenant, material, cantidad=100, lote="FANTASMA",
-        fecha_entrada=t0 - timedelta(days=30), coste=1.0,
+        db_session,
+        tenant,
+        material,
+        cantidad=100,
+        lote="FANTASMA",
+        fecha_entrada=t0 - timedelta(days=30),
+        coste=1.0,
         ubicacion="LINEA-1",
     )
     prioritaria = make_stock_item(
-        db_session, tenant, material, cantidad=50, lote="PRIORITARIA",
-        fecha_entrada=t0 - timedelta(days=1), coste=2.0,
+        db_session,
+        tenant,
+        material,
+        cantidad=50,
+        lote="PRIORITARIA",
+        fecha_entrada=t0 - timedelta(days=1),
+        coste=2.0,
         ubicacion="LINEA-1",
     )
     order = make_order(db_session, tenant)
@@ -73,7 +96,9 @@ def test_bobina_prioritaria_siempre_elegible(db_session, tenant, user):
     from app.services.inventory import consume_stock_fifo
 
     consume_stock_fifo(
-        db_session, tenant.id, user.id,
+        db_session,
+        tenant.id,
+        user.id,
         material_id=material.id,
         cantidad_requerida=30,
         order_id=order.id,

@@ -6,6 +6,7 @@ Contrato extraído de la spec 01 (InventoryService.consumeStockFIFO):
 - Permite saldo negativo solo en la bobina prioritaria (modo auditoría).
 - coste_real_total = Σ cantidad_tomada × coste_por_unidad del lote.
 """
+
 from decimal import Decimal
 from typing import Any
 
@@ -23,6 +24,7 @@ def _elegibles_fifo(
     order_id=None,
     order_line_id=None,
     priority_stock_item_id=None,
+    workstation_id=None,
 ) -> list[StockItem]:
     """Bobinas elegibles del material, ordenadas por fecha_entrada ASC (FIFO).
 
@@ -56,6 +58,15 @@ def _elegibles_fifo(
         )
         burbuja_ids.add(priority_stock_item_id)
         stmt = stmt.where(StockItem.id.in_(burbuja_ids))
+    elif workstation_id:
+        # Modo simple con filtro de puesto: solo bobinas físicamente aquí
+        # (normalización legacy: sin espacios, case-insensitive)
+        from sqlalchemy import func as sa_func
+
+        normalized = workstation_id.replace(" ", "").upper()
+        stmt = stmt.where(
+            sa_func.upper(sa_func.replace(StockItem.ubicacion, " ", "")) == normalized
+        )
 
     return list(db.scalars(stmt))
 
@@ -87,9 +98,17 @@ def consume_stock_fifo(
         order_id=order_id,
         order_line_id=order_line_id,
         priority_stock_item_id=priority_stock_item_id,
+        workstation_id=workstation_id,
     )
     if not elegibles:
         raise ValueError("Sin stock disponible para el material")
+
+    # JIT Move: si la bobina prioritaria está en otro puesto, se mueve al actual
+    # (spec 01, sección 3.2 punto 1: "JIT Move para la bobina actual")
+    if priority_stock_item_id and workstation_id:
+        prioritaria = next((b for b in elegibles if b.id == priority_stock_item_id), None)
+        if prioritaria and prioritaria.ubicacion != workstation_id:
+            prioritaria.ubicacion = workstation_id
 
     material = db.get(Material, material_id)
     restante = requerida
@@ -101,14 +120,19 @@ def consume_stock_fifo(
             break
         tomada = min(bobina.cantidad_disponible, restante)
         if tomada > 0:
+            cantidad_anterior = bobina.cantidad_disponible
             bobina.cantidad_disponible -= tomada
             coste_total += tomada * bobina.coste_por_unidad
-            consumos.append({
-                "stock_item_id": bobina.id,
-                "lote": bobina.lote,
-                "cantidad": tomada,
-                "coste_por_unidad": bobina.coste_por_unidad,
-            })
+            consumos.append(
+                {
+                    "stock_item_id": bobina.id,
+                    "lote": bobina.lote,
+                    "cantidad": tomada,
+                    "coste_por_unidad": bobina.coste_por_unidad,
+                    "cantidad_anterior": cantidad_anterior,
+                    "cantidad_nueva": bobina.cantidad_disponible,
+                }
+            )
             restante -= tomada
             if bobina.cantidad_disponible <= 0:
                 bobina.estado = "agotado"
@@ -122,37 +146,64 @@ def consume_stock_fifo(
         if ultima.cantidad_disponible >= 0 and ultima.estado != "agotado":
             # permitir negativo (tolerancia de superávit, modo auditoría)
             tomada = restante
+            cantidad_anterior = ultima.cantidad_disponible
             ultima.cantidad_disponible -= tomada
             coste_total += tomada * ultima.coste_por_unidad
-            consumos.append({
-                "stock_item_id": ultima.id,
-                "lote": ultima.lote,
-                "cantidad": tomada,
-                "coste_por_unidad": ultima.coste_por_unidad,
-            })
+            consumos.append(
+                {
+                    "stock_item_id": ultima.id,
+                    "lote": ultima.lote,
+                    "cantidad": tomada,
+                    "coste_por_unidad": ultima.coste_por_unidad,
+                    "cantidad_anterior": cantidad_anterior,
+                    "cantidad_nueva": ultima.cantidad_disponible,
+                }
+            )
             restante = Decimal("0")
 
     if restante > 0:
-        raise ValueError(
-            f"Stock insuficiente: faltan {restante} unidades"
-        )
+        raise ValueError(f"Stock insuficiente: faltan {restante} unidades")
 
     # Registrar consumos en material_consumos (auditoría / roll-up)
+    from app.models import MaterialTransaction
+
     for c in consumos:
-        db.add(MaterialConsumo(
-            tenant_id=tenant_id,
-            order_id=order_id,
-            order_line_id=order_line_id,
-            material_id=material_id,
-            stock_item_id=c["stock_item_id"],
-            lote=c["lote"],
-            consumed_quantity=c["cantidad"],
-            unit=material.unit if material else "kg",
-            cost_per_unit=c["coste_por_unidad"],
-            total_cost=round(c["cantidad"] * c["coste_por_unidad"], 2),
-            tipo="automatico",
-            operator_id=user_id,
-        ))
+        db.add(
+            MaterialConsumo(
+                tenant_id=tenant_id,
+                order_id=order_id,
+                order_line_id=order_line_id,
+                material_id=material_id,
+                stock_item_id=c["stock_item_id"],
+                lote=c["lote"],
+                consumed_quantity=c["cantidad"],
+                unit=material.unit if material else "kg",
+                cost_per_unit=c["coste_por_unidad"],
+                total_cost=round(c["cantidad"] * c["coste_por_unidad"], 2),
+                tipo="automatico",
+                operator_id=user_id,
+            )
+        )
+        # Kardex inmutable: snapshot antes/después del lote
+        db.add(
+            MaterialTransaction(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                stock_item_id=c["stock_item_id"],
+                tipo="salida_produccion",
+                cantidad=c["cantidad"],
+                cantidad_anterior=c["cantidad_anterior"],
+                cantidad_nueva=c["cantidad_nueva"],
+                orden_id=order_id,
+                linea_orden_id=order_line_id,
+                motivo=f"Consumo FIFO (Parte de {cantidad_requerida})",
+                realizado_por=user_id,
+            )
+        )
+
+    # Actualizar stock agregado del material padre (spec 01, updateMaterialAggregates)
+    if material is not None:
+        material.stock_current = max(material.stock_current - requerida, Decimal("0"))
 
     db.commit()
     return {

@@ -1,4 +1,5 @@
 """Registro de todos los modelos para Alembic y metadata."""
+
 from app.core.database import Base  # noqa: F401
 from app.models.coil_link import CoilLink  # noqa: F401
 from app.models.material import Material, StockItem  # noqa: F401

@@ -1,4 +1,5 @@
 """Modelos de inventario: Material (maestro) y StockItem (bobina/lote)."""
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -31,9 +32,7 @@ class Material(UUIDMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_material_tenant_code"),
         CheckConstraint("density BETWEEN 100 AND 30000", name="ck_material_density"),
-        CheckConstraint(
-            "unit IN ('kg','uds','m','litros')", name="ck_material_unit"
-        ),
+        CheckConstraint("unit IN ('kg','uds','m','litros')", name="ck_material_unit"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -58,9 +57,7 @@ class Material(UUIDMixin, TimestampMixin, Base):
     density_calibrada: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 4), default=Decimal("7.7807")
     )  # kg/dm3, Densidad Calibrada Kavana (Decisión 92)
-    unit: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="kg"
-    )
+    unit: Mapped[str] = mapped_column(String(10), nullable=False, default="kg")
     external_links: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -87,12 +84,8 @@ class StockItem(UUIDMixin, TimestampMixin, Base):
             name="ck_stockitem_thickness",
         ),
         CheckConstraint("coste_por_unidad >= 0", name="ck_stockitem_cost"),
-        CheckConstraint(
-            f"estado IN {ESTADOS_STOCK}", name="ck_stockitem_estado"
-        ),
-        CheckConstraint(
-            "(estado = 'pico') = es_pico", name="ck_stockitem_pico_consistente"
-        ),
+        CheckConstraint(f"estado IN {ESTADOS_STOCK}", name="ck_stockitem_estado"),
+        CheckConstraint("(estado = 'pico') = es_pico", name="ck_stockitem_pico_consistente"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -109,9 +102,7 @@ class StockItem(UUIDMixin, TimestampMixin, Base):
     cantidad_disponible: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )
-    unit: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="uds"
-    )
+    unit: Mapped[str] = mapped_column(String(10), nullable=False, default="uds")
     width_mm: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
     thickness_mm: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
     coste_por_unidad: Mapped[Decimal] = mapped_column(
@@ -126,13 +117,9 @@ class StockItem(UUIDMixin, TimestampMixin, Base):
     )  # CLAVE FIFO
     fecha_caducidad: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ubicacion: Mapped[str | None] = mapped_column(String(255), index=True)
-    estado: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="activo"
-    )
+    estado: Mapped[str] = mapped_column(String(12), nullable=False, default="activo")
     es_pico: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notas: Mapped[str | None] = mapped_column(Text)
-    creado_por: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id")
-    )
+    creado_por: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"))
 
     material: Mapped[Material] = relationship(back_populates="stock_items")
