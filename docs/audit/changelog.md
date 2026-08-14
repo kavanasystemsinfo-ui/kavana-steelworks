@@ -65,3 +65,21 @@ secciones 3.3 y D).
   contra PostgreSQL real (11 tablas). CI en GitHub Actions: uv + ruff +
   pytest + check de migraciones. Primer run: success.
 - **Verificación:** `\dt` en postgres:16 real; `gh run view` success.
+
+## 2026-08-14 — Fase 2 (cierre): Auth JWT y WebSockets
+
+### Added: Autenticación JWT (spec 05)
+- **Problema:** faltaba la sesión de 8 horas (un turno) con invalidación
+  server-side que el v2 ya tenía.
+- **Solución:** `auth.py` con login (JWT 8h), bcrypt directo (passlib roto
+  con bcrypt 4.x), logout con RevokedToken, UserShift con un turno activo.
+  Modelos `revoked_tokens` y `user_shifts`.
+- **Verificación:** 4 tests nuevos; migración aplicada en PostgreSQL real.
+
+### Added: Broker de eventos WebSocket (spec 05)
+- **Problema:** los eventos de planta (consumo, stock_deficit, downtime)
+  necesitaban canal por tenant.
+- **Solución:** `EventBroker` en memoria con cola por tenant y límite;
+  endpoint GET /api/v1/events/{tenant_id} para polling; WebSocket completo
+  en la Fase 3.
+- **Verificación:** 3 tests nuevos (23 total verdes); CI success.
