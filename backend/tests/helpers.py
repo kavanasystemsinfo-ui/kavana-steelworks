@@ -31,6 +31,8 @@ def make_stock_item(
     coste=None,
     ubicacion="LINEA-1",
     estado="activo",
+    ancho=None,
+    espesor=None,
 ):
     si = StockItem(
         tenant_id=tenant.id,
@@ -45,6 +47,8 @@ def make_stock_item(
         ubicacion=ubicacion,
         estado=estado,
         es_pico=(estado == "pico"),
+        width_mm=ancho,
+        thickness_mm=espesor,
     )
     db.add(si)
     db.commit()

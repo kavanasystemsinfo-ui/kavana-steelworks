@@ -210,3 +210,146 @@ def consume_stock_fifo(
         "consumos": consumos,
         "coste_real_total": coste_total,
     }
+
+
+def find_coil(
+    db,
+    tenant_id,
+    *,
+    coil_id=None,
+    lote=None,
+):
+    """Escaneo de bobina (anexo A): busca por coil_id o lote.
+
+    Devuelve los datos completos para el modo automático (material,
+    dimensiones, peso) o manual. None si no existe.
+    """
+    from sqlalchemy import select
+
+    from app.models import StockItem
+
+    stmt = select(StockItem)
+    if tenant_id is not None:
+        stmt = stmt.where(StockItem.tenant_id == tenant_id)
+    if coil_id:
+        stmt = stmt.where(StockItem.coil_id == coil_id)
+    elif lote:
+        stmt = stmt.where(StockItem.lote == lote)
+    else:
+        raise ValueError("Indica coil_id o lote")
+
+    bobina = db.scalar(stmt)
+    if bobina is None:
+        return None
+
+    return {
+        "id": str(bobina.id),
+        "lote": bobina.lote,
+        "coil_id": bobina.coil_id,
+        "peso_kg": float(bobina.cantidad_disponible),
+        "ancho_mm": float(bobina.width_mm) if bobina.width_mm else None,
+        "espesor_mm": float(bobina.thickness_mm) if bobina.thickness_mm else None,
+        "material_code": bobina.material.code if bobina.material else None,
+        "material_name": bobina.material.name if bobina.material else None,
+        "estado": bobina.estado,
+        "ubicacion": bobina.ubicacion,
+        "modo": "auto",
+    }
+
+
+def link_coil(
+    db,
+    tenant_id,
+    user_id,
+    *,
+    stock_item_id,
+    order_id,
+    line_id,
+) -> dict:
+    """Vincula la bobina a la orden con cobro BULK por adelantado (spec 01 3.6)."""
+    from sqlalchemy import select
+
+    from app.models import MaterialTransaction, Order, OrderLine, StockItem
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None or bobina.estado not in ("activo", "pico"):
+        raise ValueError("Bobina no encontrada o inactiva")
+
+    order = db.get(Order, order_id)
+    if order is None:
+        raise ValueError(f"Orden {order_id} no existe")
+
+    linea = db.get(OrderLine, line_id)
+    if linea is None or linea.order_id != order.id:
+        raise ValueError("Línea no encontrada para la orden")
+
+    # JIT: reubicar al puesto de la línea
+    workstation = linea.workstation_id
+    if workstation and bobina.ubicacion != workstation:
+        bobina.ubicacion = workstation
+        db.add(
+            MaterialTransaction(
+                tenant_id=tenant_id,
+                material_id=bobina.material_id,
+                stock_item_id=bobina.id,
+                tipo="traslado",
+                cantidad=Decimal("0"),
+                cantidad_anterior=Decimal("0"),
+                cantidad_nueva=Decimal("0"),
+                motivo=f"Ubicada en {workstation} (Vinculada a orden {order.numero})",
+                realizado_por=user_id,
+            )
+        )
+
+    # Idempotencia: si ya está vinculada, no volver a cobrar
+    ya_vinculada = db.scalar(
+        select(MaterialTransaction).where(
+            MaterialTransaction.tenant_id == tenant_id,
+            MaterialTransaction.stock_item_id == bobina.id,
+            MaterialTransaction.orden_id == order_id,
+            MaterialTransaction.linea_orden_id == line_id,
+            MaterialTransaction.tipo == "salida_produccion",
+            MaterialTransaction.motivo.contains("Bobina vinculada"),
+        )
+    )
+    if ya_vinculada is not None:
+        return {
+            "success": True,
+            "coil_weight": float(bobina.cantidad_disponible),
+            "msg": "Bobina ya estaba vinculada.",
+        }
+
+    # Cobro BULK: la orden paga toda la bobina por adelantado
+    coil_weight = bobina.cantidad_disponible
+    coil_cost = coil_weight * bobina.coste_por_unidad
+    linea.real_material_qty = (linea.real_material_qty or Decimal("0")) + coil_weight
+    linea.real_material_cost = (linea.real_material_cost or Decimal("0")) + coil_cost
+    linea.real_cost = (linea.real_cost or Decimal("0")) + coil_cost
+    order.real_total_cost = (order.real_total_cost or Decimal("0")) + coil_cost
+    linea.active_coil_id = bobina.id
+    linea.active_coil_code = bobina.coil_id or bobina.lote
+
+    # Kardex de vinculación (salida virtual: el material está en la línea)
+    db.add(
+        MaterialTransaction(
+            tenant_id=tenant_id,
+            material_id=bobina.material_id,
+            stock_item_id=bobina.id,
+            orden_id=order_id,
+            linea_orden_id=line_id,
+            tipo="salida_produccion",
+            cantidad=coil_weight,
+            cantidad_anterior=coil_weight,
+            cantidad_nueva=coil_weight,
+            motivo=f"Bobina vinculada a la Línea. Carga total de Entrada: {coil_weight:.2f}kg",
+            realizado_por=user_id,
+        )
+    )
+
+    db.commit()
+    db.refresh(linea)
+    return {
+        "success": True,
+        "coil_weight": float(coil_weight),
+        "order": str(order.id),
+    }

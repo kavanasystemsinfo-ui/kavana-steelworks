@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react'
 import { api, getTenantId, type EventData } from '../lib/api'
 
+interface CoilScan {
+  id: string
+  lote: string
+  coil_id: string | null
+  peso_kg: number
+  ancho_mm: number | null
+  espesor_mm: number | null
+  material_code: string | null
+  material_name: string | null
+  estado: string
+  ubicacion: string | null
+  modo: string
+}
+
 /** Panel de Operario (tablet): una acción principal a la vez.
  *  Directriz Jorge: no abrumar, guía de acción visible, sin perder
  *  funcionalidad. El escaneo/vinculación de bobina es el paso central.
  */
 export function OperarioPage() {
   const [coilId, setCoilId] = useState('')
+  const [scan, setScan] = useState<CoilScan | null>(null)
+  const [scanError, setScanError] = useState('')
   const [vinculada, setVinculada] = useState(false)
   const [events, setEvents] = useState<EventData[]>([])
 
@@ -25,7 +41,36 @@ export function OperarioPage() {
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
-    setVinculada(true)
+    setScanError('')
+    setScan(null)
+    try {
+      const res = await fetch(
+        `/api/v1/stock-items/scan?coil_id=${encodeURIComponent(coilId.trim())}`,
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al escanear')
+      }
+      const data = await res.json()
+      if (!data) {
+        setScanError('Bobina no encontrada. Comprueba el código.')
+        return
+      }
+      setScan(data)
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Error de conexión')
+    }
+  }
+
+  const handleLink = async () => {
+    setScanError('')
+    if (!scan) return
+    try {
+      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
+      setVinculada(true)
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Error al vincular')
+    }
   }
 
   return (
@@ -58,13 +103,53 @@ export function OperarioPage() {
               autoFocus
             />
           </label>
-          <button
-            type="submit"
-            disabled={!coilId.trim()}
-            className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
-          >
-            🔗 Vincular bobina
-          </button>
+
+          {scanError && (
+            <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
+              {scanError}
+            </p>
+          )}
+
+          {/* Ficha de la bobina escaneada (modo automático) */}
+          {scan && (
+            <div className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-2">
+              <p className="mono-data text-xl text-kavana-ok">
+                {scan.coil_id ?? scan.lote}
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <Data label="Material" value={scan.material_code ?? '-'} />
+                <Data label="Lote" value={scan.lote} />
+                <Data label="Peso" value={`${scan.peso_kg} kg`} />
+                <Data
+                  label="Dimensiones"
+                  value={
+                    scan.ancho_mm && scan.espesor_mm
+                      ? `${scan.ancho_mm} x ${scan.espesor_mm} mm`
+                      : '-'
+                  }
+                />
+                <Data label="Ubicación" value={scan.ubicacion ?? '-'} />
+                <Data label="Estado" value={scan.estado} />
+              </div>
+              <button
+                type="button"
+                onClick={handleLink}
+                className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+              >
+                🔗 Vincular a mi orden
+              </button>
+            </div>
+          )}
+
+          {!scan && (
+            <button
+              type="submit"
+              disabled={!coilId.trim()}
+              className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
+            >
+              🔍 Escanear bobina
+            </button>
+          )}
         </form>
       ) : (
         <div className="bg-kavana-surface border border-kavana-border rounded-sm p-6 text-center space-y-4">
@@ -114,6 +199,17 @@ export function OperarioPage() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function Data({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="label-industrial text-[10px] text-kavana-text-dim">
+        {label}
+      </span>
+      <p className="mono-data text-sm">{value}</p>
     </div>
   )
 }

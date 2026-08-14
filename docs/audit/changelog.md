@@ -119,3 +119,15 @@ secciones 3.3 y D).
   sugerencia real, evento recepcion_material visible); CI verde con los dos
   jobs.
 
+### Added: Flujo de escaneo y vinculación del operario (anexo A)
+- **Problema:** el panel de operario tenía el escaneo simulado; no buscaba
+  bobinas reales ni las vinculaba a la orden.
+- **Solución:** `find_coil` (escaneo por coil_id o lote con material,
+  dimensiones y peso, modo automático) y `link_coil` (vinculación con cobro
+  BULK por adelantado, idempotente, reubicación JIT con Kardex, spec 01
+  3.6). Endpoints GET /stock-items/scan y POST /stock-items/link. El panel
+  muestra la ficha de la bobina escaneada con "Vincular a mi orden".
+- **Verificación:** 9 tests nuevos backend (32 total), 6 tests frontend del
+  flujo escaneo→ficha, E2E contra PostgreSQL real (scan por coil_id, por
+  lote e inexistente), CI verde.
+

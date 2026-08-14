@@ -158,6 +158,45 @@ def sugerencias_picos(db: DbDep):
     ]
 
 
+@router.get("/scan", response_model=dict | None)
+def scan_coil(coil_id: str | None = None, lote: str | None = None, db: DbDep = None):
+    """Escaneo de bobina (flujo operario): busca por coil_id o lote.
+
+    Modo automático: devuelve material, dimensiones y peso. Modo manual:
+    el operario ajusta peso y lote desde la etiqueta física.
+    """
+    from app.services.inventory import find_coil
+
+    try:
+        return find_coil(db, None, coil_id=coil_id, lote=lote)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class LinkCoilRequest(BaseModel):
+    stock_item_id: uuid.UUID
+    order_id: uuid.UUID
+    line_id: uuid.UUID
+
+
+@router.post("/link")
+def link(body: LinkCoilRequest, db: DbDep):
+    """Vincula la bobina a la orden (cobro BULK por adelantado)."""
+    from app.services.inventory import link_coil
+
+    try:
+        return link_coil(
+            db,
+            tenant_id=None,  # TODO: tenant desde el token JWT
+            user_id=None,
+            stock_item_id=body.stock_item_id,
+            order_id=body.order_id,
+            line_id=body.line_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("", response_model=list[StockItemOut])
 def list_stock(db: DbDep):
     """Lista bobinas (para el panel de Materias Primas)."""
