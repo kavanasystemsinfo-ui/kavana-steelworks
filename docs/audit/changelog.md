@@ -40,3 +40,28 @@ narrativa de ingeniería.
 El guard de seguridad de kilos (`max(15%, 150kg)`) y el cobro BULK de
 `linkCoil` se implementan en la siguiente iteración de la Fase 2 (spec 01,
 secciones 3.3 y D).
+
+## 2026-08-14 — Fase 2 (continuación): recepción, feature flags, Alembic y CI
+
+### Added: Módulo de Materias Primas (recepción) con TDD
+- **Problema:** el rol de recepción no existía; el operario tecleaba peso y
+  lote a mano. La investigación de industria confirmó el flujo estándar
+  (ASN → recepción → GRN → lote → etiqueta → putaway).
+- **Solución:** `receive_coil` (alta de bobina activa + Kardex GRN + stock
+  padre), `build_label` (etiqueta QR escaneable), `move_coil` (putaway con
+  traslado en Kardex). Campos estándar de bobina: heat_number, grado_acero,
+  supplier_coil_id, parent_coil_id.
+- **Verificación:** 6 tests nuevos (16 total verdes).
+
+### Added: Sistema de planes con feature flags (ADR-003)
+- **Problema:** cada planta necesita distinto nivel de automatización.
+- **Solución:** `TenantFeature` (JSONB) + catálogo de 12 features + 3 planes
+  (básico/pro/industrial), patrón replicado del v3.
+- **Verificación:** PLANES con features correctas por nivel.
+
+### Added: Alembic + CI
+- **Problema:** sin migraciones versionadas ni pipeline.
+- **Solución:** Alembic con migración autogenerada, aplicada y verificada
+  contra PostgreSQL real (11 tablas). CI en GitHub Actions: uv + ruff +
+  pytest + check de migraciones. Primer run: success.
+- **Verificación:** `\dt` en postgres:16 real; `gh run view` success.

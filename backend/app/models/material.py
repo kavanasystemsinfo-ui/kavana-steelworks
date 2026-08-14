@@ -122,4 +122,12 @@ class StockItem(UUIDMixin, TimestampMixin, Base):
     notas: Mapped[str | None] = mapped_column(Text)
     creado_por: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"))
 
+    # Atributos estándar de bobina de acero (spec 06, investigación industria)
+    heat_number: Mapped[str | None] = mapped_column(String(100), index=True)
+    grado_acero: Mapped[str | None] = mapped_column(String(50), index=True)
+    supplier_coil_id: Mapped[str | None] = mapped_column(String(100))
+    parent_coil_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("stock_items.id")
+    )  # retales: bobina madre de la que salió
+
     material: Mapped[Material] = relationship(back_populates="stock_items")
