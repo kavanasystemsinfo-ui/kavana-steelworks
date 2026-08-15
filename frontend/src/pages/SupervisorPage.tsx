@@ -35,6 +35,22 @@ interface OrderItem {
   fecha_entrega: string | null
 }
 
+interface IncidenciaItem {
+  id: string
+  linea_id: string | null
+  puesto: string
+  descripcion: string
+  tipo: string
+  estado: string
+  resolucion_tipo: string | null
+  resolucion_descripcion: string | null
+  tiempo_parada_min: number | null
+  coste: number | null
+  created_at: string
+  operario: { id: string; name: string } | null
+  responsable: { id: string; name: string } | null
+}
+
 interface TraceEvent {
   id: string
   action: string
@@ -74,6 +90,71 @@ export function SupervisorPage() {
   const [selectedOrder, setSelectedOrder] = useState('')
   const [trace, setTrace] = useState<TraceEvent[] | null>(null)
   const [traceError, setTraceError] = useState('')
+
+  // Incidencias de planta (spec 04 §3.3): listado y resolución
+  const [incidencias, setIncidencias] = useState<IncidenciaItem[]>([])
+  const [incError, setIncError] = useState('')
+  const [incMsg, setIncMsg] = useState('')
+  const [resolviendoId, setResolviendoId] = useState<string | null>(null)
+  const [resForm, setResForm] = useState({
+    estado: 'resuelta',
+    resolucion_tipo: '',
+    resolucion_descripcion: '',
+    tiempo_parada_min: '',
+    coste: '',
+  })
+
+  const cargarIncidencias = () => {
+    fetch('/api/v1/incidencias')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Incidencias ${r.status}`))))
+      .then((data) => {
+        if (data && Array.isArray(data.incidencias)) setIncidencias(data.incidencias)
+      })
+      .catch(() => setIncError('No se pudieron cargar las incidencias'))
+  }
+
+  useEffect(() => {
+    cargarIncidencias()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleResolver = async (id: string) => {
+    setIncMsg('')
+    setIncError('')
+    try {
+      const res = await fetch(`/api/v1/incidencias/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: resForm.estado,
+          resolucion_tipo: resForm.resolucion_tipo || null,
+          resolucion_descripcion: resForm.resolucion_descripcion || null,
+          tiempo_parada_min:
+            resForm.tiempo_parada_min === ''
+              ? null
+              : Number(resForm.tiempo_parada_min),
+          coste: resForm.coste === '' ? null : Number(resForm.coste),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al resolver incidencia')
+      }
+      await res.json()
+      setIncMsg('Incidencia actualizada')
+      setResolviendoId(null)
+      setResForm({
+        estado: 'resuelta',
+        resolucion_tipo: '',
+        resolucion_descripcion: '',
+        tiempo_parada_min: '',
+        coste: '',
+      })
+      cargarIncidencias()
+    } catch (e) {
+      setIncError(e instanceof Error ? e.message : 'Error de conexión')
+    }
+  }
 
   useEffect(() => {
     const cargar = () => {
@@ -279,6 +360,138 @@ export function SupervisorPage() {
               </li>
             ))}
           </ol>
+        )}
+      </div>
+
+      {/* Incidencias de planta (spec 04 §3.3) */}
+      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="label-industrial text-xs text-kavana-text-dim">
+            Incidencias de planta
+          </p>
+          <span className="text-[10px] text-kavana-text-dim">
+            {incidencias.length} reportadas
+          </span>
+        </div>
+
+        {incMsg && (
+          <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
+            {incMsg}
+          </p>
+        )}
+        {incError && <p className="text-kavana-danger text-sm">{incError}</p>}
+
+        {incidencias.length === 0 && !incError && (
+          <p className="text-kavana-text-dim text-sm">
+            Sin incidencias reportadas.
+          </p>
+        )}
+
+        {incidencias.length > 0 && (
+          <ul className="space-y-3">
+            {incidencias.map((inc) => (
+              <li key={inc.id} className="border-t border-kavana-border pt-2 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{inc.descripcion}</p>
+                    <p className="text-kavana-text-dim text-xs">
+                      {inc.puesto || inc.linea_id || '—'} · {inc.tipo} ·{' '}
+                      {inc.operario?.name ?? '—'} ·{' '}
+                      {new Date(inc.created_at).toLocaleString('es-ES')}
+                    </p>
+                    {inc.resolucion_descripcion && (
+                      <p className="text-kavana-text-dim text-xs">
+                        Resolución: {inc.resolucion_descripcion}
+                      </p>
+                    )}
+                    {inc.tiempo_parada_min != null && (
+                      <p className="text-kavana-text-dim text-xs">
+                        {inc.tiempo_parada_min} min parada · {inc.coste ?? 0} €
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="mono-data text-xs uppercase">{inc.estado}</span>
+                    {inc.estado !== 'cerrada' && (
+                      <button
+                        type="button"
+                        onClick={() => setResolviendoId(inc.id)}
+                        className="text-kavana-orange text-xs uppercase tracking-widest hover:underline"
+                      >
+                        Resolver
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {resolviendoId === inc.id && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="label-industrial text-[10px] text-kavana-text-dim">
+                        Estado final
+                      </span>
+                      <select
+                        value={resForm.estado}
+                        onChange={(e) =>
+                          setResForm({ ...resForm, estado: e.target.value })
+                        }
+                        className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
+                      >
+                        <option value="resuelta">Resuelta</option>
+                        <option value="cerrada">Cerrada</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="label-industrial text-[10px] text-kavana-text-dim">
+                        Tipo de resolución
+                      </span>
+                      <select
+                        value={resForm.resolucion_tipo}
+                        onChange={(e) =>
+                          setResForm({ ...resForm, resolucion_tipo: e.target.value })
+                        }
+                        className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
+                      >
+                        <option value="">—</option>
+                        <option value="reparacion">Reparación</option>
+                        <option value="cambio_pieza">Cambio de pieza</option>
+                        <option value="ajuste">Ajuste</option>
+                      </select>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      placeholder="Minutos de parada"
+                      value={resForm.tiempo_parada_min}
+                      onChange={(e) =>
+                        setResForm({ ...resForm, tiempo_parada_min: e.target.value })
+                      }
+                      className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Coste (€)"
+                      value={resForm.coste}
+                      onChange={(e) =>
+                        setResForm({ ...resForm, coste: e.target.value })
+                      }
+                      className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleResolver(inc.id)}
+                      className="col-span-2 min-h-[44px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+                    >
+                      Confirmar resolución
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>

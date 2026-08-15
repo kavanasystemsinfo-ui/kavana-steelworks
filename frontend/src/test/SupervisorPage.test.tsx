@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { SupervisorPage } from '../pages/SupervisorPage'
@@ -177,6 +178,96 @@ describe('Trazabilidad ISO 9001 en el panel Supervisor', () => {
     renderPage()
 
     expect(await screen.findByText('Sin órdenes disponibles.')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+})
+
+const incidenciaDemo = {
+  id: 'INC-1',
+  linea_id: 'LINEA-1',
+  puesto: 'LINEA-1',
+  descripcion: 'Atasco de bobina en la cizalla',
+  tipo: 'maquina',
+  estado: 'abierta',
+  resolucion_tipo: null,
+  resolucion_descripcion: null,
+  tiempo_parada_min: null,
+  coste: null,
+  created_at: '2026-08-15T10:00:00Z',
+  operario: { id: 'u1', name: 'Operario Demo' },
+  responsable: null,
+  historial: [
+    { estado: 'abierta', timestamp: '2026-08-15T10:00:00Z', comentario: 'Incidencia creada', usuario: 'Operario Demo' },
+  ],
+}
+
+describe('Incidencias de planta en el Supervisor (spec 04 §3.3)', () => {
+  function stubConIncidencias(
+    fetchMock: (url: string, init?: RequestInit) => Promise<unknown>,
+  ) {
+    const base = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes('/api/v1/incidencias')) return fetchMock(url, init)
+      if (url.includes('/supervisor/oee')) {
+        return Promise.resolve({ ok: true, json: async () => oeeBody })
+      }
+      if (url.includes('/supervisor/kpis')) {
+        return Promise.resolve({ ok: true, json: async () => kpisBody })
+      }
+      if (url.includes('/api/v1/orders')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', base)
+  }
+
+  it('lista las incidencias abiertas con su estado', async () => {
+    stubConIncidencias(
+      vi.fn(() =>
+        Promise.resolve({ ok: true, json: async () => ({ success: true, incidencias: [incidenciaDemo] }) }),
+      ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Incidencias de planta')).toBeInTheDocument()
+    expect(screen.getByText('Atasco de bobina en la cizalla')).toBeInTheDocument()
+    expect(screen.getByText('abierta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /resolver/i })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('resuelve una incidencia con cierre financiero vía PATCH', async () => {
+    const user = userEvent.setup()
+    stubConIncidencias(
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          const body = JSON.parse(init.body as string)
+          expect(body.estado).toBe('cerrada')
+          expect(body.resolucion_tipo).toBe('reparacion')
+          expect(body.tiempo_parada_min).toBe(30)
+          expect(body.coste).toBe(120)
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ success: true, msg: 'Incidencia actualizada' }),
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, incidencias: [incidenciaDemo] }),
+        })
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('Atasco de bobina en la cizalla')
+    await user.click(screen.getByRole('button', { name: /resolver/i }))
+    await user.selectOptions(screen.getByLabelText(/estado final/i), 'cerrada')
+    await user.selectOptions(screen.getByLabelText(/tipo de resolución/i), 'reparacion')
+    await user.type(screen.getByPlaceholderText(/minutos de parada/i), '30')
+    await user.type(screen.getByPlaceholderText(/coste.*€/i), '120')
+    await user.click(screen.getByRole('button', { name: /confirmar resolución/i }))
+
+    expect(await screen.findByText('Incidencia actualizada')).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 })

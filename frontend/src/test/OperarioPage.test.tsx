@@ -352,3 +352,49 @@ describe('Autocontrol de calidad (spec 04)', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('Reportar incidencia (spec 04 §3.3)', () => {
+  it('reporta una incidencia desde el puesto con tipo y descripción', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes('/scan')) {
+        return Promise.resolve({ ok: true, json: async () => bobinaDemo })
+      }
+      if (url.includes('/api/v1/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: null, fecha_entrega: null, workstation_id: 'LINEA-1' },
+          ],
+        })
+      }
+      if (url.includes('/api/v1/quality/models')) {
+        return Promise.resolve({ ok: true, json: async () => [modeloDemo] })
+      }
+      if (url.includes('/api/v1/incidencias')) {
+        const body = JSON.parse(init?.body as string)
+        expect(body.linea_id).toBe('LINEA-1')
+        expect(body.descripcion).toBe('Atasco en la cizalla')
+        expect(body.tipo).toBe('maquina')
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, msg: 'Incidencia registrada' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    const descripcion = await screen.findByPlaceholderText(/describe el problema/i)
+    await user.type(descripcion, 'Atasco en la cizalla')
+    await user.selectOptions(
+      screen.getByLabelText(/tipo de incidencia/i),
+      'maquina',
+    )
+    await user.click(screen.getByRole('button', { name: /reportar incidencia/i }))
+
+    expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+})

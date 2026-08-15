@@ -182,6 +182,44 @@ export function OperarioPage() {
     }
   }
 
+  // Incidencias de planta (spec 04 §3.3): reporte desde el puesto
+  const [incDescripcion, setIncDescripcion] = useState('')
+  const [incTipo, setIncTipo] = useState('maquina')
+  const [incMsg, setIncMsg] = useState('')
+  const [incError, setIncError] = useState('')
+
+  const handleReportarIncidencia = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIncMsg('')
+    setIncError('')
+    if (!ordenActual?.workstation_id) return
+    if (!incDescripcion.trim()) {
+      setIncError('Describe el problema antes de reportar.')
+      return
+    }
+    try {
+      const res = await fetch('/api/v1/incidencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          linea_id: ordenActual.workstation_id,
+          descripcion: incDescripcion.trim(),
+          tipo: incTipo,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al reportar incidencia')
+      }
+      await res.json()
+      setIncMsg('Incidencia registrada')
+      setIncDescripcion('')
+      setIncTipo('maquina')
+    } catch (err) {
+      setIncError(err instanceof Error ? err.message : 'Error de conexión')
+    }
+  }
+
   const handleRecordProduction = async (e: React.FormEvent) => {
     e.preventDefault()
     setFinBobinaMsg('')
@@ -558,6 +596,65 @@ export function OperarioPage() {
             🔄 Desvincular bobina
           </button>
         </div>
+      )}
+
+      {/* Reportar incidencia (spec 04 §3.3): siempre accesible desde el puesto */}
+      {ordenActual?.workstation_id && (
+        <form
+          onSubmit={handleReportarIncidencia}
+          className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3"
+        >
+          <p className="label-industrial text-xs text-kavana-text-dim">
+            Reportar incidencia
+          </p>
+
+          {incMsg && (
+            <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
+              {incMsg}
+            </p>
+          )}
+          {incError && (
+            <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
+              {incError}
+            </p>
+          )}
+
+          <label className="block">
+            <span className="label-industrial text-xs text-kavana-text-dim">
+              Tipo de incidencia
+            </span>
+            <select
+              value={incTipo}
+              onChange={(e) => setIncTipo(e.target.value)}
+              className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+            >
+              <option value="maquina">Máquina</option>
+              <option value="material">Material</option>
+              <option value="seguridad">Seguridad</option>
+              <option value="otro">Otro</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="label-industrial text-xs text-kavana-text-dim">
+              Descripción
+            </span>
+            <textarea
+              value={incDescripcion}
+              onChange={(e) => setIncDescripcion(e.target.value)}
+              placeholder="Describe el problema"
+              rows={2}
+              className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-danger hover:text-white transition-colors"
+          >
+            ⚠️ Reportar incidencia
+          </button>
+        </form>
       )}
 
       {/* Datos de apoyo colapsados: solo si el operario los necesita */}
