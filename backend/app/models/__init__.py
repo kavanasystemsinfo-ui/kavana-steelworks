@@ -3,6 +3,7 @@
 from app.core.database import Base  # noqa: F401
 from app.models.coil_link import CoilLink  # noqa: F401
 from app.models.incidencia import Incidencia, IncidenciaHistorial  # noqa: F401
+from app.models.incidencia_upload import IncidenciaUploadSession  # noqa: F401
 from app.models.material import Material, StockItem  # noqa: F401
 from app.models.order import Order, OrderLine  # noqa: F401
 from app.models.quality import (  # noqa: F401
@@ -23,6 +24,7 @@ __all__ = [
     "CoilLink",
     "Incidencia",
     "IncidenciaHistorial",
+    "IncidenciaUploadSession",
     "Material",
     "StockItem",
     "Order",

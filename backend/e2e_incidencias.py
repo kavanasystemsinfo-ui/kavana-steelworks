@@ -81,7 +81,54 @@ def main() -> None:
     assert oee["raw"]["total_downtime_min"] == 45, oee
     assert "total_downtime_min" in oee["raw"]
 
-    # 6. Check real: tipo inválido -> 400 (el CHECK de PG no llega a saltar
+    # 6. Flujo QR + móvil (spec 04 §3.3.2): sesión -> foto -> incidencia
+    r = client.post("/api/v1/incidencias/upload-session")
+    assert r.status_code == 200, r.text
+    sesion = r.json()
+    assert sesion["status"] == "pending"
+
+    png = b"\x89PNG\r\n\x1a\n" + b"e2e-foto"
+    r = client.post(
+        f"/api/v1/incidencias/upload-mobile/{sesion['session_id']}",
+        files={"foto": ("foto.png", png, "image/png")},
+    )
+    assert r.status_code == 200, r.text
+
+    r = client.get(f"/api/v1/incidencias/upload-session/{sesion['session_id']}")
+    assert r.status_code == 200, r.text
+    estado = r.json()
+    assert estado["status"] == "uploaded"
+    assert estado["has_photo"] is True
+    assert estado["photo_data_url"].startswith("data:image/png;base64,")
+
+    r = client.post(
+        "/api/v1/incidencias",
+        json={
+            "linea_id": "LINEA-1",
+            "descripcion": "Incidencia con evidencia QR",
+            "tipo": "seguridad",
+            "photo_session_id": sesion["session_id"],
+        },
+    )
+    assert r.status_code == 201, r.text
+    inc_foto = r.json()["incidencia"]
+    assert inc_foto["foto_data_url"].startswith("data:image/png;base64,")
+    assert inc_foto["foto_size"] == len(png)
+
+    # Sesión 'used' y bytes temporales liberados
+    from app.models.incidencia_upload import IncidenciaUploadSession
+
+    db = SessionLocal()
+    fila = (
+        db.query(IncidenciaUploadSession)
+        .filter_by(session_id=sesion["session_id"])
+        .one()
+    )
+    assert fila.status == "used", fila.status
+    assert fila.photo is None
+    db.close()
+
+    # 7. Check real: tipo inválido -> 400 (el CHECK de PG no llega a saltar
     # porque el servicio valida antes; verificar el CHECK con psql en la migración)
     r = client.post(
         "/api/v1/incidencias",
@@ -90,10 +137,12 @@ def main() -> None:
     assert r.status_code == 400, r.text
 
     db = SessionLocal()
-    assert db.query(Incidencia).count() == 1
+    assert db.query(Incidencia).count() == 2
     db.close()
 
-    print("E2E INCIDENCIAS OK: alta, orden activa, broker, resolucion, OEE downtime")
+    print(
+        "E2E INCIDENCIAS OK: alta, orden activa, broker, resolucion, OEE downtime, foto QR"
+    )
 
 
 if __name__ == "__main__":

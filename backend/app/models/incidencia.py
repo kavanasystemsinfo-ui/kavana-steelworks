@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -61,7 +62,13 @@ class Incidencia(UUIDMixin, TimestampMixin, Base):
     )
     descripcion: Mapped[str] = mapped_column(Text, nullable=False)
     tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="otro")
+    # Foto de la incidencia. `foto` (TEXT) era la URL del legacy (Cloudinary);
+    # en el v2 la evidencia se guarda como BYTEA en `foto_data` (patrón de
+    # kavana-manufacturing, sin servicios externos) con su mime y tamaño.
     foto: Mapped[str | None] = mapped_column(Text)
+    foto_data: Mapped[bytes | None] = mapped_column(LargeBinary)
+    foto_mime: Mapped[str | None] = mapped_column(String(50))
+    foto_size: Mapped[int | None] = mapped_column()
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="abierta")
 
     # Resolución financiera (spec 04 §3.3: campos independientes, conservan

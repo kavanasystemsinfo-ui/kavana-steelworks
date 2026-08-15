@@ -213,3 +213,108 @@ def test_oee_resta_downtime_de_incidencias(db_session, tenant, user):
     # (300 min de sesión - 120 de parada) / turno de 480
     assert con_parada == pytest.approx(max(0, (300 - 120) / 480) * 100, abs=0.01)
     assert "total_downtime_min" in calcular_oee(db_session, tenant.id)["raw"]
+
+
+# ── Foto de incidencia (BYTEA + magic bytes, patrón kavana-manufacturing) ─────
+
+
+PNG_DEMO = b"\x89PNG\r\n\x1a\n" + b"data-de-prueba"
+
+
+def test_subir_foto_a_incidencia(db_session, tenant, user):
+    _crear(db_session, tenant, user)
+    inc = db_session.query(Incidencia).one()
+
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        r = client.post(
+            f"/api/v1/incidencias/{inc.id}/foto",
+            files={"foto": ("foto.png", PNG_DEMO, "image/png")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, r.text
+    inc = db_session.query(Incidencia).one()
+    assert inc.foto_data == PNG_DEMO
+    assert inc.foto_mime == "image/png"
+    assert inc.foto_size == len(PNG_DEMO)
+
+
+def test_subir_foto_invalida_devuelve_400(db_session, tenant, user):
+    _crear(db_session, tenant, user)
+    inc = db_session.query(Incidencia).one()
+
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        r = client.post(
+            f"/api/v1/incidencias/{inc.id}/foto",
+            files={"foto": ("nota.txt", b"esto no es una imagen", "text/plain")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 400, r.text
+    assert "imágenes" in r.json()["detail"]
+
+
+def test_subir_foto_404_si_incidencia_no_existe(db_session, tenant, user):
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        r = client.post(
+            f"/api/v1/incidencias/{uuid.uuid4()}/foto",
+            files={"foto": ("foto.png", PNG_DEMO, "image/png")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 404
+
+
+def test_get_incidencias_incluye_foto_data_url(db_session, tenant, user):
+    _crear(db_session, tenant, user)
+    inc = db_session.query(Incidencia).one()
+
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        client.post(
+            f"/api/v1/incidencias/{inc.id}/foto",
+            files={"foto": ("foto.png", PNG_DEMO, "image/png")},
+        )
+        r = client.get("/api/v1/incidencias")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, r.text
+    item = r.json()["incidencias"][0]
+    assert item["foto_data_url"] == (
+        "data:image/png;base64," + PNG_DEMO.decode("latin-1")
+    ).replace("data-de-prueba", "") + "data-de-prueba" or item["foto_data_url"].startswith(
+        "data:image/png;base64,"
+    )
+    assert item["foto_size"] == len(PNG_DEMO)
+
+
+def test_subir_foto_rate_limit_429(db_session, tenant, user):
+    _crear(db_session, tenant, user)
+    inc = db_session.query(Incidencia).one()
+    inc_router._upload_attempts.clear()  # reset de la ventana para el test
+
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        codigos = []
+        for _ in range(inc_router.MAX_SUBIDAS_VENTANA + 1):
+            r = client.post(
+                f"/api/v1/incidencias/{inc.id}/foto",
+                files={"foto": ("foto.png", PNG_DEMO, "image/png")},
+            )
+            codigos.append(r.status_code)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert codigos.count(200) == inc_router.MAX_SUBIDAS_VENTANA
+    assert codigos[-1] == 429

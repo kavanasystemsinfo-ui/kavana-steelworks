@@ -18,6 +18,7 @@ from app.models.incidencia import ESTADOS_INCIDENCIA, Incidencia, IncidenciaHist
 from app.models.order import Order, OrderLine
 from app.services.demo_context import resolver_operario, resolver_tenant
 from app.services.events import broker
+from app.services.incidencia_uploads import UploadError
 
 LIMITE_INCIDENCIAS = 50  # spec 04: límite duro de listado
 
@@ -45,8 +46,15 @@ def crear_incidencia(
     descripcion: str,
     tipo: str = "otro",
     foto: str | None = None,
+    photo_session_id: str | None = None,
 ) -> Incidencia:
-    """Crea una incidencia en estado 'abierta' con su historial inicial."""
+    """Crea una incidencia en estado 'abierta' con su historial inicial.
+
+    Si `photo_session_id` apunta a una sesión QR con foto 'uploaded', la
+    foto se copia a la incidencia y la sesión pasa a 'used' (finalize).
+    """
+    from app.services.incidencia_uploads import finalizar as finalizar_foto
+
     if tenant_id is None:
         tenant = resolver_tenant(db)
         if tenant is None:
@@ -89,6 +97,21 @@ def crear_incidencia(
 
     db.commit()
     db.refresh(incidencia)
+
+    # Adjuntar la foto de la sesión QR si llegó (no bloquea: sin foto, la
+    # incidencia se crea igual; la sesión pendiente caduca sola).
+    if photo_session_id:
+        try:
+            finalizar_foto(
+                db,
+                tenant_id=tenant_id,
+                session_id=uuid.UUID(photo_session_id),
+                incidencia_id=incidencia.id,
+            )
+        except (ValueError, TypeError):
+            db.rollback()
+            db.refresh(incidencia)
+
     return incidencia
 
 
@@ -160,6 +183,36 @@ def actualizar_incidencia(
         data={"id": str(incidencia.id), "estado": incidencia.estado},
     )
 
+    db.commit()
+    db.refresh(incidencia)
+    return incidencia
+
+
+def subir_foto(
+    db: Session, *, incidencia_id: uuid.UUID, tenant_id: uuid.UUID, buf: bytes
+) -> Incidencia:
+    """Valida por magic bytes y guarda la foto como BYTEA (patrón manufacturing).
+
+    La foto es la evidencia de la incidencia y vive en PostgreSQL; sin
+    servicios externos (el legacy usaba Cloudinary, no portado).
+    """
+    from app.services.photo_validator import validar_foto
+
+    incidencia = (
+        db.query(Incidencia)
+        .filter(Incidencia.id == incidencia_id, Incidencia.tenant_id == tenant_id)
+        .first()
+    )
+    if incidencia is None:
+        raise UploadError("Incidencia no encontrada", 404)
+
+    validacion = validar_foto(buf)
+    if not validacion["ok"]:
+        raise UploadError(validacion["reason"], 400)
+
+    incidencia.foto_data = buf
+    incidencia.foto_mime = validacion["mime"]
+    incidencia.foto_size = validacion["size"]
     db.commit()
     db.refresh(incidencia)
     return incidencia
