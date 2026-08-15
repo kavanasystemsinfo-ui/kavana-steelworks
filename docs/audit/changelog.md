@@ -44,6 +44,33 @@ narrativa de ingeniería.
 - 56 tests backend + 8 tests frontend, ruff limpio, CI con los dos jobs.
 - Archivo de verificación: `backend/e2e_produccion.py`.
 
+## 2026-08-15 — Fase 4: despliegue demo (Fly.io + Vercel + PostgreSQL)
+
+### Added: backend en Fly.io (steelworks-api)
+- **Decisión:** Fly.io + PostgreSQL gestionado (patrón BusRoad verificado; el VPS
+  es laboratorio, no producción — estándar KAVANA 2026-08-05). La BD es
+  PostgreSQL real con los CHECK constraints que el modelo exige.
+- **Infra:** Dockerfile python:3.12-slim, fly.toml (machines, region cdg,
+  256mb), entrypoint que aplica migraciones + seed + uvicorn. App `steelworks-api`,
+  clúster `steelworks-db` (shared-cpu-1x, 1 GB), attach con secret DATABASE_URL.
+- **Config:** `config.py` acepta `DATABASE_URL`/`JWT_SECRET` estándar (alias
+  STEELWORKS_*) y normaliza `postgres://` → `postgresql+psycopg://`.
+- **Seed demo:** `app/services/seed_demo.py` idempotente (tenant Demo Aceros +
+  material ACERO-DC01 + bobina COIL-DEMO-001 + orden + operario), 2 tests.
+- **Verificación:** health OK, materials con datos reales, scan de
+  COIL-DEMO-001 devuelve la ficha completa (800 kg, 1220×1,2 mm).
+
+### Added: frontend en Vercel (steelworks-kavana)
+- `vercel.json` con rewrites `/api/*` → steelworks-api.fly.dev + fallback SPA.
+- CORS del backend incluye el dominio final y el de Vercel.
+- Dominio `steelworks.kavanasystems.com` añadido en Vercel (CNAME
+  `c656b0c70cfddc43.vercel-dns-017.com.` en Namecheap, pendiente propagación).
+- **Verificación:** frontend 200 en Vercel, rewrite /api/* con datos reales.
+
+### URLs de la demo (verificadas)
+- App: https://steelworks-kavana.vercel.app (final: steelworks.kavanasystems.com)
+- API: https://steelworks-api.fly.dev/health
+
 ## 2026-08-15 — Fase 3: fin de bobina corregido (radio→kg, fórmula v2) + botón Retirar
 
 ### Added: port de la fórmula v2 radio→kg (coil_math)
