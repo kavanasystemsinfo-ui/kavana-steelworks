@@ -450,17 +450,36 @@ def create_retal(
     db.commit()
     db.refresh(bobina)
     db.refresh(linea)
+
+    # Trazabilidad ISO 9001 (spec 04): evento scrap con la reconciliación real
+    from app.services.traceability import log_event
+
+    log_event(
+        db,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        line_id=line_id,
+        operator_id=user_id,
+        action="scrap",
+        quantity=float(hidden_merma),
+        metadata={
+            "radio_mm": radio_mm,
+            "peso_restante_kg": float(real_remaining),
+            "system_remaining_kg": float(system_remaining),
+            "merma_cost": float(merma_cost),
+            "reason": "fin_bobina",
+            "activeCoilId": str(bobina.id),
+            "activeCoilCode": bobina.coil_id,
+        },
+    )
+
     return {
         "success": True,
         "merma_kg": float(hidden_merma),
         "merma_cost": float(merma_cost),
         "radio_mm": radio_mm,
         "peso_restante_kg": float(real_remaining),
-        "msg": (
-            "Pico retirado a inventario"
-            if real_remaining > 0
-            else "Bobina agotada"
-        ),
+        "msg": ("Pico retirado a inventario" if real_remaining > 0 else "Bobina agotada"),
     }
 
 
@@ -533,6 +552,27 @@ def retirar_pico(
 
     db.commit()
     db.refresh(bobina)
+
+    # Trazabilidad ISO 9001 (spec 04): la línea deja de usar el material
+    if order_id and line_id:
+        from app.services.traceability import log_event
+
+        log_event(
+            db,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            line_id=line_id,
+            operator_id=user_id,
+            action="finish",
+            quantity=float(peso),
+            metadata={
+                "reason": "retirar_pico",
+                "activeCoilId": str(bobina.id),
+                "activeCoilCode": bobina.coil_id,
+                "ubicacion": "Retales",
+            },
+        )
+
     return {
         "success": True,
         "peso_kg": float(peso),

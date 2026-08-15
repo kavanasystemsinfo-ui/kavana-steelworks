@@ -38,9 +38,7 @@ def _resolver_usuario(db: Session, tenant_id, user_id):
             return user.id
         if user is not None and user.email == "system@kavana.local":
             return user.id
-        raise ValueError(
-            "Permiso denegado: solo los operarios pueden registrar producción"
-        )
+        raise ValueError("Permiso denegado: solo los operarios pueden registrar producción")
     from app.services.receiving import _system_user
 
     return _system_user(db, tenant_id)
@@ -114,9 +112,8 @@ def record_production(
     idx = next((i for i, linea_i in enumerate(lineas_orden) if linea_i.id == linea.id), 0)
     if idx > 0:
         previa = lineas_orden[idx - 1]
-        disponible_wip = (
-            (previa.produced_quantity or Decimal("0"))
-            - (linea.produced_quantity or Decimal("0"))
+        disponible_wip = (previa.produced_quantity or Decimal("0")) - (
+            linea.produced_quantity or Decimal("0")
         )
         if qty > disponible_wip:
             raise ValueError(
@@ -180,12 +177,8 @@ def record_production(
         if modo_auditoria and qty > 0:
             kg_per_unit = kg_por_pieza
             if kg_per_unit == 0 and linea.target_material_qty:
-                kg_per_unit = linea.target_material_qty / (
-                    linea.total_quantity or Decimal("1")
-                )
-            theoretical_total = (
-                linea.produced_quantity or Decimal("0") + qty
-            ) * kg_per_unit
+                kg_per_unit = linea.target_material_qty / (linea.total_quantity or Decimal("1"))
+            theoretical_total = (linea.produced_quantity or Decimal("0") + qty) * kg_per_unit
             real_limit = linea.real_material_qty or Decimal("0")
             tolerance = max(real_limit * Decimal("0.15"), Decimal("150"))
             if theoretical_total > real_limit + tolerance:
@@ -249,30 +242,24 @@ def record_production(
         linea.real_cost = (linea.real_cost or Decimal("0")) + incremental_labor_cost
     else:
         linea.real_cost = (
-            (linea.real_cost or Decimal("0"))
-            + incremental_material_cost
-            + incremental_labor_cost
+            (linea.real_cost or Decimal("0")) + incremental_material_cost + incremental_labor_cost
         )
         linea.real_material_qty = (linea.real_material_qty or Decimal("0")) + consumed_amount
 
     # Reparar target_material_qty si faltaba (órdenes legacy sin BOM)
     if not linea.target_material_qty or linea.target_material_qty == 0:
         if kg_por_pieza > 0:
-            linea.target_material_qty = (total_requerida * kg_por_pieza).quantize(
-                Decimal("0.0001")
-            )
+            linea.target_material_qty = (total_requerida * kg_por_pieza).quantize(Decimal("0.0001"))
             linea.target_material_unit = "kg"
         elif consumed_amount > 0 and qty > 0:
-            linea.target_material_qty = (
-                (consumed_amount / qty) * total_requerida
-            ).quantize(Decimal("0.0001"))
+            linea.target_material_qty = ((consumed_amount / qty) * total_requerida).quantize(
+                Decimal("0.0001")
+            )
             linea.target_material_unit = consumption_unit
 
     # 8) Roll-up del coste total de la orden
     order.real_total_cost = sum(
-        (linea_i.real_cost or Decimal("0"))
-        for linea_i in lineas_orden
-        if linea_i.id != linea.id
+        (linea_i.real_cost or Decimal("0")) for linea_i in lineas_orden if linea_i.id != linea.id
     ) + (linea.real_cost or Decimal("0"))
     order.estado = (
         "completed"
@@ -282,6 +269,33 @@ def record_production(
 
     db.commit()
     db.refresh(linea)
+
+    # 9) Trazabilidad ISO 9001 (spec 04): evento produce inmutable, best-effort.
+    #    Nunca rompe el flujo: si el log falla, ya se registró y se traga.
+    from app.services.traceability import log_event
+
+    log_event(
+        db,
+        tenant_id=order.tenant_id,
+        order_id=order.id,
+        line_id=linea.id,
+        operator_id=user_id,
+        action="produce",
+        quantity=float(qty),
+        metadata={
+            "observaciones": observaciones or None,
+            "consumedMaterial": consumption_unit,
+            "consumedAmount": float(consumed_amount),
+            "incrementalCost": float(incremental_material_cost + incremental_labor_cost),
+            "efficiency": (float(qty / hours) if hours > 0 else None),
+            "activeCoilId": str(bobina_activa.id) if bobina_activa else None,
+            "activeCoilCode": bobina_activa.coil_id if bobina_activa else None,
+            "workstationName": linea.workstation_id,
+            "manufacturingModel": linea.modelo_id,
+            "totalRealized": float(linea.produced_quantity),
+            "calculationMethod": calculation_method,
+        },
+    )
 
     return {
         "success": True,

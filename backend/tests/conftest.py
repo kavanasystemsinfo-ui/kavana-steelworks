@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.models import Base, Tenant, User
 
@@ -14,6 +15,7 @@ def db_session():
     engine = create_engine(
         TEST_DB_URL,
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,  # BD en memoria COMPARTIDA entre conexiones (TestClient)
     )
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
