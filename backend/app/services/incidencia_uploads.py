@@ -32,11 +32,21 @@ class UploadError(Exception):
 def crear_sesion(
     db: Session, *, tenant_id: uuid.UUID, operario_id: uuid.UUID
 ) -> IncidenciaUploadSession:
-    """Crea una sesión pendiente con TTL; expira las vencidas (lazy)."""
+    """Crea una sesión pendiente con TTL; expira las vencidas (lazy).
+
+    También expira sesiones 'uploaded' huérfanas de más de 24 h (por ejemplo
+    cuando el operario descarta la foto del modal sin reportar).
+    """
+    ahora = datetime.now(UTC)
     db.query(IncidenciaUploadSession).filter(
         IncidenciaUploadSession.tenant_id == tenant_id,
         IncidenciaUploadSession.status == "pending",
-        IncidenciaUploadSession.expires_at < datetime.now(UTC),
+        IncidenciaUploadSession.expires_at < ahora,
+    ).update({IncidenciaUploadSession.status: "expired"}, synchronize_session=False)
+    db.query(IncidenciaUploadSession).filter(
+        IncidenciaUploadSession.tenant_id == tenant_id,
+        IncidenciaUploadSession.status == "uploaded",
+        IncidenciaUploadSession.expires_at < ahora - timedelta(hours=24),
     ).update({IncidenciaUploadSession.status: "expired"}, synchronize_session=False)
 
     sesion = IncidenciaUploadSession(
