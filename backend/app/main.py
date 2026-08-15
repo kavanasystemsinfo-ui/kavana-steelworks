@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers import auth as auth_router
+from app.routers import production as production_router
 from app.routers import stock as stock_router
 from app.services.events import broker
 
@@ -31,6 +32,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(stock_router.router)
+app.include_router(production_router.router)
 
 
 @app.get("/health")

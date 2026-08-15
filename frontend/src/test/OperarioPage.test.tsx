@@ -89,4 +89,91 @@ describe('Panel de Operario (directriz no abrumar)', () => {
     expect(detalles).toBeInTheDocument()
     expect(detalles.closest('summary')).toBeTruthy()
   })
+
+  it('tras vincular, el fin de bobina pide radio en mm y hay botón Retirar', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'bobina-1',
+        lote: 'L-DEMO',
+        coil_id: 'COIL-L-DEMO',
+        peso_kg: 800,
+        ancho_mm: 122,
+        espesor_mm: 0.5,
+        material_code: 'ACERO-01',
+        material_name: 'Bobina Acero',
+        estado: 'activo',
+        ubicacion: 'ALMACEN-1',
+        modo: 'auto',
+      }),
+    }))
+    renderPage()
+    const input = screen.getByPlaceholderText(/escanea la etiqueta/i)
+    await user.type(input, 'COIL-L-DEMO')
+    await user.click(screen.getByRole('button', { name: /escanear bobina/i }))
+    const botonVincular = await screen.findByRole('button', { name: /vincular a mi orden/i })
+    // El flujo de demo: vincular muestra el panel de producción
+    await user.click(botonVincular)
+    expect(
+      await screen.findByPlaceholderText(/radio restante/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /retirar pico a inventario/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /registrar piezas/i }),
+    ).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('registrar piezas llama a /api/v1/production/record', async () => {
+    const user = userEvent.setup()
+    const bobina = {
+      id: 'bobina-1',
+      lote: 'L-DEMO',
+      coil_id: 'COIL-L-DEMO',
+      peso_kg: 800,
+      ancho_mm: 122,
+      espesor_mm: 0.5,
+      material_code: 'ACERO-01',
+      material_name: 'Bobina Acero',
+      estado: 'activo',
+      ubicacion: 'ALMACEN-1',
+      modo: 'auto',
+    }
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('/scan')) {
+        return Promise.resolve({ ok: true, json: async () => bobina })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          incremental_quantity: 5,
+          consumed_amount: 4.75,
+          consumption_unit: 'kg',
+          calculation_method: 'density_formula',
+        }),
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    const input = screen.getByPlaceholderText(/escanea la etiqueta/i)
+    await user.type(input, 'COIL-L-DEMO')
+    await user.click(screen.getByRole('button', { name: /escanear bobina/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /vincular a mi orden/i }),
+    )
+
+    const piezas = await screen.findByPlaceholderText(/piezas/i)
+    await user.type(piezas, '5')
+    await user.click(screen.getByRole('button', { name: /registrar piezas/i }))
+
+    const llamadas = fetchMock.mock.calls.map((c) => c[0])
+    expect(llamadas).toContain('/api/v1/production/record')
+    expect(
+      await screen.findByText(/5 piezas registradas/i),
+    ).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
 })

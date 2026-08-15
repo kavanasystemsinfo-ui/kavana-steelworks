@@ -4,6 +4,46 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-15 — Fase 3: producción con auto-consumo FIFO (recordProduction)
+
+### Added: `record_production` (spec 02 3.4 + spec 01 3.12)
+- **Problema:** faltaba el corazón del ciclo: registrar piezas y que el FIFO
+  consuma el material automáticamente, con trazabilidad real por lote.
+- **Solución:** servicio `app/services/production.py`:
+  - Cálculo de kg por pieza: `density_formula` (ancho/espesor del lote,
+    largo de `meters_per_piece`, densidad calibrada Kavana 7.7807 kg/dm³ ×1000)
+    con fallback `meters_legacy` y `bom_static` (spec 01 3.12).
+  - Modo auditoría (línea con bobina activa): consume por burbuja de
+    vinculación + bobina prioritaria (`consume_stock_fifo` con contexto de
+    producción: `produced_quantity`, `kg_por_pieza`, `calculation_method`,
+    `tipo auto_audit`); el fallo de deducción BLOQUEA la producción.
+  - Modo simple (sin bobina): FIFO global; el fallo NO bloquea (produce sin
+    descuento, nunca consumos fantasma).
+  - GUARDIA DE SEGURIDAD (evaluada ANTES de descontar stock, porque
+    `consume_stock_fifo` hace commit interno): kilos teóricos acumulados no
+    pueden superar los reales vinculados + max(15%, 150 kg).
+  - WIP waterfall entre líneas en cascada; `produced >= total` → línea
+    `completed`; `real_time` en minutos; roll-up de coste de la orden.
+  - Nuevo endpoint POST /api/v1/production/record.
+- **Verificación:** 8 tests TDD (rol operator, cantidad/horas, consumo por
+  burbuja con density_formula, modo simple tolerante, auto-complete,
+  guardia de seguridad, WIP, horas), 56 tests backend totales, ruff limpio.
+  E2E contra PostgreSQL real: bobina 800 kg, 10 piezas → 9,49 kg consumidos
+  (density_formula), MaterialConsumo auto_audit, fin de bobina por radio
+  (queda 626,43 kg en puesto, 164,08 kg merma), retirar a 'Retales'.
+- Migración Alembic `c4a9f2e7d1b3` (real_time en order_lines).
+
+### Changed: frontend panel de operario (producción real)
+- El botón "Registrar producción" ahora es un formulario: piezas (+ horas
+  opcional) que llama a /api/v1/production/record y muestra el resultado
+  (piezas, kg consumidos, método). Botón "Desvincular bobina" secundario.
+- **Verificación:** 8 tests vitest (2 nuevos: panel post-vincular con radio
+  + Retirar, y llamada real a /api/v1/production/record), tsc limpio, build PWA.
+
+### Totales tras el cambio
+- 56 tests backend + 8 tests frontend, ruff limpio, CI con los dos jobs.
+- Archivo de verificación: `backend/e2e_produccion.py`.
+
 ## 2026-08-15 — Fase 3: fin de bobina corregido (radio→kg, fórmula v2) + botón Retirar
 
 ### Added: port de la fórmula v2 radio→kg (coil_math)

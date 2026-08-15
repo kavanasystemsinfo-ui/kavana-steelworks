@@ -78,6 +78,9 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
     produced_quantity: Mapped[Decimal] = mapped_column(
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )
+    real_time: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), nullable=False, default=Decimal("0")
+    )  # minutos de sesión acumulados (spec 02 3.4)
     target_material_qty: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     target_material_unit: Mapped[str | None] = mapped_column(String(10))
     meters_per_piece: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))

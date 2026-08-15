@@ -75,6 +75,41 @@ export function OperarioPage() {
 
   const [radioMm, setRadioMm] = useState('')
   const [finBobinaMsg, setFinBobinaMsg] = useState('')
+  const [piezas, setPiezas] = useState('')
+  const [horas, setHoras] = useState('')
+
+  const handleRecordProduction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFinBobinaMsg('')
+    if (!scan) return
+    try {
+      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
+      const res = await fetch('/api/v1/production/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: '00000000-0000-0000-0000-000000000000',
+          line_id: '00000000-0000-0000-0000-000000000000',
+          incremental_quantity: Number(piezas),
+          hours_worked: Number(horas || 0),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al registrar producción')
+      }
+      const data = await res.json()
+      setFinBobinaMsg(
+        `${data.incremental_quantity} piezas registradas · ${data.consumed_amount} ${data.consumption_unit} consumidos (${data.calculation_method})`,
+      )
+      setPiezas('')
+      setHoras('')
+    } catch (err) {
+      setFinBobinaMsg(
+        err instanceof Error ? err.message : 'Error al registrar producción',
+      )
+    }
+  }
 
   const handleFinBobina = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -265,15 +300,52 @@ export function OperarioPage() {
             </button>
           </form>
 
+          {/* Registrar producción: piezas buenas (auto-consumo FIFO) */}
+          <form
+            onSubmit={handleRecordProduction}
+            className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
+          >
+            <p className="label-industrial text-xs text-kavana-text-dim">
+              Registrar producción
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                step="1"
+                min="1"
+                value={piezas}
+                onChange={(e) => setPiezas(e.target.value)}
+                placeholder="Piezas"
+                className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+                required
+              />
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={horas}
+                onChange={(e) => setHoras(e.target.value)}
+                placeholder="Horas"
+                className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full min-h-[56px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+            >
+              ➕ Registrar piezas
+            </button>
+          </form>
+
           <button
             onClick={() => {
               setVinculada(false)
               setScan(null)
               setCoilId('')
             }}
-            className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+            className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
           >
-            ➕ Registrar producción
+            🔄 Desvincular bobina
           </button>
         </div>
       )}

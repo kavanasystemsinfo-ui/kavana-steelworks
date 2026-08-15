@@ -82,6 +82,11 @@ def consume_stock_fifo(
     order_line_id,
     workstation_id=None,
     priority_stock_item_id=None,
+    produced_quantity: Decimal | float | None = None,
+    kg_por_pieza: Decimal | float | None = None,
+    calculation_method: str | None = None,
+    consumo_tipo: str = "automatico",
+    meters_per_piece: Decimal | float | None = None,
 ) -> dict[str, Any]:
     """Consume cantidad_requerida aplicando cascada FIFO.
 
@@ -89,6 +94,11 @@ def consume_stock_fifo(
     (burbuja de vinculación): solo las bobinas vinculadas a la orden y la
     prioritaria son elegibles. Devuelve dict con `consumos` (por bobina) y
     `coste_real_total`.
+
+    Contexto de producción opcional (spec 01 3.12): produced_quantity,
+    kg_por_pieza, calculation_method y meters_per_piece se escriben en los
+    MaterialConsumo para trazabilidad real por lote; consumo_tipo permite
+    'auto_audit' en modo auditoría.
     """
     requerida = Decimal(str(cantidad_requerida))
     elegibles = _elegibles_fifo(
@@ -173,6 +183,7 @@ def consume_stock_fifo(
                 tenant_id=tenant_id,
                 order_id=order_id,
                 order_line_id=order_line_id,
+                workstation_id=workstation_id or "reconciliacion",
                 material_id=material_id,
                 stock_item_id=c["stock_item_id"],
                 lote=c["lote"],
@@ -180,7 +191,11 @@ def consume_stock_fifo(
                 unit=material.unit if material else "kg",
                 cost_per_unit=c["coste_por_unidad"],
                 total_cost=round(c["cantidad"] * c["coste_por_unidad"], 2),
-                tipo="automatico",
+                produced_quantity=produced_quantity or 0,
+                kg_por_pieza=kg_por_pieza or 0,
+                calculation_method=calculation_method or "none",
+                meters_per_piece=meters_per_piece,
+                tipo=consumo_tipo,
                 operator_id=user_id,
             )
         )

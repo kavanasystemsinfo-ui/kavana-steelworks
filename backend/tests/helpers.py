@@ -64,10 +64,10 @@ def make_order(db, tenant, numero="OP-001"):
     return o
 
 
-def make_order_line(db, order, workstation="LINEA-1", total_quantity=10.0):
+def make_order_line(db, order, workstation="LINEA-1", total_quantity=10.0, linea_numero=1):
     line = OrderLine(
         order_id=order.id,
-        linea_numero=1,
+        linea_numero=linea_numero,
         workstation_id=workstation,
         total_quantity=total_quantity,
     )
