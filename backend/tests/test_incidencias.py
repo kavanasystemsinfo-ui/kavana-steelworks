@@ -90,7 +90,7 @@ def test_listar_incidencias_orden_desc(db_session, tenant, user):
     from datetime import UTC, datetime, timedelta
 
     r1 = _crear(db_session, tenant, user, descripcion="Primera")
-    primera = db_session.get(Incidencia, r1.json()["incidencia"]["id"])
+    primera = db_session.get(Incidencia, uuid.UUID(r1.json()["incidencia"]["id"]))
     primera.created_at = datetime.now(UTC) - timedelta(hours=1)
     _crear(db_session, tenant, user, descripcion="Segunda")
     db_session.commit()
