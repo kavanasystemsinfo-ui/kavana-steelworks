@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, getTenantId, type EventData } from '../lib/api'
+import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 
 interface UploadSession {
   session_id: string
@@ -66,20 +67,48 @@ export function OperarioPage() {
   const [scan, setScan] = useState<CoilScan | null>(null)
   const [scanError, setScanError] = useState('')
   const [vinculada, setVinculada] = useState(false)
-  const [events, setEvents] = useState<EventData[]>([])
 
-  // Polling ligero de eventos del tenant (WebSocket completo en Fase 4)
+  // Alertas de planta por WebSocket (ADR-014): el polling de 5 s desaparece.
+  // El hook reconecta solo con backoff; aquí orquestamos conexión y el
+  // fallback REST honesto para el caso de Vercel sin reenvío de upgrades.
+  const { conectar, desconectar, eventos, estado } = usePlantEvents()
+  const [restEvents, setRestEvents] = useState<EventData[]>([])
+  const [usandoWs, setUsandoWs] = useState(false)
+  const tenantRef = useRef<string | null>(null)
+
   useEffect(() => {
-    const tenantId = getTenantId()
-    if (!tenantId) return
-    const timer = setInterval(() => {
+    const t = getTenantId()
+    if (!t) return
+    tenantRef.current = t
+    conectar(t)
+    return () => {
+      tenantRef.current = null
+      desconectar()
+    }
+  }, [conectar, desconectar])
+
+  useEffect(() => {
+    if (estado === 'conectado') setUsandoWs(true)
+  }, [estado])
+
+  // Fallback REST: solo si el WS llegó a fallar y nunca conectó. Una vez
+  // conectado, el WS manda; si luego cae, se muestra lo último recibido
+  // mientras el hook reintenta en segundo plano.
+  useEffect(() => {
+    if (estado !== 'reconectando' || usandoWs || !tenantRef.current) return
+    const t = tenantRef.current
+    const cargar = () => {
       api
-        .getEvents(tenantId)
-        .then((r) => setEvents(r.events.slice(-3)))
+        .getEvents(t)
+        .then((r) => setRestEvents(r.events.slice(-3)))
         .catch(() => {})
-    }, 5000)
+    }
+    cargar()
+    const timer = setInterval(cargar, 5000)
     return () => clearInterval(timer)
-  }, [])
+  }, [estado, usandoWs])
+
+  const eventosVisibles = usandoWs ? eventos : restEvents
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -865,14 +894,18 @@ export function OperarioPage() {
         </p>
       </details>
 
-      {/* Sugerencias y alertas del almacén (idea Jorge: mostrar picos
-          registrados para aconsejar su uso antes de abrir bobina nueva) */}
-      {events.length > 0 && (
-        <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
+      {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}
+      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
           <p className="label-industrial text-xs text-kavana-text-dim">
             Alertas de almacén
           </p>
-          {events.map((ev) => (
+          <ConexionBadge estado={estado} />
+        </div>
+        {eventosVisibles.length === 0 ? (
+          <p className="text-xs text-kavana-text-dim">Sin alertas recientes.</p>
+        ) : (
+          eventosVisibles.slice(-3).map((ev) => (
             <div
               key={ev.id}
               className="flex items-start justify-between gap-3 text-sm border-l-2 border-kavana-orange pl-3"
@@ -882,10 +915,35 @@ export function OperarioPage() {
                 {JSON.stringify(ev.data)}
               </span>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
+  )
+}
+
+/** Badge del estado de la conexión de eventos (ADR-014). */
+function ConexionBadge({ estado }: { estado: ConexionEstado }) {
+  const texto =
+    estado === 'conectado'
+      ? 'En vivo'
+      : estado === 'reconectando'
+        ? 'Reconectando...'
+        : estado === 'conectando'
+          ? 'Conectando...'
+          : 'Sin conexión'
+  const clase =
+    estado === 'conectado'
+      ? 'border-kavana-ok/40 bg-kavana-ok/10 text-kavana-ok'
+      : estado === 'reconectando'
+        ? 'border-amber-400/40 bg-amber-400/10 text-amber-400'
+        : 'border-kavana-border bg-kavana-text-dim/10 text-kavana-text-dim'
+  return (
+    <span
+      className={`label-industrial text-[10px] uppercase tracking-wider rounded-sm border px-2 py-0.5 ${clase}`}
+    >
+      {texto}
+    </span>
   )
 }
 

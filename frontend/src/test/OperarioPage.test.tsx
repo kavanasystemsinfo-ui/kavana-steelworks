@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { OperarioPage } from '../pages/OperarioPage'
+import { MockWebSocket } from './mockWebSocket'
 
 function renderPage() {
   return render(
@@ -534,5 +535,109 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
     expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
     expect(captura.body?.photo_session_id).toBeNull()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('Alertas de almacén por WebSocket (ADR-014)', () => {
+  const tokenDemo = (() => {
+    const b64 = (s: string) =>
+      btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const payload = JSON.stringify({
+      sub: 'u1',
+      tenant_id: 'T1',
+      role: 'operator',
+      exp: 9999999999,
+    })
+    return `x.${b64(payload)}.sig`
+  })()
+  const eventoWs = {
+    id: 'e1',
+    tipo: 'consumo_fifo',
+    data: { kg: 30 },
+    timestamp: '2026-08-15T10:00:00Z',
+  }
+  const eventoRest = {
+    id: 'e2',
+    tipo: 'stock_deficit',
+    data: { kg: 12 },
+    timestamp: '2026-08-15T10:05:00Z',
+  }
+
+  function stubFetch() {
+    return vi.fn((url: string) => {
+      if (url.includes('/api/v1/quality/models')) {
+        return Promise.resolve({ ok: true, json: async () => [modeloDemo] })
+      }
+      if (url.includes('/api/v1/orders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: null, fecha_entrega: null, workstation_id: 'LINEA-1' },
+          ],
+        })
+      }
+      if (url.includes('/api/v1/events/')) {
+        return Promise.resolve({ ok: true, json: async () => ({ events: [eventoRest] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear()
+    sessionStorage.setItem('kavana_token', tokenDemo)
+    MockWebSocket.instances = []
+    vi.stubGlobal('WebSocket', MockWebSocket)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    sessionStorage.clear()
+  })
+
+  it('muestra los eventos recibidos por WebSocket y el badge En vivo, sin polling', async () => {
+    const fetchMock = stubFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    const ws = MockWebSocket.instances.at(-1)!
+    expect(ws.url).toContain('/api/v1/ws/events?tenant_id=T1')
+
+    act(() => ws.mensaje({ type: 'hello', tenant_id: 'T1', queued: 1 }))
+    act(() => ws.mensaje({ type: 'events', events: [eventoWs] }))
+
+    expect(screen.getByText('En vivo')).toBeInTheDocument()
+    expect(screen.getByText('consumo_fifo')).toBeInTheDocument()
+    // El polling de 5 s desaparece: el fallback REST no llega a arrancar
+    const llamadas = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(llamadas.filter((u) => u.includes('/api/v1/events/'))).toHaveLength(0)
+  })
+
+  it('muestra Reconectando... cuando se cae la conexión', async () => {
+    const fetchMock = stubFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    const ws = MockWebSocket.instances.at(-1)!
+    act(() => ws.mensaje({ type: 'hello', tenant_id: 'T1', queued: 0 }))
+    expect(screen.getByText('En vivo')).toBeInTheDocument()
+
+    act(() => ws.cerrarServidor())
+
+    expect(screen.getByText('Reconectando...')).toBeInTheDocument()
+  })
+
+  it('cae al polling REST si el WebSocket nunca conecta (fallback honesto)', async () => {
+    const fetchMock = stubFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    const ws = MockWebSocket.instances.at(-1)!
+
+    // El handshake falla (p.ej. Vercel no reenvía upgrades): el servidor
+    // nunca envía hello y el socket se cierra.
+    act(() => ws.cerrarServidor())
+
+    expect(screen.getByText('Reconectando...')).toBeInTheDocument()
+    expect(await screen.findByText('stock_deficit')).toBeInTheDocument()
+    const llamadas = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(llamadas.filter((u) => u.includes('/api/v1/events/')).length).toBeGreaterThanOrEqual(1)
   })
 })
