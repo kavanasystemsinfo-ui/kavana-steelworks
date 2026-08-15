@@ -87,8 +87,14 @@ def test_crear_incidencia_422_sin_descripcion(db_session, tenant, user):
 
 
 def test_listar_incidencias_orden_desc(db_session, tenant, user):
-    _crear(db_session, tenant, user, descripcion="Primera")
+    from datetime import UTC, datetime, timedelta
+
+    r1 = _crear(db_session, tenant, user, descripcion="Primera")
+    primera = db_session.get(Incidencia, r1.json()["incidencia"]["id"])
+    primera.created_at = datetime.now(UTC) - timedelta(hours=1)
     _crear(db_session, tenant, user, descripcion="Segunda")
+    db_session.commit()
+
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
         client = TestClient(app)
