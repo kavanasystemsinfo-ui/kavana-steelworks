@@ -140,7 +140,10 @@ def sugerencias_picos(db: DbDep):
 
     items = (
         db.query(StockItem)
-        .filter(StockItem.estado.in_(["pico", "retal"]))
+        .filter(
+            StockItem.estado.in_(["pico", "retal"]),
+            StockItem.ubicacion == "Retales",  # solo picos retirados al almacén
+        )
         .order_by(StockItem.fecha_entrada.asc())
         .all()
     )
@@ -201,12 +204,13 @@ class FinBobinaRequest(BaseModel):
     stock_item_id: uuid.UUID
     order_id: uuid.UUID
     line_id: uuid.UUID
-    remaining_weight: float = Field(ge=0)
+    radio_mm: float = Field(ge=0)
 
 
 @router.post("/fin-bobina")
 def fin_bobina(body: FinBobinaRequest, db: DbDep):
-    """Fin de bobina: mide los milímetros de radio restantes y reconcilia la merma."""
+    """Fin de bobina: el operario mide los milímetros de radio restantes
+    y el sistema convierte a kg con la fórmula v2 (Densidad Calibrada Kavana)."""
     from app.services.inventory import create_retal
 
     try:
@@ -215,7 +219,36 @@ def fin_bobina(body: FinBobinaRequest, db: DbDep):
             tenant_id=None,  # TODO: tenant desde el token JWT
             user_id=None,
             stock_item_id=body.stock_item_id,
-            remaining_weight=body.remaining_weight,
+            radio_mm=body.radio_mm,
+            order_id=body.order_id,
+            line_id=body.line_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class RetirarPicoRequest(BaseModel):
+    stock_item_id: uuid.UUID
+    order_id: uuid.UUID | None = None
+    line_id: uuid.UUID | None = None
+
+
+@router.post("/retirar")
+def retirar(body: RetirarPicoRequest, db: DbDep):
+    """Botón 'Retirar': segunda opción del fin de bobina (visión Jorge).
+
+    Devuelve el pico al inventario (ubicación 'Retales'). Aparecerá después
+    como material SUGERIDO cuando una orden use ese material. Es distinto
+    del fin de bobina, que deja el pico en la máquina.
+    """
+    from app.services.inventory import retirar_pico
+
+    try:
+        return retirar_pico(
+            db,
+            tenant_id=None,  # TODO: tenant desde el token JWT
+            user_id=None,
+            stock_item_id=body.stock_item_id,
             order_id=body.order_id,
             line_id=body.line_id,
         )

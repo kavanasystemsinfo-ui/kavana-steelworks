@@ -4,6 +4,60 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-15 — Fase 3: fin de bobina corregido (radio→kg, fórmula v2) + botón Retirar
+
+### Added: port de la fórmula v2 radio→kg (coil_math)
+- **Problema:** el `create_retal` anterior pedía al operario los kg que
+  quedaban; en planta NO se puede pesar una bobina montada en la máquina.
+  La fórmula v2 (legacy coilMath.js, verificada por Jorge en fábrica) solo
+  existía en JavaScript.
+- **Solución:** módulo `app/services/coil_math.py` con `peso_desde_radio_mm`
+  (π·(R_ext²−R_int²)·ancho·densidad), Densidad Calibrada Kavana 7.7807 kg/dm³
+  (Decisión 92) como default, mandril 508 mm. Redondeo a 2 decimales.
+- **Verificación:** 7 tests unitarios con valores de referencia del legacy
+  (radio 500/ancho 1000 → 12.319,67 kg; radio 250/ancho 122 → 565,12 kg);
+  radio 0 → 0; sin ancho → ValueError explícito.
+
+### Changed: `create_retal` mide milímetros de radio (no kg)
+- **Problema:** la implementación anterior contradecía el modelo de Jorge
+  (medir kg directos, tratar el sobrante como merma, mover el pico a
+  'Retales' siempre).
+- **Solución:** `create_retal` recibe `radio_mm`, convierte con la fórmula v2
+  usando el ancho de la bobina y la densidad calibrada del material. La merma
+  invisible sigue siendo la reconciliación FIFO-vs-medición (ISO 9001,
+  merma_puntas + Kardex ajuste). El SOBRANTE NO es merma: queda como pico
+  EN EL PUESTO (misma ubicación), material FIFO para el siguiente turno.
+  Reembolso a la línea de lo que deja de estar comprometido. Endpoint
+  POST /stock-items/fin-bobina con `radio_mm`.
+- **Verificación:** tests reescritos al nuevo contrato (8), E2E contra
+  PostgreSQL real: bobina 800 kg, consumidos 300, radio 200 mm → 422,27 kg
+  restantes, 77,73 kg de merma, pico en 'LINEA-1'.
+
+### Added: botón "Retirar" (segunda opción del fin de bobina)
+- **Problema:** faltaba la segunda opción que Jorge describió: devolver el
+  pico al inventario cuando el material no se va a gastar (pasa a otra orden
+  de otro material).
+- **Solución:** `retirar_pico`: mueve la bobina a ubicación 'Retales' con
+  estado pico/es_pico, desvincula la línea activa si sigue vinculada
+  (reembolso), y registra traslado en Kardex. Endpoint POST /stock-items/retirar.
+  `/picos` ahora solo sugiere picos del almacén (ubicación 'Retales'), no los
+  que siguen en la máquina.
+- **Verificación:** 3 tests (retirar a inventario, error sin material,
+  filtro de sugerencias), E2E real: pico en puesto no sugerido → tras
+  retirar aparece en /picos con 422,27 kg.
+
+### Changed: frontend panel de operario
+- Formulario de fin de bobina pide "Radio restante (mm)" (input step 0,5,
+  min 0) y muestra el resultado con kg restantes + merma. Botón secundario
+  "Retirar pico a inventario" llama a /stock-items/retirar.
+- **Verificación:** 6 tests vitest, `tsc --noEmit` limpio, build PWA OK.
+
+### Totales tras el cambio
+- 48 tests backend (37 previos + 11 nuevos: 7 coil_math + 3 retirar/picos +
+  1 reescrito), 6 tests frontend, ruff limpio, CI con los dos jobs.
+- Archivo de verificación: `backend/e2e_radio_retirar.py` (usa PostgreSQL
+  real del contenedor de test, nunca toca la BD del VPS).
+
 ## 2026-08-14 — Fase 2 (backend): base FastAPI + motor FIFO con TDD
 
 ### Added: Proyecto FastAPI con estructura modular

@@ -73,7 +73,7 @@ export function OperarioPage() {
     }
   }
 
-  const [pesoRestante, setPesoRestante] = useState('')
+  const [radioMm, setRadioMm] = useState('')
   const [finBobinaMsg, setFinBobinaMsg] = useState('')
 
   const handleFinBobina = async (e: React.FormEvent) => {
@@ -89,7 +89,7 @@ export function OperarioPage() {
           stock_item_id: scan.id,
           order_id: '00000000-0000-0000-0000-000000000000',
           line_id: '00000000-0000-0000-0000-000000000000',
-          remaining_weight: Number(pesoRestante),
+          radio_mm: Number(radioMm),
         }),
       })
       if (!res.ok) {
@@ -98,7 +98,7 @@ export function OperarioPage() {
       }
       const data = await res.json()
       setFinBobinaMsg(
-        `${data.msg}: ${data.merma_kg} kg de merma (${data.merma_cost} €)`,
+        `${data.msg}: quedan ${data.peso_restante_kg} kg, ${data.merma_kg} kg de merma (${data.merma_cost} €)`,
       )
       setVinculada(false)
       setScan(null)
@@ -106,6 +106,35 @@ export function OperarioPage() {
     } catch (err) {
       setFinBobinaMsg(
         err instanceof Error ? err.message : 'Error al cerrar bobina',
+      )
+    }
+  }
+
+  const handleRetirarPico = async () => {
+    setFinBobinaMsg('')
+    if (!scan) return
+    try {
+      const res = await fetch('/api/v1/stock-items/retirar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stock_item_id: scan.id,
+          order_id: '00000000-0000-0000-0000-000000000000',
+          line_id: '00000000-0000-0000-0000-000000000000',
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al retirar pico')
+      }
+      const data = await res.json()
+      setFinBobinaMsg(data.msg)
+      setVinculada(false)
+      setScan(null)
+      setCoilId('')
+    } catch (err) {
+      setFinBobinaMsg(
+        err instanceof Error ? err.message : 'Error al retirar pico',
       )
     }
   }
@@ -209,14 +238,15 @@ export function OperarioPage() {
             className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
           >
             <p className="label-industrial text-xs text-kavana-text-dim">
-              Fin de bobina: mide los kg que quedan
+              Fin de bobina: mide el radio con el metro
             </p>
             <input
               type="number"
-              step="0.001"
-              value={pesoRestante}
-              onChange={(e) => setPesoRestante(e.target.value)}
-              placeholder="Peso restante (kg)"
+              step="0.5"
+              min="0"
+              value={radioMm}
+              onChange={(e) => setRadioMm(e.target.value)}
+              placeholder="Radio restante (mm)"
               className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
               required
             />
@@ -225,6 +255,13 @@ export function OperarioPage() {
               className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
             >
               🏁 Cerrar bobina (merma real)
+            </button>
+            <button
+              type="button"
+              onClick={handleRetirarPico}
+              className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+            >
+              📦 Retirar pico a inventario
             </button>
           </form>
 

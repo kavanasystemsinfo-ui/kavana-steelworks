@@ -263,20 +263,23 @@ def create_retal(
     user_id,
     *,
     stock_item_id,
-    remaining_weight: float,
+    radio_mm: float,
     order_id,
     line_id,
 ) -> dict:
-    """Fin de bobina (spec 01 3.9): mide los milímetros de radio restantes y reconcilia.
+    """Fin de bobina (spec 01 3.9): mide los milímetros de radio y reconcilia.
 
-    El operario mide el peso físico que queda (remaining_weight). El sistema
-    compara con lo que el FIFO cree que queda (cantidad_disponible): la
-    diferencia es merma invisible. El sobrante real vuelve a inventario
-    como retal (ubicación 'Retales').
+    El operario MIDE LOS MILÍMETROS DE RADIO de la bobina con un metro (en
+    planta no se puede pesar una bobina montada en la máquina). El sistema
+    convierte radio → kg con la fórmula v2 (coil_math, Densidad Calibrada
+    Kavana) y compara con lo que el FIFO cree que queda: la diferencia es
+    merma invisible. El sobrante NO es merma: queda como pico en el puesto
+    y pasa al siguiente turno como material FIFO (visión Jorge, anexo A).
     """
     from decimal import Decimal
 
     from app.models import MaterialConsumo, MaterialTransaction, Order, OrderLine
+    from app.services.coil_math import peso_desde_radio_mm
 
     bobina = db.get(StockItem, stock_item_id)
     if bobina is None:
@@ -296,8 +299,22 @@ def create_retal(
     if linea is None or linea.order_id != order.id:
         raise ValueError("Línea no encontrada para la orden")
 
+    # Fórmula v2: radio medido → kg restantes (densidad calibrada del material)
+    densidad = (
+        bobina.material.density_calibrada
+        if bobina.material and bobina.material.density_calibrada
+        else None
+    )
+    real_remaining = Decimal(
+        str(
+            peso_desde_radio_mm(
+                radio_mm=radio_mm,
+                width_mm=bobina.width_mm,
+                densidad_kg_dm3=densidad if densidad is not None else 7.7807,
+            )
+        )
+    )
     system_remaining = bobina.cantidad_disponible
-    real_remaining = max(Decimal("0"), Decimal(str(remaining_weight)))
     hidden_merma = max(Decimal("0"), system_remaining - real_remaining)
     merma_cost = hidden_merma * bobina.coste_por_unidad
     coste_reembolso = real_remaining * bobina.coste_por_unidad
@@ -330,12 +347,14 @@ def create_retal(
             )
         )
 
-    # 2) Actualizar la bobina física
+    # 2) Actualizar la bobina física: el sobrante QUEDA EN EL PUESTO como pico
+    #    (material FIFO para el siguiente turno, visión Jorge). Solo el botón
+    #    "Retirar" lo devuelve al inventario.
     bobina.cantidad_disponible = real_remaining
     if real_remaining > 0:
-        bobina.estado = "pico"  # retal: menos del 10% original o sobrante
+        bobina.estado = "pico"  # sobrante que sigue en la máquina
         bobina.es_pico = True
-        bobina.ubicacion = "Retales"
+        # NO se mueve a 'Retales': sigue en su puesto (workstation)
     else:
         bobina.estado = "agotado"
         bobina.es_pico = False
@@ -351,14 +370,14 @@ def create_retal(
             cantidad_anterior=system_remaining,
             cantidad_nueva=real_remaining,
             motivo=(
-                f"Fin de Bobina (Retal). Devuelto: {real_remaining}kg. "
+                f"Fin de Bobina. Queda en puesto: {real_remaining}kg. "
                 f"Merma detectada: {hidden_merma}kg ({merma_cost:.2f}€)."
             ),
             realizado_por=user_id,
         )
     )
 
-    # 4) Reembolsar a la línea lo devuelto + mover merma a scrap
+    # 4) Reembolsar a la línea lo que deja de estar comprometido + merma a scrap
     linea.real_material_qty = (linea.real_material_qty or Decimal("0")) - real_remaining
     linea.real_cost = (linea.real_cost or Decimal("0")) - coste_reembolso
     order.real_total_cost = (order.real_total_cost or Decimal("0")) - coste_reembolso
@@ -374,7 +393,90 @@ def create_retal(
         "success": True,
         "merma_kg": float(hidden_merma),
         "merma_cost": float(merma_cost),
-        "msg": ("Retal devuelto a inventario" if real_remaining > 0 else "Bobina agotada"),
+        "radio_mm": radio_mm,
+        "peso_restante_kg": float(real_remaining),
+        "msg": (
+            "Pico retirado a inventario"
+            if real_remaining > 0
+            else "Bobina agotada"
+        ),
+    }
+
+
+def retirar_pico(
+    db: Session,
+    tenant_id,
+    user_id,
+    *,
+    stock_item_id,
+    order_id=None,
+    line_id=None,
+) -> dict:
+    """Botón 'Retirar' (segunda opción del fin de bobina, visión Jorge).
+
+    Devuelve el pico al inventario (ubicación 'Retales'). A diferencia del
+    fin de bobina (que deja el pico en la máquina para el siguiente turno),
+    Retirar saca el material del puesto y lo pone como sugerencia de uso en
+    el almacén. Si la bobina aún está vinculada a una línea, la desvincula
+    y reembolsa lo que deja de estar comprometido.
+    """
+    from decimal import Decimal
+
+    from app.models import MaterialTransaction, OrderLine
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None:
+        raise ValueError("Bobina no encontrada")
+
+    if tenant_id is None:
+        tenant_id = bobina.tenant_id
+    if user_id is None:
+        from app.services.receiving import _system_user
+
+        user_id = _system_user(db, tenant_id)
+
+    if bobina.estado not in ("activo", "pico") or bobina.cantidad_disponible <= 0:
+        raise ValueError("La bobina no tiene material retirable")
+
+    peso = bobina.cantidad_disponible
+    coste_reembolso = peso * bobina.coste_por_unidad
+
+    # Si sigue vinculada a una línea activa, desvincular y reembolsar
+    if order_id and line_id:
+        linea = db.get(OrderLine, line_id)
+        if linea is not None and linea.order_id == order_id:
+            if linea.active_coil_id == bobina.id:
+                linea.real_material_qty = (linea.real_material_qty or Decimal("0")) - peso
+                linea.real_cost = (linea.real_cost or Decimal("0")) - coste_reembolso
+                linea.active_coil_id = None
+                linea.active_coil_code = None
+
+    # Devuelve al inventario como retal/pico sugerible
+    bobina.estado = "pico"
+    bobina.es_pico = True
+    bobina.ubicacion = "Retales"
+
+    db.add(
+        MaterialTransaction(
+            tenant_id=tenant_id,
+            material_id=bobina.material_id,
+            stock_item_id=bobina.id,
+            tipo="traslado",
+            cantidad=Decimal("0"),
+            cantidad_anterior=Decimal("0"),
+            cantidad_nueva=Decimal("0"),
+            motivo=f"Pico retirado de la máquina a inventario: {peso}kg ({coste_reembolso:.2f}€)",
+            realizado_por=user_id,
+        )
+    )
+
+    db.commit()
+    db.refresh(bobina)
+    return {
+        "success": True,
+        "peso_kg": float(peso),
+        "ubicacion": "Retales",
+        "msg": f"Pico retirado a inventario: {peso}kg ({coste_reembolso:.2f}€)",
     }
 
 
