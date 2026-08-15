@@ -12,8 +12,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# URL de la base de datos desde la config de la app (variable STEELWORKS_DATABASE_URL)
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# URL de la base de datos desde la config de la app (variable STEELWORKS_DATABASE_URL o DATABASE_URL)
+config.set_main_option("sqlalchemy.url", get_settings().sqlalchemy_database_url)
 
 target_metadata = Base.metadata
 
