@@ -192,17 +192,20 @@ export function OperarioPage() {
     }
   }
 
-  // Incidencia (spec 04 §3.3): modal QR + móvil (patrón kavana-manufacturing)
+  // Incidencia (spec 04 §3.3): formulario clásico + foto QR opcional.
+  // El operario reporta siempre (observaciones + tipo); la foto es una vía
+  // MÁS, no la única: el QR solo se activa si el operario pulsa "Adjuntar foto".
   const [incModalOpen, setIncModalOpen] = useState(false)
   const [incSession, setIncSession] = useState<UploadSession | null>(null)
   const [incPhotoUrl, setIncPhotoUrl] = useState<string | null>(null)
   const [incStatus, setIncStatus] = useState<
-    'creating' | 'waiting' | 'photo' | 'expired' | 'error' | 'submitting'
-  >('creating')
+    'form' | 'creating' | 'waiting' | 'photo' | 'expired' | 'error' | 'submitting'
+  >('form')
   const [incDescripcion, setIncDescripcion] = useState('')
   const [incTipo, setIncTipo] = useState('maquina')
   const [incMsg, setIncMsg] = useState('')
   const [incError, setIncError] = useState('')
+  const [incFecha, setIncFecha] = useState('')
   const incPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopIncPoll = () => {
@@ -212,15 +215,11 @@ export function OperarioPage() {
     }
   }
 
-  const abrirModalIncidencia = () => {
-    setIncModalOpen(true)
+  const adjuntarFoto = () => {
+    setIncError('')
     setIncStatus('creating')
     setIncSession(null)
     setIncPhotoUrl(null)
-    setIncDescripcion('')
-    setIncTipo('maquina')
-    setIncMsg('')
-    setIncError('')
     fetch('/api/v1/incidencias/upload-session', { method: 'POST' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((sesion) => {
@@ -243,9 +242,28 @@ export function OperarioPage() {
         }, 2000)
       })
       .catch(() => {
-        setIncStatus('error')
+        setIncStatus('form')
         setIncError('No se pudo crear la sesión de subida. Inténtalo de nuevo.')
       })
+  }
+
+  const quitarFoto = () => {
+    stopIncPoll()
+    setIncSession(null)
+    setIncPhotoUrl(null)
+    setIncStatus('form')
+  }
+
+  const abrirModalIncidencia = () => {
+    setIncModalOpen(true)
+    setIncStatus('form')
+    setIncSession(null)
+    setIncPhotoUrl(null)
+    setIncDescripcion('')
+    setIncTipo('maquina')
+    setIncMsg('')
+    setIncError('')
+    setIncFecha(new Date().toLocaleString('es-ES'))
   }
 
   const cerrarModalIncidencia = () => {
@@ -281,7 +299,7 @@ export function OperarioPage() {
       setIncModalOpen(false)
       stopIncPoll()
     } catch (err) {
-      setIncStatus(incPhotoUrl ? 'photo' : 'waiting')
+      setIncStatus(incPhotoUrl ? 'photo' : 'form')
       setIncError(err instanceof Error ? err.message : 'Error de conexión')
     }
   }
@@ -703,6 +721,29 @@ export function OperarioPage() {
               </p>
             )}
 
+            {/* Datos auto-importados (formulario clásico): el sistema conoce
+                operario, puesto, modelo y fecha; el operario solo observa. */}
+            <div className="grid grid-cols-2 gap-2 text-xs border border-kavana-border rounded-sm p-3">
+              <div>
+                <span className="label-industrial text-kavana-text-dim">Operario</span>
+                <p className="font-semibold">Operario Demo</p>
+              </div>
+              <div>
+                <span className="label-industrial text-kavana-text-dim">Puesto</span>
+                <p className="font-semibold">{ordenActual?.workstation_id}</p>
+              </div>
+              <div>
+                <span className="label-industrial text-kavana-text-dim">Modelo</span>
+                <p className="font-semibold">
+                  {modelo ? `${modelo.name} · ${modelo.code}` : '—'}
+                </p>
+              </div>
+              <div>
+                <span className="label-industrial text-kavana-text-dim">Fecha y hora</span>
+                <p className="font-semibold">{incFecha}</p>
+              </div>
+            </div>
+
             {incStatus === 'creating' && (
               <div className="flex flex-col items-center gap-4 py-10 text-kavana-text-dim">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-kavana-orange border-t-transparent" />
@@ -710,6 +751,16 @@ export function OperarioPage() {
                   Creando sesión…
                 </p>
               </div>
+            )}
+
+            {incStatus === 'form' && (
+              <button
+                type="button"
+                onClick={adjuntarFoto}
+                className="w-full min-h-[48px] border border-dashed border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+              >
+                📷 Adjuntar foto (opcional)
+              </button>
             )}
 
             {(incStatus === 'waiting' ||
@@ -728,10 +779,7 @@ export function OperarioPage() {
                         Foto recibida
                       </span>
                       <button
-                        onClick={() => {
-                          setIncPhotoUrl(null)
-                          setIncStatus('waiting')
-                        }}
+                        onClick={quitarFoto}
                         className="absolute bottom-2 right-2 rounded-sm bg-kavana-danger px-3 py-1.5 text-xs font-bold text-white"
                       >
                         Quitar foto
@@ -783,13 +831,13 @@ export function OperarioPage() {
 
               <label className="block">
                 <span className="label-industrial text-xs text-kavana-text-dim">
-                  Descripción
+                  Observaciones
                 </span>
                 <textarea
                   value={incDescripcion}
                   onChange={(e) => setIncDescripcion(e.target.value)}
-                  placeholder="Describe el problema"
-                  rows={2}
+                  placeholder="Detalla la incidencia"
+                  rows={3}
                   className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
                 />
               </label>

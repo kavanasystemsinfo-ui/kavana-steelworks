@@ -354,9 +354,10 @@ describe('Autocontrol de calidad (spec 04)', () => {
 })
 
 describe('Reportar incidencia (spec 04 §3.3)', () => {
-  it('abre el modal QR, crea la sesión y reporta con la foto de la sesión', async () => {
-    const user = userEvent.setup()
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+  function stubReporte(
+    onBody: (body: Record<string, unknown>) => void,
+  ) {
+    return vi.fn((url: string, init?: RequestInit) => {
       if (url.includes('/scan')) {
         return Promise.resolve({ ok: true, json: async () => bobinaDemo })
       }
@@ -384,7 +385,6 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
             }),
           })
         }
-        // GET: polling del modal (aún sin foto)
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -398,11 +398,7 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
         })
       }
       if (url.includes('/api/v1/incidencias')) {
-        const body = JSON.parse(init?.body as string)
-        expect(body.linea_id).toBe('LINEA-1')
-        expect(body.descripcion).toBe('Atasco en la cizalla')
-        expect(body.tipo).toBe('maquina')
-        expect(body.photo_session_id).toBe('SES-DEMO')
+        onBody(JSON.parse(init?.body as string))
         return Promise.resolve({
           ok: true,
           json: async () => ({ success: true, msg: 'Incidencia registrada' }),
@@ -410,29 +406,133 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
-    vi.stubGlobal('fetch', fetchMock)
+  }
+
+  it('formulario clásico: auto-importa operario, puesto, modelo y fecha', async () => {
+    const user = userEvent.setup()
+    const captura: { body: Record<string, unknown> | null } = { body: null }
+    vi.stubGlobal('fetch', stubReporte((b) => { captura.body = b }))
     renderPage()
 
-    // El operario está en el puesto (orden con workstation) y abre el modal
     await user.click(
       await screen.findByRole('button', { name: /reportar incidencia/i }),
     )
 
-    // El modal crea la sesión y muestra el QR para el móvil
-    expect(await screen.findByText('Escanea con tu móvil')).toBeInTheDocument()
+    // Datos auto-importados visibles en el formulario
+    expect(await screen.findByText('Operario Demo')).toBeInTheDocument()
+    expect(screen.getByText('LINEA-1')).toBeInTheDocument()
     expect(
-      await screen.findByTitle('QR de subida de foto'),
+      screen.getByText(`Perfil decapado 1.2x1220 · PERFIL-DEMO-001`),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /adjuntar foto/i }),
+    ).toBeInTheDocument()
+    // Sin foto: el QR NO se genera al abrir (la sesión no se crea sola)
+    expect(screen.queryByTitle('QR de subida de foto')).not.toBeInTheDocument()
 
-    const descripcion = await screen.findByPlaceholderText(/describe el problema/i)
-    await user.type(descripcion, 'Atasco en la cizalla')
-    await user.selectOptions(
-      screen.getByLabelText(/tipo de incidencia/i),
-      'maquina',
-    )
+    const obs = await screen.findByPlaceholderText(/detalla la incidencia/i)
+    await user.type(obs, 'Atasco en la cizalla')
+    await user.selectOptions(screen.getByLabelText(/tipo de incidencia/i), 'maquina')
     await user.click(screen.getByRole('button', { name: /enviar incidencia/i }))
 
     expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
+    expect(captura.body).toMatchObject({ linea_id: 'LINEA-1', descripcion: 'Atasco en la cizalla', tipo: 'maquina' })
+    expect(captura.body?.photo_session_id).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
+  it('con foto: la sesión QR se crea solo al pulsar Adjuntar foto y se envía', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubReporte((b) => {
+      expect(b.photo_session_id).toBe('SES-DEMO')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await user.click(
+      await screen.findByRole('button', { name: /reportar incidencia/i }),
+    )
+
+    const obs = await screen.findByPlaceholderText(/detalla la incidencia/i)
+    await user.type(obs, 'Atasco en la cizalla')
+    await user.selectOptions(screen.getByLabelText(/tipo de incidencia/i), 'maquina')
+
+    // El QR solo aparece cuando el operario decide adjuntar foto
+    await user.click(screen.getByRole('button', { name: /adjuntar foto \(opcional\)/i }))
+    expect(await screen.findByText('Escanea con tu móvil')).toBeInTheDocument()
+    expect(await screen.findByTitle('QR de subida de foto')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /enviar incidencia/i }))
+
+    expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('Quitar foto vuelve al formulario y la incidencia se envía sin foto', async () => {
+    const user = userEvent.setup()
+    const captura: { body: Record<string, unknown> | null } = { body: null }
+    const fetchMock = stubReporte((b) => { captura.body = b })
+    // Subida móvil simulada: el polling encuentra la foto
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/upload-session')) {
+        if (init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              session_id: 'SES-DEMO',
+              status: 'pending',
+              expires_at: '2026-08-15T23:00:00Z',
+              has_photo: false,
+              incidencia_id: null,
+            }),
+          })
+        }
+        // GET: el polling ya encuentra la foto subida desde el móvil
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            session_id: 'SES-DEMO',
+            status: 'uploaded',
+            expires_at: '2026-08-15T23:00:00Z',
+            has_photo: true,
+            incidencia_id: null,
+            photo_data_url: 'data:image/png;base64,AAAA',
+          }),
+        })
+      }
+      if (url.includes('/api/v1/incidencias')) {
+        captura.body = JSON.parse(init?.body as string)
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, msg: 'Incidencia registrada' }),
+        })
+      }
+      return stubReporte(() => {})(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+
+    await user.click(
+      await screen.findByRole('button', { name: /reportar incidencia/i }),
+    )
+    const obs = await screen.findByPlaceholderText(/detalla la incidencia/i)
+    await user.type(obs, 'Atasco en la cizalla')
+
+    await user.click(screen.getByRole('button', { name: /adjuntar foto \(opcional\)/i }))
+    // El polling tarda 2s en encontrar la foto (el stub devuelve uploaded)
+    expect(
+      await screen.findByText('Foto recibida', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /quitar foto/i }))
+
+    expect(
+      screen.getByRole('button', { name: /adjuntar foto \(opcional\)/i }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /enviar incidencia/i }))
+
+    expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
+    expect(captura.body?.photo_session_id).toBeNull()
     vi.unstubAllGlobals()
   })
 })
