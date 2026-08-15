@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { api, getTenantId, type EventData } from '../lib/api'
+
+interface UploadSession {
+  session_id: string
+  status: string
+  expires_at: string
+  has_photo: boolean
+  incidencia_id: string | null
+  photo_data_url?: string | null
+}
 
 interface CoilScan {
   id: string
@@ -182,29 +192,84 @@ export function OperarioPage() {
     }
   }
 
-  // Incidencias de planta (spec 04 §3.3): reporte desde el puesto
+  // Incidencia (spec 04 §3.3): modal QR + móvil (patrón kavana-manufacturing)
+  const [incModalOpen, setIncModalOpen] = useState(false)
+  const [incSession, setIncSession] = useState<UploadSession | null>(null)
+  const [incPhotoUrl, setIncPhotoUrl] = useState<string | null>(null)
+  const [incStatus, setIncStatus] = useState<
+    'creating' | 'waiting' | 'photo' | 'expired' | 'error' | 'submitting'
+  >('creating')
   const [incDescripcion, setIncDescripcion] = useState('')
   const [incTipo, setIncTipo] = useState('maquina')
   const [incMsg, setIncMsg] = useState('')
   const [incError, setIncError] = useState('')
+  const incPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const handleReportarIncidencia = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const stopIncPoll = () => {
+    if (incPollRef.current) {
+      clearInterval(incPollRef.current)
+      incPollRef.current = null
+    }
+  }
+
+  const abrirModalIncidencia = () => {
+    setIncModalOpen(true)
+    setIncStatus('creating')
+    setIncSession(null)
+    setIncPhotoUrl(null)
+    setIncDescripcion('')
+    setIncTipo('maquina')
     setIncMsg('')
     setIncError('')
-    if (!ordenActual?.workstation_id) return
+    fetch('/api/v1/incidencias/upload-session', { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((sesion) => {
+        setIncSession(sesion)
+        setIncStatus('waiting')
+        incPollRef.current = setInterval(() => {
+          fetch(`/api/v1/incidencias/upload-session/${sesion.session_id}`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+            .then((estado) => {
+              if (estado.has_photo && estado.photo_data_url) {
+                setIncPhotoUrl(estado.photo_data_url)
+                setIncStatus('photo')
+                stopIncPoll()
+              } else if (estado.status === 'expired') {
+                setIncStatus('expired')
+                stopIncPoll()
+              }
+            })
+            .catch(() => {})
+        }, 2000)
+      })
+      .catch(() => {
+        setIncStatus('error')
+        setIncError('No se pudo crear la sesión de subida. Inténtalo de nuevo.')
+      })
+  }
+
+  const cerrarModalIncidencia = () => {
+    stopIncPoll()
+    setIncModalOpen(false)
+  }
+
+  const enviarIncidencia = async () => {
+    setIncMsg('')
+    setIncError('')
     if (!incDescripcion.trim()) {
       setIncError('Describe el problema antes de reportar.')
       return
     }
+    setIncStatus('submitting')
     try {
       const res = await fetch('/api/v1/incidencias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          linea_id: ordenActual.workstation_id,
+          linea_id: ordenActual?.workstation_id,
           descripcion: incDescripcion.trim(),
           tipo: incTipo,
+          photo_session_id: incSession?.session_id ?? null,
         }),
       })
       if (!res.ok) {
@@ -213,9 +278,10 @@ export function OperarioPage() {
       }
       await res.json()
       setIncMsg('Incidencia registrada')
-      setIncDescripcion('')
-      setIncTipo('maquina')
+      setIncModalOpen(false)
+      stopIncPoll()
     } catch (err) {
+      setIncStatus(incPhotoUrl ? 'photo' : 'waiting')
       setIncError(err instanceof Error ? err.message : 'Error de conexión')
     }
   }
@@ -598,63 +664,147 @@ export function OperarioPage() {
         </div>
       )}
 
-      {/* Reportar incidencia (spec 04 §3.3): siempre accesible desde el puesto */}
+      {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
       {ordenActual?.workstation_id && (
-        <form
-          onSubmit={handleReportarIncidencia}
-          className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3"
-        >
-          <p className="label-industrial text-xs text-kavana-text-dim">
-            Reportar incidencia
-          </p>
-
+        <div className="space-y-3">
+          <button
+            onClick={abrirModalIncidencia}
+            className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-danger hover:text-white transition-colors"
+          >
+            ⚠️ Reportar incidencia
+          </button>
           {incMsg && (
             <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
               {incMsg}
             </p>
           )}
-          {incError && (
-            <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-              {incError}
-            </p>
-          )}
+        </div>
+      )}
 
-          <label className="block">
-            <span className="label-industrial text-xs text-kavana-text-dim">
-              Tipo de incidencia
-            </span>
-            <select
-              value={incTipo}
-              onChange={(e) => setIncTipo(e.target.value)}
-              className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
-            >
-              <option value="maquina">Máquina</option>
-              <option value="material">Material</option>
-              <option value="seguridad">Seguridad</option>
-              <option value="otro">Otro</option>
-            </select>
-          </label>
+      {incModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-kavana-surface border border-kavana-orange/50 rounded-sm p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-kavana-border pb-3">
+              <h2 className="text-lg font-bold uppercase tracking-widest">
+                Reportar incidencia
+              </h2>
+              <button
+                onClick={cerrarModalIncidencia}
+                aria-label="Cerrar"
+                className="text-kavana-text-dim hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
 
-          <label className="block">
-            <span className="label-industrial text-xs text-kavana-text-dim">
-              Descripción
-            </span>
-            <textarea
-              value={incDescripcion}
-              onChange={(e) => setIncDescripcion(e.target.value)}
-              placeholder="Describe el problema"
-              rows={2}
-              className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
-            />
-          </label>
+            {incError && (
+              <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
+                {incError}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-danger hover:text-white transition-colors"
-          >
-            ⚠️ Reportar incidencia
-          </button>
-        </form>
+            {incStatus === 'creating' && (
+              <div className="flex flex-col items-center gap-4 py-10 text-kavana-text-dim">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-kavana-orange border-t-transparent" />
+                <p className="text-sm font-bold uppercase tracking-wider">
+                  Creando sesión…
+                </p>
+              </div>
+            )}
+
+            {(incStatus === 'waiting' ||
+              incStatus === 'photo' ||
+              incStatus === 'expired') &&
+              incSession && (
+                <div className="border-2 border-dashed border-kavana-border bg-kavana-dark/60 p-5 text-center space-y-3">
+                  {incStatus === 'photo' && incPhotoUrl ? (
+                    <div className="relative">
+                      <img
+                        src={incPhotoUrl}
+                        alt="Evidencia"
+                        className="mx-auto max-h-56 w-full rounded-sm object-cover"
+                      />
+                      <span className="absolute right-2 top-2 rounded-sm bg-kavana-ok/90 px-3 py-1 text-xs font-bold uppercase text-black">
+                        Foto recibida
+                      </span>
+                      <button
+                        onClick={() => {
+                          setIncPhotoUrl(null)
+                          setIncStatus('waiting')
+                        }}
+                        className="absolute bottom-2 right-2 rounded-sm bg-kavana-danger px-3 py-1.5 text-xs font-bold text-white"
+                      >
+                        Quitar foto
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mx-auto w-fit rounded-sm bg-white p-3">
+                        <QRCodeSVG
+                          value={`${window.location.origin}/mobile-upload/${incSession.session_id}`}
+                          size={150}
+                          title="QR de subida de foto"
+                        />
+                      </div>
+                      <p className="text-sm font-bold uppercase tracking-wider">
+                        Escanea con tu móvil
+                      </p>
+                      <p className="text-xs text-kavana-text-dim">
+                        Abre la cámara del móvil, escanea el QR y sube la foto de
+                        la incidencia.
+                      </p>
+                      {incStatus === 'expired' && (
+                        <p className="text-xs font-bold text-amber-400">
+                          La sesión caducó. Cierra y vuelve a abrir el modal para
+                          generar un QR nuevo.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="label-industrial text-xs text-kavana-text-dim">
+                  Tipo de incidencia
+                </span>
+                <select
+                  value={incTipo}
+                  onChange={(e) => setIncTipo(e.target.value)}
+                  className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                >
+                  <option value="maquina">Máquina</option>
+                  <option value="material">Material</option>
+                  <option value="seguridad">Seguridad</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="label-industrial text-xs text-kavana-text-dim">
+                  Descripción
+                </span>
+                <textarea
+                  value={incDescripcion}
+                  onChange={(e) => setIncDescripcion(e.target.value)}
+                  placeholder="Describe el problema"
+                  rows={2}
+                  className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={enviarIncidencia}
+                disabled={incStatus === 'submitting' || incStatus === 'creating'}
+                className="w-full min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {incStatus === 'submitting' ? 'Enviando…' : 'Enviar incidencia'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Datos de apoyo colapsados: solo si el operario los necesita */}

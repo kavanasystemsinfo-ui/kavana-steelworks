@@ -189,6 +189,7 @@ const incidenciaDemo = {
   descripcion: 'Atasco de bobina en la cizalla',
   tipo: 'maquina',
   estado: 'abierta',
+  foto_data_url: null,
   resolucion_tipo: null,
   resolucion_descripcion: null,
   tiempo_parada_min: null,
@@ -268,6 +269,31 @@ describe('Incidencias de planta en el Supervisor (spec 04 §3.3)', () => {
     await user.click(screen.getByRole('button', { name: /confirmar resolución/i }))
 
     expect(await screen.findByText('Incidencia actualizada')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('muestra la evidencia fotográfica de la incidencia si existe', async () => {
+    stubConIncidencias(
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            incidencias: [
+              {
+                ...incidenciaDemo,
+                foto_data_url: 'data:image/png;base64,AAAA',
+              },
+            ],
+          }),
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(
+      await screen.findByAltText(/evidencia de atasco de bobina/i),
+    ).toHaveAttribute('src', 'data:image/png;base64,AAAA')
     vi.unstubAllGlobals()
   })
 })

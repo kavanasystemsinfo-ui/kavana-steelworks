@@ -42,6 +42,7 @@ interface IncidenciaItem {
   descripcion: string
   tipo: string
   estado: string
+  foto_data_url: string | null
   resolucion_tipo: string | null
   resolucion_descripcion: string | null
   tiempo_parada_min: number | null
@@ -392,13 +393,20 @@ export function SupervisorPage() {
             {incidencias.map((inc) => (
               <li key={inc.id} className="border-t border-kavana-border pt-2 text-sm">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold">{inc.descripcion}</p>
                     <p className="text-kavana-text-dim text-xs">
                       {inc.puesto || inc.linea_id || '—'} · {inc.tipo} ·{' '}
                       {inc.operario?.name ?? '—'} ·{' '}
                       {new Date(inc.created_at).toLocaleString('es-ES')}
                     </p>
+                    {inc.foto_data_url && (
+                      <img
+                        src={inc.foto_data_url}
+                        alt={`Evidencia de ${inc.descripcion}`}
+                        className="mt-2 max-h-32 rounded-sm border border-kavana-border object-cover"
+                      />
+                    )}
                     {inc.resolucion_descripcion && (
                       <p className="text-kavana-text-dim text-xs">
                         Resolución: {inc.resolucion_descripcion}

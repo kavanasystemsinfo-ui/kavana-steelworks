@@ -354,7 +354,7 @@ describe('Autocontrol de calidad (spec 04)', () => {
 })
 
 describe('Reportar incidencia (spec 04 §3.3)', () => {
-  it('reporta una incidencia desde el puesto con tipo y descripción', async () => {
+  it('abre el modal QR, crea la sesión y reporta con la foto de la sesión', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url.includes('/scan')) {
@@ -371,11 +371,38 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
       if (url.includes('/api/v1/quality/models')) {
         return Promise.resolve({ ok: true, json: async () => [modeloDemo] })
       }
+      if (url.includes('/upload-session')) {
+        if (init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              session_id: 'SES-DEMO',
+              status: 'pending',
+              expires_at: '2026-08-15T23:00:00Z',
+              has_photo: false,
+              incidencia_id: null,
+            }),
+          })
+        }
+        // GET: polling del modal (aún sin foto)
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            session_id: 'SES-DEMO',
+            status: 'pending',
+            expires_at: '2026-08-15T23:00:00Z',
+            has_photo: false,
+            incidencia_id: null,
+            photo_data_url: null,
+          }),
+        })
+      }
       if (url.includes('/api/v1/incidencias')) {
         const body = JSON.parse(init?.body as string)
         expect(body.linea_id).toBe('LINEA-1')
         expect(body.descripcion).toBe('Atasco en la cizalla')
         expect(body.tipo).toBe('maquina')
+        expect(body.photo_session_id).toBe('SES-DEMO')
         return Promise.resolve({
           ok: true,
           json: async () => ({ success: true, msg: 'Incidencia registrada' }),
@@ -386,13 +413,24 @@ describe('Reportar incidencia (spec 04 §3.3)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
+    // El operario está en el puesto (orden con workstation) y abre el modal
+    await user.click(
+      await screen.findByRole('button', { name: /reportar incidencia/i }),
+    )
+
+    // El modal crea la sesión y muestra el QR para el móvil
+    expect(await screen.findByText('Escanea con tu móvil')).toBeInTheDocument()
+    expect(
+      await screen.findByTitle('QR de subida de foto'),
+    ).toBeInTheDocument()
+
     const descripcion = await screen.findByPlaceholderText(/describe el problema/i)
     await user.type(descripcion, 'Atasco en la cizalla')
     await user.selectOptions(
       screen.getByLabelText(/tipo de incidencia/i),
       'maquina',
     )
-    await user.click(screen.getByRole('button', { name: /reportar incidencia/i }))
+    await user.click(screen.getByRole('button', { name: /enviar incidencia/i }))
 
     expect(await screen.findByText('Incidencia registrada')).toBeInTheDocument()
     vi.unstubAllGlobals()
