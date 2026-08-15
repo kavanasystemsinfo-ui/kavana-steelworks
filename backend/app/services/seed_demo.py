@@ -14,6 +14,53 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Material, Order, OrderLine, StockItem, Tenant, User
+from app.models.quality import ManufacturingModel, QualityPlanCheck
+
+
+def _asegurar_modelo_demo(db, tenant_id) -> None:
+    """Crea el modelo de calidad demo con su plan si no existe (idempotente)."""
+    from sqlalchemy import select
+
+    existente = db.scalar(
+        select(ManufacturingModel).where(
+            ManufacturingModel.tenant_id == tenant_id,
+            ManufacturingModel.code == "PERFIL-DEMO-001",
+        )
+    )
+    if existente is not None:
+        return
+    modelo = ManufacturingModel(
+        tenant_id=tenant_id,
+        code="PERFIL-DEMO-001",
+        name="Perfil decapado 1.2x1220",
+        description="Plantilla demo: controles de calidad del perfil decapado.",
+        material_code="ACERO-DC01",
+        is_active=True,
+    )
+    db.add(modelo)
+    db.flush()
+    checks = [
+        ("Largo Total", "numeric", "Cinta métrica", "2000", "10", "10", True),
+        ("Acabado superficial", "visual", None, None, None, None, True),
+        ("Espesor", "numeric", "Micrómetro", "1.2", "0.1", "0.1", True),
+    ]
+    for pos, (name, tipo, tool, nominal, tol_plus, tol_minus, critico) in enumerate(
+        checks, start=1
+    ):
+        db.add(
+            QualityPlanCheck(
+                manufacturing_model_id=modelo.id,
+                position=pos,
+                name=name,
+                tipo=tipo,
+                tool_id=tool,
+                nominal_value=Decimal(nominal) if nominal else None,
+                tolerance_plus=Decimal(tol_plus) if tol_plus else None,
+                tolerance_minus=Decimal(tol_minus) if tol_minus else None,
+                is_critical=critico,
+            )
+        )
+    db.commit()
 
 
 def seed_demo(db: Session) -> dict:
@@ -39,6 +86,8 @@ def seed_demo(db: Session) -> dict:
         if linea is not None and material is not None and linea.material_id is None:
             linea.material_id = material.id
             db.commit()
+        # Asegurar el modelo de calidad demo (autocontroles, spec 04)
+        _asegurar_modelo_demo(db, existente.id)
         return {"created": False, "tenant": str(existente.id)}
 
     tenant = Tenant(name="Demo Aceros")
@@ -112,6 +161,9 @@ def seed_demo(db: Session) -> dict:
         material_id=material.id,  # la orden gasta ACERO-DC01 (validación de compatibilidad)
     )
     db.add(linea)
+
+    # Modelo de calidad demo con su plan (autocontroles, spec 04)
+    _asegurar_modelo_demo(db, tenant.id)
 
     db.commit()
     return {"created": True, "tenant": str(tenant.id)}

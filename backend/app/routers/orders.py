@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -35,13 +35,12 @@ DbDep = Annotated[Session, Depends(get_db)]
 
 
 class OrderOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
     numero: str
     estado: str
     cliente: str | None = None
     fecha_entrega: datetime | None = None
+    workstation_id: str | None = None  # puesto de la primera línea (autocontrol)
 
 
 @router.get("", response_model=list[OrderOut])
@@ -53,10 +52,21 @@ def list_orders(db: DbDep):
     if tenant is None:
         return []
 
-    return (
+    ordenes = (
         db.query(Order)
         .filter(Order.tenant_id == tenant.id)
         .order_by(Order.created_at.desc())
         .limit(LIMITE_ORDENES)
         .all()
     )
+    return [
+        OrderOut(
+            id=o.id,
+            numero=o.numero,
+            estado=o.estado,
+            cliente=o.cliente,
+            fecha_entrega=o.fecha_entrega,
+            workstation_id=o.lines[0].workstation_id if o.lines else None,
+        )
+        for o in ordenes
+    ]

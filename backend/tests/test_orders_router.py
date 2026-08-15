@@ -59,6 +59,25 @@ def test_list_orders_devuelve_ordenes_del_tenant(db_session, tenant, user):
     assert por_id[str(o2.id)]["estado"] == "completed"
 
 
+def test_list_orders_incluye_workstation_de_la_linea(db_session, tenant, user):
+    orden = _crear_orden(db_session, tenant, numero="OP-LIST-WS")
+    from tests.helpers import make_order_line
+
+    make_order_line(db_session, orden, workstation="LINEA-1")
+
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        r = client.get("/api/v1/orders")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    con_ws = next(o for o in body if o["numero"] == "OP-LIST-WS")
+    assert con_ws["workstation_id"] == "LINEA-1"
+
+
 def test_list_orders_sin_tenant_devuelve_vacio(db_session):
     app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
     try:
