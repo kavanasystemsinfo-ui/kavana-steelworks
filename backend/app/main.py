@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers import auth as auth_router
+from app.routers import incidencias as incidencias_router
 from app.routers import orders as orders_router
 from app.routers import production as production_router
 from app.routers import quality as quality_router
@@ -35,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
+app.include_router(incidencias_router.router)
 app.include_router(orders_router.router)
 app.include_router(production_router.router)
 app.include_router(quality_router.router)

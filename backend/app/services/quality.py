@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models.quality import ManufacturingModel, QualityMeasurement, QualityRecord
 from app.services import traceability
+from app.services.demo_context import resolver_operario, resolver_tenant
 
 _PATRON_LARGO = re.compile(r"largo\s*total|longitud", re.IGNORECASE)
 
@@ -85,29 +86,6 @@ def evaluar_inspeccion(plan, mediciones, context_overrides=None):
     return procesadas, estado
 
 
-def _resolver_tenant(db: Session):
-    """Primer tenant (patrón demo; auth por roles pendiente Fase 5)."""
-    from app.models import Tenant
-
-    return db.query(Tenant).order_by(Tenant.created_at).first()
-
-
-def _resolver_operario(db: Session, tenant_id) -> uuid.UUID:
-    """Operario de la demo (primer user del tenant); fallback al usuario system."""
-    from app.models import User
-    from app.services.receiving import _system_user
-
-    operario = (
-        db.query(User)
-        .filter(User.tenant_id == tenant_id, User.role == "operator")
-        .order_by(User.created_at)
-        .first()
-    )
-    if operario is not None:
-        return operario.id
-    return _system_user(db, tenant_id)
-
-
 def _resolver_linea(db: Session, order_id, workstation_id):
     """Línea de la orden en el puesto (para largo dinámico y traza)."""
     from app.models import OrderLine
@@ -142,12 +120,12 @@ def registrar_autocontrol(
 ) -> QualityRecord:
     """Orquesta el registro de un autocontrol (spec 04 §3.2.3)."""
     if tenant_id is None:
-        tenant = _resolver_tenant(db)
+        tenant = resolver_tenant(db)
         if tenant is None:
             raise ValueError("No hay tenant configurado")
         tenant_id = tenant.id
     if operator_id is None:
-        operator_id = _resolver_operario(db, tenant_id)
+        operator_id = resolver_operario(db, tenant_id)
 
     modelo = db.get(ManufacturingModel, manufacturing_model_id)
     if modelo is None or modelo.tenant_id != tenant_id:
