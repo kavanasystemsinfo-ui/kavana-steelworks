@@ -15,6 +15,38 @@ interface CoilScan {
   modo: string
 }
 
+interface PlanCheck {
+  id: string
+  name: string
+  tipo: string
+  tool_id: string | null
+  nominal_value: number | null
+  tolerance_plus: number | null
+  tolerance_minus: number | null
+  is_critical: boolean
+}
+
+interface QualityModel {
+  id: string
+  code: string
+  name: string
+  material_code: string | null
+  quality_plan: PlanCheck[]
+}
+
+interface OrdenInfo {
+  id: string
+  workstation_id: string | null
+}
+
+/** Traducción del estado evaluado del autocontrol (spec 04). */
+function estadoCalidad(estado: string): string {
+  if (estado === 'approved') return 'Aprobado'
+  if (estado === 'rejected') return 'Rechazado (no bloquea la producción)'
+  if (estado === 'rework') return 'Requiere retrabajo (no bloquea la producción)'
+  return estado
+}
+
 /** Panel de Operario (tablet): una acción principal a la vez.
  *  Directriz Jorge: no abrumar, guía de acción visible, sin perder
  *  funcionalidad. El escaneo/vinculación de bobina es el paso central.
@@ -77,6 +109,78 @@ export function OperarioPage() {
   const [finBobinaMsg, setFinBobinaMsg] = useState('')
   const [piezas, setPiezas] = useState('')
   const [horas, setHoras] = useState('')
+
+  // Autocontrol de calidad (spec 04): plantilla + orden de la demo
+  const [models, setModels] = useState<QualityModel[]>([])
+  const [ordenActual, setOrdenActual] = useState<OrdenInfo | null>(null)
+  const [mediciones, setMediciones] = useState<
+    Record<string, number | boolean | string>
+  >({})
+  const [qcMsg, setQcMsg] = useState('')
+  const [qcError, setQcError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/v1/quality/models')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setModels(data)
+      })
+      .catch(() => {})
+    fetch('/api/v1/orders')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setOrdenActual({
+            id: data[0].id,
+            workstation_id: data[0].workstation_id ?? null,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const modelo = models[0] ?? null
+  const puedeAutocontrol = Boolean(modelo && ordenActual?.workstation_id)
+
+  const setMedicion = (name: string, valor: number | boolean | string) => {
+    setMediciones((prev) => ({ ...prev, [name]: valor }))
+  }
+
+  const handleQualityCheck = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setQcMsg('')
+    setQcError('')
+    if (!modelo || !ordenActual || !scan) return
+    const lista = Object.entries(mediciones)
+      .filter(([, v]) => v !== '' && v !== undefined)
+      .map(([name, value]) => ({ check_name: name, value_entered: value }))
+    if (lista.length === 0) {
+      setQcError('Mide al menos un control antes de registrar.')
+      return
+    }
+    try {
+      const res = await fetch('/api/v1/quality/checks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: ordenActual.id,
+          workstation_id: ordenActual.workstation_id,
+          manufacturing_model_id: modelo.id,
+          stock_item_id: scan.id,
+          measurements: lista,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail ?? 'Error al registrar autocontrol')
+      }
+      const data = await res.json()
+      setQcMsg(estadoCalidad(data.record?.overall_status ?? ''))
+      setMediciones({})
+    } catch (err) {
+      setQcError(err instanceof Error ? err.message : 'Error de conexión')
+    }
+  }
 
   const handleRecordProduction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -336,6 +440,112 @@ export function OperarioPage() {
               ➕ Registrar piezas
             </button>
           </form>
+
+          {/* Autocontrol de calidad (spec 04): no bloquea, solo informa */}
+          {puedeAutocontrol && (
+            <form
+              onSubmit={handleQualityCheck}
+              className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
+            >
+              <p className="label-industrial text-xs text-kavana-text-dim">
+                Autocontrol de calidad
+              </p>
+              <p className="text-xs text-kavana-text-dim">
+                {modelo?.name} · {modelo?.code}
+              </p>
+
+              {qcMsg && (
+                <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
+                  {qcMsg}
+                </p>
+              )}
+              {qcError && (
+                <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
+                  {qcError}
+                </p>
+              )}
+
+              {modelo?.quality_plan.map((check) => (
+                <div key={check.id} className="space-y-1">
+                  <label
+                    htmlFor={`qc-${check.id}`}
+                    className="block text-sm"
+                  >
+                    {check.name}
+                    {check.is_critical && (
+                      <span className="text-kavana-orange"> *</span>
+                    )}
+                    {check.tool_id && (
+                      <span className="text-kavana-text-dim text-xs">
+                        {' '}· {check.tool_id}
+                      </span>
+                    )}
+                  </label>
+                  {check.tipo === 'numeric' ? (
+                    <input
+                      id={`qc-${check.id}`}
+                      type="number"
+                      step="any"
+                      value={
+                        (mediciones[check.name] as
+                          | string
+                          | number
+                          | undefined) ?? ''
+                      }
+                      onChange={(e) =>
+                        setMedicion(
+                          check.name,
+                          e.target.value === ''
+                            ? ''
+                            : Number(e.target.value),
+                        )
+                      }
+                      placeholder={
+                        check.nominal_value != null
+                          ? `Nominal ${check.nominal_value} ±${check.tolerance_plus ?? 0}/${check.tolerance_minus ?? 0}`
+                          : 'Valor'
+                      }
+                      className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                    />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        aria-label={`Aprobar ${check.name}`}
+                        onClick={() => setMedicion(check.name, true)}
+                        className={`min-h-[44px] border rounded-sm font-bold uppercase tracking-widest transition-colors ${
+                          mediciones[check.name] === true
+                            ? 'bg-kavana-ok text-black border-kavana-ok'
+                            : 'border-kavana-border text-kavana-text-dim hover:border-kavana-ok hover:text-kavana-ok'
+                        }`}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Rechazar ${check.name}`}
+                        onClick={() => setMedicion(check.name, false)}
+                        className={`min-h-[44px] border rounded-sm font-bold uppercase tracking-widest transition-colors ${
+                          mediciones[check.name] === false
+                            ? 'bg-kavana-danger text-white border-kavana-danger'
+                            : 'border-kavana-border text-kavana-text-dim hover:border-kavana-danger hover:text-kavana-danger'
+                        }`}
+                      >
+                        NO
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="submit"
+                className="w-full min-h-[52px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+              >
+                📋 Registrar autocontrol
+              </button>
+            </form>
+          )}
 
           <button
             onClick={() => {
