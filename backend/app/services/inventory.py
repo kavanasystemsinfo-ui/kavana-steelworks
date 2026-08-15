@@ -15,6 +15,52 @@ from sqlalchemy.orm import Session
 
 from app.models import Material, MaterialConsumo, StockItem
 
+# Tolerancias de compatibilidad dimensional al vincular bobina (visión Jorge,
+# anexo A punto 8). El ancho de banda se corta con precisión (±2 mm típico
+# comercial); el espesor tiene tolerancia de laminación del ±10 %.
+TOLERANCIA_ANCHO_MM = 2.0
+TOLERANCIA_ESPESOR_PCT = 0.10
+
+
+def validar_material_compatible(db: Session, bobina: StockItem, linea) -> None:
+    """No deja vincular una bobina de características incompatibles.
+
+    Regla de Jorge (anexo A, punto 8): el sistema sabe qué material gasta el
+    modelo según la orden y no permite vincular otro material. Si la línea NO
+    declara material, no hay restricción (compatibilidad hacia atrás).
+    """
+    if linea.material_id is None:
+        return
+
+    requerido = db.get(Material, linea.material_id)
+    if requerido is None:
+        raise ValueError("El material requerido por la línea no existe")
+
+    # Tipo de material: la bobina debe ser del material que gasta el modelo
+    if bobina.material_id != linea.material_id:
+        code_bobina = bobina.material.code if bobina.material else "?"
+        raise ValueError(
+            f"Material incompatible: la orden requiere {requerido.code} "
+            f"pero la bobina es {code_bobina}"
+        )
+
+    # Dimensiones nominales del material requerido vs reales de la bobina
+    if requerido.dimension_ancho_mm and bobina.width_mm:
+        diff = abs(float(bobina.width_mm) - float(requerido.dimension_ancho_mm))
+        if diff > TOLERANCIA_ANCHO_MM:
+            raise ValueError(
+                f"Ancho incompatible: la orden requiere {requerido.dimension_ancho_mm} mm "
+                f"y la bobina mide {bobina.width_mm} mm"
+            )
+    if requerido.dimension_espesor_mm and bobina.thickness_mm:
+        diff = abs(float(bobina.thickness_mm) - float(requerido.dimension_espesor_mm))
+        tolerancia = float(requerido.dimension_espesor_mm) * TOLERANCIA_ESPESOR_PCT
+        if diff > tolerancia:
+            raise ValueError(
+                f"Espesor incompatible: la orden requiere {requerido.dimension_espesor_mm} mm "
+                f"y la bobina mide {bobina.thickness_mm} mm"
+            )
+
 
 def _elegibles_fifo(
     db: Session,
@@ -525,6 +571,11 @@ def link_coil(
     linea = db.get(OrderLine, line_id)
     if linea is None or linea.order_id != order.id:
         raise ValueError("Línea no encontrada para la orden")
+
+    # Validación de compatibilidad (visión Jorge, anexo A punto 8): el modelo
+    # de la orden declara el material que gasta; no se vincula una bobina de
+    # otro tipo o de dimensiones incompatibles.
+    validar_material_compatible(db, bobina, linea)
 
     # JIT: reubicar al puesto de la línea
     workstation = linea.workstation_id

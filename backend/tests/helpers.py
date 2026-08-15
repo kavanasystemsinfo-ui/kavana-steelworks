@@ -64,12 +64,20 @@ def make_order(db, tenant, numero="OP-001"):
     return o
 
 
-def make_order_line(db, order, workstation="LINEA-1", total_quantity=10.0, linea_numero=1):
+def make_order_line(
+    db,
+    order,
+    workstation="LINEA-1",
+    total_quantity=10.0,
+    linea_numero=1,
+    material=None,
+):
     line = OrderLine(
         order_id=order.id,
         linea_numero=linea_numero,
         workstation_id=workstation,
         total_quantity=total_quantity,
+        material_id=material.id if material else None,
     )
     db.add(line)
     db.commit()

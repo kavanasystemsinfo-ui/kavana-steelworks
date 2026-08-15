@@ -68,6 +68,9 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
     linea_numero: Mapped[int] = mapped_column(nullable=False)
     product_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     modelo_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    material_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("materials.id"), index=True
+    )  # material que gasta el modelo de la línea (validación de compatibilidad)
     workstation_id: Mapped[str | None] = mapped_column(String(100))
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 

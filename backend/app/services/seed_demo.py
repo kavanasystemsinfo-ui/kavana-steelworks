@@ -17,9 +17,28 @@ from app.models import Material, Order, OrderLine, StockItem, Tenant, User
 
 
 def seed_demo(db: Session) -> dict:
-    """Crea el tenant demo con material, bobina, orden y operario si no existe."""
+    """Crea el tenant demo con material, bobina, orden y operario si no existe.
+
+    Idempotente: si el tenant ya existe, solo asegura que la línea demo declare
+    el material (necesario para la validación de compatibilidad en despliegues
+    donde el seed original creó la línea sin material_id).
+    """
     existente = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
     if existente is not None:
+        # Asegurar material en la línea demo (validación de compatibilidad)
+        linea = db.scalar(
+            select(OrderLine)
+            .join(Order, Order.id == OrderLine.order_id)
+            .where(Order.tenant_id == existente.id, Order.numero == "OP-DEMO-001")
+        )
+        material = db.scalar(
+            select(Material).where(
+                Material.tenant_id == existente.id, Material.code == "ACERO-DC01"
+            )
+        )
+        if linea is not None and material is not None and linea.material_id is None:
+            linea.material_id = material.id
+            db.commit()
         return {"created": False, "tenant": str(existente.id)}
 
     tenant = Tenant(name="Demo Aceros")
@@ -90,6 +109,7 @@ def seed_demo(db: Session) -> dict:
         produced_quantity=Decimal("0"),
         real_time=Decimal("0"),
         meters_per_piece=Decimal("2.0"),
+        material_id=material.id,  # la orden gasta ACERO-DC01 (validación de compatibilidad)
     )
     db.add(linea)
 

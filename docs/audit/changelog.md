@@ -4,6 +4,34 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-15 — Fase 3: validación de material por características
+
+### Added: `validar_material_compatible` (anexo A punto 8)
+
+- **Problema:** faltaba la última pieza de la Fase 3: el sistema no sabía
+  qué material gasta el modelo de la orden, así que podía vincular una
+  bobina de otro tipo (galva en vez de decapado) o de dimensiones
+  incompatibles. La visión de Jorge (anexo A, punto 8) lo prohíbe.
+- **Solución:**
+  - `OrderLine.material_id` (FK materials, nullable): la orden declara el
+    material que gasta el modelo. Migración Alembic
+    `d7e9f2c4a1b3_order_lines_material_id.py`.
+  - `validar_material_compatible` en `app/services/inventory.py`, llamada en
+    `link_coil` ANTES del cobro BULK:
+    - Material distinto al declarado → bloquea ("Material incompatible").
+    - Ancho fuera de ±2 mm del nominal → bloquea ("Ancho incompatible").
+    - Espesor fuera de ±10 % del nominal → bloquea ("Espesor
+      incompatible"); dentro de tolerancia comercial de laminación → permite.
+    - Línea sin `material_id`: no valida (compatibilidad hacia atrás, la
+      demo pre-existente sigue funcionando).
+  - Seed demo actualizado: la línea OP-DEMO-001 declara el material
+    ACERO-DC01, y el seed idempotente lo repara en despliegues existentes.
+- **Verificación:** 6 tests TDD nuevos (test_material_compat.py: material
+  correcto, otro material, ancho, espesor, tolerancia comercial, sin
+  declarar), 69 tests backend totales, ruff limpio, migración validada
+  desde cero contra PostgreSQL real (13 tablas), E2E real 5/5
+  (e2e_material_compat.py).
+
 ## 2026-08-15 — Fase 3: producción con auto-consumo FIFO (recordProduction)
 
 ### Added: `record_production` (spec 02 3.4 + spec 01 3.12)
