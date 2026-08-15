@@ -44,6 +44,34 @@ narrativa de ingeniería.
 - 56 tests backend + 8 tests frontend, ruff limpio, CI con los dos jobs.
 - Archivo de verificación: `backend/e2e_produccion.py`.
 
+## 2026-08-15 — Fase 3: panel Supervisor con OEE y KPIs (spec 03, adaptado al v2)
+
+### Added: servicio OEE y KPIs + endpoints
+- **Problema:** el panel de Supervisor mostraba '--' (datos simulados); la spec
+  03 depende de modelos legacy no portados (ProductionLog, Incidencia, Tooling,
+  UserShift).
+- **Solución:** `app/services/oee_kpis.py` con los datos reales del v2:
+  - OEE = A × P × Q: disponibilidad (real_time vs turno 480 min), rendimiento
+    (produced/total), calidad (material bueno/material total). Clamp a 100,
+    sin datos → 0 (nunca inventar, AUDIT FIX 2.3).
+  - KPIs financieros: coste real vs estimado, varianzas, eficiencia (invertida),
+    tasa de merma. Sin costes → 0 (sin división por cero).
+  - Endpoints GET /api/v1/supervisor/oee y /kpis (tenant del token en Fase 4;
+    demo usa el primer tenant).
+- **Verificación:** 5 tests TDD, E2E contra PostgreSQL real: vincular → producir
+  10 piezas con 2 h → OEE A=25% P=20% Q=100% → 5%, KPIs con 1 orden activa.
+
+### Changed: frontend panel Supervisor conectado
+- `SupervisorPage` llama a los endpoints reales (polling 10 s): tarjeta OEE
+  grande con A/P/Q, KPIs de turno (producción, merma, varianza de coste,
+  eficiencia), detalle de órdenes y tasa de merma.
+- **Verificación:** 2 tests vitest (datos reales cargados + sin datos no
+  inventa), tsc limpio, build PWA.
+
+### Totales tras el cambio
+- 63 tests backend + 10 tests frontend, ruff limpio, CI con los dos jobs.
+- Archivo de verificación: `backend/e2e_supervisor.py`.
+
 ## 2026-08-15 — Fase 4: despliegue demo (Fly.io + Vercel + PostgreSQL)
 
 ### Added: backend en Fly.io (steelworks-api)
