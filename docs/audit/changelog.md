@@ -4,6 +4,41 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-16 — Fase 6: login y roles por panel (credenciales demo)
+
+- **Problema:** la demo era pública sin login (decisión anterior) y el JWT
+  existía pero ningún endpoint exigía token; no había forma de demostrar el
+  multirol del sistema.
+- **Solución (decisión de Jorge: credenciales fáciles, password `kavana`):**
+  - `app/core/security.py`: `autenticar` (Bearer + JWT + revocación, 401) y
+    `require_roles` (403 si el rol no corresponde), patrón Annotated.
+  - TODOS los routers exigen token; matriz de permisos:
+    - operario (operator): escaneo, vincular, fin de bobina, retirar,
+      producción, autocontroles, crear incidencia y su foto.
+    - materias (materials): recepción e inventario.
+    - supervisor: OEE/KPIs, trazabilidad, órdenes, gestionar incidencias
+      (y puede operar, demo).
+    - admin: hereda supervisor.
+    - Público sin token: solo login y subida de foto del móvil (el
+      session_id es la credencial de un solo uso).
+  - Seed: 4 usuarios demo `<rol>@demo.local` con password `kavana`,
+    idempotente y REPARADOR (actualiza el password legacy `!demo`).
+  - El tenant se resuelve del JWT en quality/supervisor/orders (antes "primer
+    tenant", incorrecto con multi-tenant real). El polling QR del móvil
+    resuelve su tenant desde la propia sesión (obtener_sesion_por_id).
+  - Frontend: guard de rutas RequireRole (sin token → /login; sin acceso →
+    home del rol), LoginPage con las cuentas demo visibles y redirección por
+    rol, Layout con navegación filtrada por rol + botón Salir (logout).
+    `lib/roles.ts` con la matriz espejo del backend.
+  - `user_id` real del token conectado en recepción, producción, calidad,
+    stock e incidencias (los TODOs del v2 ya no hacen falta: el operario
+    queda registrado en Kardex/traza/historial).
+- **Verificación:** 204 tests backend (192 unit + 3 E2E contra PG real con
+  drop_all/create_all reproducibles), 57 tests frontend, ruff/oxlint/tsc
+  limpios, CI local verde. Desplegado: Fly (steelworks-api) + Vercel manual.
+  En producción: login 200 para los 4 roles, 401 sin token, 403 con rol
+  incorrecto, 200 con rol correcto.
+
 ## 2026-08-16 — Endurecimiento de seguridad (auditoría con 5 subagentes)
 
 - **Problema:** la demo era pública sin login y el JWT no estaba conectado al
