@@ -53,9 +53,8 @@ const BASE = '/api/v1'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = sessionStorage.getItem('kavana_token')
-  const scheme = 'Bea' + 'rer'
   const authHeader: Record<string, string> = token
-    ? { Authorization: scheme + ' ' + token }
+    ? { Authorization: `Bearer ${token}` }
     : {}
   const res = await fetch(`${BASE}${path}`, {
     ...init,
