@@ -318,3 +318,19 @@ def test_subir_foto_rate_limit_429(db_session, tenant, user):
 
     assert codigos.count(200) == inc_router.MAX_SUBIDAS_VENTANA
     assert codigos[-1] == 429
+
+
+def test_listar_incidencias_limit_negativo_clampa_a_uno(db_session, tenant, user):
+    for i in range(3):
+        _crear(db_session, tenant, user, descripcion=f"Incidencia {i}")
+
+    app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
+    try:
+        client = TestClient(app)
+        r = client.get("/api/v1/incidencias?limit=-1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, r.text
+    # limit=-1 (antiguo: LIMIT -1 = sin límite → devolvía las 3); ahora clampa a 1
+    assert len(r.json()["incidencias"]) == 1

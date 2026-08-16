@@ -199,7 +199,7 @@ def listar_registros(
     q = db.query(QualityRecord).filter(QualityRecord.tenant_id == tenant_id)
     if order_id is not None:
         q = q.filter(QualityRecord.order_id == order_id)
-    return q.order_by(QualityRecord.created_at.desc()).limit(min(limit, 50)).all()
+    return q.order_by(QualityRecord.created_at.desc()).limit(min(max(limit, 1), 50)).all()
 
 
 def listar_modelos(db: Session, tenant_id: uuid.UUID) -> list[ManufacturingModel]:

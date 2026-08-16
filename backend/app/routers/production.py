@@ -29,7 +29,7 @@ class RecordProductionRequest(BaseModel):
     line_id: uuid.UUID
     incremental_quantity: Decimal = Field(ge=0)
     hours_worked: Decimal = Field(default=0, ge=0)
-    observaciones: str | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
 
 
 @router.post("/record")

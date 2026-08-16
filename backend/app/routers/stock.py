@@ -30,16 +30,16 @@ DbDep = Annotated[Session, Depends(get_db)]
 class ReceiveCoilRequest(BaseModel):
     tenant_id: uuid.UUID
     material_id: uuid.UUID
-    lote: str
-    coil_id: str | None = None
+    lote: str = Field(max_length=255)
+    coil_id: str | None = Field(default=None, max_length=255)
     peso: Decimal = Field(gt=0)
-    width_mm: Decimal | None = None
-    thickness_mm: Decimal | None = None
+    width_mm: Decimal | None = Field(default=None, ge=0)
+    thickness_mm: Decimal | None = Field(default=None, ge=0)
     coste_real: Decimal | None = Field(default=None, ge=0)
-    ubicacion: str | None = None
-    heat_number: str | None = None
-    grado_acero: str | None = None
-    supplier_coil_id: str | None = None
+    ubicacion: str | None = Field(default=None, max_length=255)
+    heat_number: str | None = Field(default=None, max_length=255)
+    grado_acero: str | None = Field(default=None, max_length=255)
+    supplier_coil_id: str | None = Field(default=None, max_length=255)
 
 
 class ReceiveCoilResponse(BaseModel):

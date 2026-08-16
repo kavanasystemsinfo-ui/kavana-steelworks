@@ -3,7 +3,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -56,8 +56,21 @@ def login(body: LoginRequest, db: DbDep):
     return LoginResponse(access_token=token)
 
 
+def _extraer_bearer(authorization: str | None) -> str | None:
+    """Extrae el token de 'Authorization: Bearer <token>'."""
+    if not authorization:
+        return None
+    partes = authorization.split()
+    if len(partes) == 2 and partes[0].lower() == "bearer":
+        return partes[1]
+    return None
+
+
 @router.post("/logout", status_code=204)
-def logout(token: str, db: DbDep):
-    """Revoca el token server-side."""
+def logout(authorization: Annotated[str | None, Header()] = None, db: DbDep = None):
+    """Revoca el token server-side (Bearer en header Authorization)."""
+    token = _extraer_bearer(authorization)
+    if token is None:
+        raise HTTPException(status_code=401, detail="Token requerido")
     auth_service.logout(db, token)
     return None

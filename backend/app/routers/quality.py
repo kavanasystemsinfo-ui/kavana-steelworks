@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -31,17 +31,17 @@ DbDep = Annotated[Session, Depends(get_db)]
 
 
 class MeasurementIn(BaseModel):
-    check_name: str
+    check_name: str = Field(max_length=255)
     value_entered: bool | int | float | str
 
 
 class QualityCheckIn(BaseModel):
     order_id: uuid.UUID
-    workstation_id: str
+    workstation_id: str = Field(max_length=255)
     manufacturing_model_id: uuid.UUID
     stock_item_id: uuid.UUID | None = None
-    measurements: list[MeasurementIn]
-    notes: str | None = None
+    measurements: list[MeasurementIn] = Field(max_length=100)
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class MeasurementOut(BaseModel):

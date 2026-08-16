@@ -18,4 +18,6 @@ with Session(engine) as db:
 PY
 
 echo "[entrypoint] arrancando uvicorn en 0.0.0.0:8000"
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+# --proxy-headers + --forwarded-allow-ips: tras el edge de Fly.io, request.client.host
+# refleja la IP real del cliente (X-Forwarded-For) para que el rate limit sea efectivo.
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"

@@ -79,3 +79,16 @@ def test_operario_tiene_un_solo_turno_activo(db_session, tenant):
 
     turnos_activos = db_session.query(UserShift).filter(UserShift.status == "active").count()
     assert turnos_activos == 1
+
+
+def test_logout_es_idempotente(db_session, tenant):
+    from app.services.auth import login, logout
+
+    _make_user(db_session, tenant)
+    token = login(db_session, tenant.id, "operario@test.local", "clave123")
+
+    logout(db_session, token)
+    # Un segundo logout del mismo token no debe lanzar IntegrityError (unique)
+    logout(db_session, token)
+
+    assert db_session.query(RevokedToken).count() == 1

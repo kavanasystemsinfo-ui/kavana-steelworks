@@ -123,7 +123,7 @@ def listar_incidencias(
         db.query(Incidencia)
         .filter(Incidencia.tenant_id == tenant_id)
         .order_by(Incidencia.created_at.desc(), Incidencia.id.desc())
-        .limit(min(limit, LIMITE_INCIDENCIAS))
+        .limit(min(max(limit, 1), LIMITE_INCIDENCIAS))
         .all()
     )
 

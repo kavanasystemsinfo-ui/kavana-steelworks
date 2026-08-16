@@ -6,6 +6,7 @@ inventario/recepción se exponen en la Fase 3 (frontend) o según necesidad.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
 from app.routers import auth as auth_router
@@ -21,6 +22,21 @@ from app.services.events import broker
 
 settings = get_settings()
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Cabeceras de seguridad básicas en cada respuesta de la API."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+        return response
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -35,6 +51,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth_router.router)
 app.include_router(incidencias_router.router)

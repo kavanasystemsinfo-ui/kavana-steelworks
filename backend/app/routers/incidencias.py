@@ -13,10 +13,11 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.services.photo_validator import MAX_FOTO_BYTES
 
 router = APIRouter(prefix="/api/v1/incidencias", tags=["incidencias"])
 
@@ -28,8 +29,20 @@ VENTANA_SUBIDA_SEGUNDOS = 10 * 60
 _upload_attempts: dict[str, list[float]] = {}
 
 
+def _podar_ips_vencidas(ahora: float) -> None:
+    """Elimina IPs sin actividad reciente (evita que el dict crezca sin fin)."""
+    vencidas = [
+        ip
+        for ip, intentos in _upload_attempts.items()
+        if not any(ahora - t < VENTANA_SUBIDA_SEGUNDOS for t in intentos)
+    ]
+    for ip in vencidas:
+        del _upload_attempts[ip]
+
+
 def _enforce_upload_rate_limit(ip: str) -> None:
     ahora = time.time()
+    _podar_ips_vencidas(ahora)
     recientes = [t for t in _upload_attempts.get(ip, []) if ahora - t < VENTANA_SUBIDA_SEGUNDOS]
     if len(recientes) >= MAX_SUBIDAS_VENTANA:
         raise HTTPException(
@@ -38,6 +51,23 @@ def _enforce_upload_rate_limit(ip: str) -> None:
         )
     recientes.append(ahora)
     _upload_attempts[ip] = recientes
+
+
+async def _leer_foto_limitada(foto: UploadFile, max_bytes: int = MAX_FOTO_BYTES) -> bytes:
+    """Lee la subida en chunks y aborta si supera el límite (evita cargar el
+    cuerpo completo en memoria antes de validar el tamaño)."""
+    buf = bytearray()
+    while True:
+        chunk = await foto.read(1024 * 1024)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"La imagen supera el tamaño máximo de {max_bytes // (1024 * 1024)}MB",
+            )
+    return bytes(buf)
 
 
 def get_db():
@@ -52,20 +82,20 @@ DbDep = Annotated[Session, Depends(get_db)]
 
 
 class IncidenciaIn(BaseModel):
-    linea_id: str
-    descripcion: str
+    linea_id: str = Field(max_length=255)
+    descripcion: str = Field(max_length=2000)
     tipo: str = "otro"
-    foto: str | None = None
-    photo_session_id: str | None = None  # sesión QR + móvil (si hay foto)
+    foto: str | None = Field(default=None, max_length=15_000_000)
+    photo_session_id: str | None = Field(default=None, max_length=64)  # sesión QR + móvil
 
 
 class IncidenciaUpdate(BaseModel):
     estado: str | None = None
-    comentario: str | None = None
-    resolucion_tipo: str | None = None
-    resolucion_descripcion: str | None = None
-    tiempo_parada_min: Decimal | None = None
-    coste: Decimal | None = None
+    comentario: str | None = Field(default=None, max_length=2000)
+    resolucion_tipo: str | None = Field(default=None, max_length=64)
+    resolucion_descripcion: str | None = Field(default=None, max_length=2000)
+    tiempo_parada_min: Decimal | None = Field(default=None, ge=0)
+    coste: Decimal | None = Field(default=None, ge=0)
 
 
 class UploadSessionOut(BaseModel):
@@ -113,7 +143,7 @@ async def subir_foto_movil(
 
     _enforce_upload_rate_limit(request.client.host if request.client else "unknown")
 
-    buf = await foto.read()
+    buf = await _leer_foto_limitada(foto)
     try:
         return adjuntar_foto(db, session_id=session_id, buf=buf)
     except UploadError as exc:
@@ -238,7 +268,7 @@ async def subir_foto_incidencia(
     if tenant is None:
         raise HTTPException(status_code=404, detail="Incidencia no encontrada")
 
-    buf = await foto.read()
+    buf = await _leer_foto_limitada(foto)
     try:
         incidencia = service(db, incidencia_id=incidencia_id, tenant_id=tenant.id, buf=buf)
     except UploadError as exc:

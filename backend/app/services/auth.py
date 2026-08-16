@@ -88,10 +88,12 @@ def is_revoked(db: Session, token: str) -> bool:
 
 
 def logout(db: Session, token: str) -> None:
-    """Revoca el token en la lista negra server-side."""
+    """Revoca el token en la lista negra server-side (idempotente)."""
     payload = verify_token(token)
     if payload is None:
         return
+    if is_revoked(db, token):
+        return  # ya revocado: evita IntegrityError por unique(token)
     exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
     db.add(
         RevokedToken(

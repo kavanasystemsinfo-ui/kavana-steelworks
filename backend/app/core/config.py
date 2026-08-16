@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 8  # un turno estándar de fábrica (decisión legacy)
 
+    @model_validator(mode="after")
+    def _exigir_secret_fuerte_en_produccion(self) -> "Settings":
+        """Fail-fast: en producción no se firman JWTs con un secreto débil o ausente."""
+        if self.environment == "production" and len(self.jwt_secret) < 32:
+            raise ValueError(
+                "STEELWORKS_JWT_SECRET ausente o demasiado corto en producción. "
+                "Establece un secreto de al menos 256 bits: "
+                "fly secrets set STEELWORKS_JWT_SECRET=<valor-aleatorio>"
+            )
+        return self
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
@@ -42,9 +53,7 @@ class Settings(BaseSettings):
         "https://steelworks-kavana.vercel.app",
     ]
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="STEELWORKS_", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="STEELWORKS_", extra="ignore")
 
     @property
     def sqlalchemy_database_url(self) -> str:

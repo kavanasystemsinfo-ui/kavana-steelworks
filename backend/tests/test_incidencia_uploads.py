@@ -164,3 +164,30 @@ def test_crear_incidencia_con_sesion_pendiente_no_falla(db_session, tenant, user
     assert r.status_code == 201, r.text
     inc = db_session.query(Incidencia).one()
     assert inc.foto_data is None
+
+
+async def test_leer_foto_limitada_aborta_si_supera_limite():
+    import io
+
+    import pytest
+    from fastapi import HTTPException
+    from starlette.datastructures import UploadFile
+
+    from app.routers.incidencias import _leer_foto_limitada
+
+    f = UploadFile(io.BytesIO(b"x" * 100), filename="foto.png")
+    with pytest.raises(HTTPException) as exc:
+        await _leer_foto_limitada(f, max_bytes=50)
+    assert exc.value.status_code == 413
+
+
+async def test_leer_foto_limitada_acepta_dentro_del_limite():
+    import io
+
+    from starlette.datastructures import UploadFile
+
+    from app.routers.incidencias import _leer_foto_limitada
+
+    f = UploadFile(io.BytesIO(b"x" * 30), filename="foto.png")
+    buf = await _leer_foto_limitada(f, max_bytes=50)
+    assert buf == b"x" * 30
