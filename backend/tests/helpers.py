@@ -2,7 +2,72 @@
 
 from datetime import UTC, datetime
 
-from app.models import CoilLink, Material, Order, OrderLine, StockItem
+from app.models import CoilLink, Material, Order, OrderLine, StockItem, User
+
+
+def make_user(db, tenant, email="operario@test.local", role="operator", name="Usuario Test"):
+    """Crea un usuario con password 'kavana' (hash bcrypt real) y devuelve el User."""
+    from app.services.auth import hash_password
+
+    u = User(
+        tenant_id=tenant.id,
+        email=email,
+        name=name,
+        password_hash=hash_password("kavana"),
+        role=role,
+    )
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def auth_headers(db, tenant, role="operator", email=None):
+    """Devuelve headers Authorization con un JWT real de un usuario del rol.
+
+    El usuario se crea con password 'kavana' (mismo patrón que la demo).
+    """
+    from app.services.auth import login
+
+    email = email or f"{role}@test.local"
+    user = db.scalar(
+        __import__("sqlalchemy").select(User).where(User.email == email)
+    )
+    if user is None:
+        user = make_user(db, tenant, email=email, role=role)
+    token = login(db, tenant.id, email, "kavana")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def auth_headers_for(db, user):
+    """Headers de auth para un User existente (password kavana del fixture)."""
+    from app.services.auth import login
+
+    token = login(db, user.tenant_id, user.email, "kavana")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def authed_client(db, tenant, role="operator"):
+    """TestClient de la app con headers de auth del rol (overrides aparte)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    client.headers.update(auth_headers(db, tenant, role=role))
+    return client
+
+
+def authed_client_for(db, user):
+    """TestClient con headers de auth del User dado (el operario del token)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    client.headers.update(auth_headers_for(db, user))
+    return client
+
 
 
 def make_material(db, tenant, code="ACERO-01", cost=1.0, density=7850):

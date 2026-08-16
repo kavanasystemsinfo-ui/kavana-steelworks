@@ -12,11 +12,13 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import autenticar, require_roles
+from app.models import User
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
 
@@ -34,6 +36,13 @@ def get_db():
 DbDep = Annotated[Session, Depends(get_db)]
 
 
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    return autenticar(db, authorization)
+
+
 class OrderOut(BaseModel):
     id: uuid.UUID
     numero: str
@@ -44,17 +53,19 @@ class OrderOut(BaseModel):
 
 
 @router.get("", response_model=list[OrderOut])
-def list_orders(db: DbDep):
+def list_orders(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
     """Órdenes del tenant de la demo (creación descendente, límite 50)."""
-    from app.models import Order, Tenant
-
-    tenant = db.query(Tenant).order_by(Tenant.created_at).first()
-    if tenant is None:
-        return []
+    from app.models import Order
 
     ordenes = (
         db.query(Order)
-        .filter(Order.tenant_id == tenant.id)
+        .filter(Order.tenant_id == current_user.tenant_id)
         .order_by(Order.created_at.desc())
         .limit(LIMITE_ORDENES)
         .all()

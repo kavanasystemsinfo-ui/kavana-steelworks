@@ -12,14 +12,12 @@ Contrato portado de QualityService.js / QualityController.js del legacy:
 import uuid
 from decimal import Decimal
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.models import ProductionLog
 from app.models.quality import ManufacturingModel, QualityPlanCheck, QualityRecord
 from app.routers import quality as quality_router
 from app.services.quality import evaluar_inspeccion, evaluar_numerico
-from tests.helpers import make_order, make_order_line
+from tests.helpers import authed_client_for, make_order, make_order_line
 
 
 def make_model(db, tenant, code="MOD-001", checks=None):
@@ -262,7 +260,7 @@ def test_registrar_autocontrol_crea_record_y_log(db_session, tenant, user):
 
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             "/api/v1/quality/checks",
             json={
@@ -318,7 +316,7 @@ def test_registrar_autocontrol_aplica_largo_dinamico_de_la_orden(
 
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             "/api/v1/quality/checks",
             json={
@@ -348,7 +346,7 @@ def test_registrar_autocontrol_rechazado_no_bloquea_produccion(
 
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             "/api/v1/quality/checks",
             json={
@@ -371,7 +369,7 @@ def test_registrar_autocontrol_rechazado_no_bloquea_produccion(
 def test_registrar_autocontrol_validaciones(db_session, tenant, user):
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         # Sin measurements -> 422 (Pydantic: campo obligatorio)
         r1 = client.post(
             "/api/v1/quality/checks",
@@ -404,7 +402,7 @@ def test_get_quality_records_filtra_por_orden(db_session, tenant, user):
 
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         client.post(
             "/api/v1/quality/checks",
             json={
@@ -432,7 +430,7 @@ def test_get_quality_models_devuelve_plan(db_session, tenant, user):
 
     app.dependency_overrides[quality_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.get("/api/v1/quality/models")
     finally:
         app.dependency_overrides.clear()

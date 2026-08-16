@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models import Base, Tenant, User
+from app.models import Base, Tenant
 
 TEST_DB_URL = "sqlite+pysqlite:///:memory:"
 
@@ -39,14 +39,6 @@ def tenant(db_session):
 
 @pytest.fixture()
 def user(db_session, tenant):
-    u = User(
-        tenant_id=tenant.id,
-        email="operario@test.local",
-        name="Operario Test",
-        password_hash="x",
-        role="operator",
-    )
-    db_session.add(u)
-    db_session.commit()
-    db_session.refresh(u)
-    return u
+    from tests.helpers import make_user
+
+    return make_user(db_session, tenant, email="operario@test.local", role="operator")

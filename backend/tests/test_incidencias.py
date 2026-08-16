@@ -13,14 +13,13 @@ import uuid
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.incidencia import Incidencia
 from app.routers import incidencias as inc_router
 from app.services.events import broker
 from app.services.oee_kpis import calcular_oee
-from tests.helpers import make_order, make_order_line
+from tests.helpers import authed_client_for, make_order, make_order_line
 
 
 def _override_get_db(db_session):
@@ -40,7 +39,7 @@ def _crear(
 ):
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         return client.post(
             "/api/v1/incidencias",
             json={"linea_id": linea, "descripcion": descripcion, "tipo": tipo},
@@ -79,7 +78,7 @@ def test_crear_incidencia_sin_orden_activa_deja_order_null(db_session, tenant, u
 def test_crear_incidencia_422_sin_descripcion(db_session, tenant, user):
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post("/api/v1/incidencias", json={"linea_id": "LINEA-1"})
     finally:
         app.dependency_overrides.clear()
@@ -87,6 +86,9 @@ def test_crear_incidencia_422_sin_descripcion(db_session, tenant, user):
 
 
 def test_listar_incidencias_orden_desc(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     from datetime import UTC, datetime, timedelta
 
     r1 = _crear(db_session, tenant, user, descripcion="Primera")
@@ -97,7 +99,7 @@ def test_listar_incidencias_orden_desc(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.get("/api/v1/incidencias")
     finally:
         app.dependency_overrides.clear()
@@ -108,12 +110,15 @@ def test_listar_incidencias_orden_desc(db_session, tenant, user):
 
 
 def test_actualizar_estado_anade_historial(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     _crear(db_session, tenant, user)
     inc = db_session.query(Incidencia).one()
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.patch(
             f"/api/v1/incidencias/{inc.id}",
             json={"estado": "en_revision", "comentario": "revisando"},
@@ -129,12 +134,15 @@ def test_actualizar_estado_anade_historial(db_session, tenant, user):
 
 
 def test_actualizar_resolucion_financiera(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     _crear(db_session, tenant, user)
     inc = db_session.query(Incidencia).one()
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.patch(
             f"/api/v1/incidencias/{inc.id}",
             json={
@@ -158,12 +166,15 @@ def test_actualizar_resolucion_financiera(db_session, tenant, user):
 
 
 def test_actualizar_resolucion_conserva_campos_previos(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     _crear(db_session, tenant, user)
     inc = db_session.query(Incidencia).one()
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         client.patch(
             f"/api/v1/incidencias/{inc.id}",
             json={"resolucion_tipo": "ajuste", "tiempo_parada_min": 15},
@@ -182,9 +193,12 @@ def test_actualizar_resolucion_conserva_campos_previos(db_session, tenant, user)
 
 
 def test_actualizar_incidencia_404(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.patch(
             f"/api/v1/incidencias/{uuid.uuid4()}", json={"estado": "resuelta"}
         )
@@ -227,7 +241,7 @@ def test_subir_foto_a_incidencia(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             f"/api/v1/incidencias/{inc.id}/foto",
             files={"foto": ("foto.png", PNG_DEMO, "image/png")},
@@ -248,7 +262,7 @@ def test_subir_foto_invalida_devuelve_400(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             f"/api/v1/incidencias/{inc.id}/foto",
             files={"foto": ("nota.txt", b"esto no es una imagen", "text/plain")},
@@ -263,7 +277,7 @@ def test_subir_foto_invalida_devuelve_400(db_session, tenant, user):
 def test_subir_foto_404_si_incidencia_no_existe(db_session, tenant, user):
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             f"/api/v1/incidencias/{uuid.uuid4()}/foto",
             files={"foto": ("foto.png", PNG_DEMO, "image/png")},
@@ -274,12 +288,15 @@ def test_subir_foto_404_si_incidencia_no_existe(db_session, tenant, user):
 
 
 def test_get_incidencias_incluye_foto_data_url(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     _crear(db_session, tenant, user)
     inc = db_session.query(Incidencia).one()
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         client.post(
             f"/api/v1/incidencias/{inc.id}/foto",
             files={"foto": ("foto.png", PNG_DEMO, "image/png")},
@@ -305,7 +322,7 @@ def test_subir_foto_rate_limit_429(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         codigos = []
         for _ in range(inc_router.MAX_SUBIDAS_VENTANA + 1):
             r = client.post(
@@ -321,12 +338,15 @@ def test_subir_foto_rate_limit_429(db_session, tenant, user):
 
 
 def test_listar_incidencias_limit_negativo_clampa_a_uno(db_session, tenant, user):
+    user.role = "supervisor"
+    db_session.commit()
+
     for i in range(3):
         _crear(db_session, tenant, user, descripcion=f"Incidencia {i}")
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.get("/api/v1/incidencias?limit=-1")
     finally:
         app.dependency_overrides.clear()

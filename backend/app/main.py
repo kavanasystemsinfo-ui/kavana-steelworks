@@ -4,11 +4,16 @@ Fase 2: core con auth JWT, health, y endpoints base. Los routers de
 inventario/recepción se exponen en la Fase 3 (frontend) o según necesidad.
 """
 
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.database import SessionLocal
+from app.core.security import autenticar
 from app.routers import auth as auth_router
 from app.routers import incidencias as incidencias_router
 from app.routers import orders as orders_router
@@ -65,13 +70,26 @@ app.include_router(trace_router.router)
 app.include_router(ws_router.router)
 
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "app": settings.app_name, "version": settings.app_version}
 
 
 @app.get("/api/v1/events/{tenant_id}")
-def get_events(tenant_id: str) -> dict:
+def get_events(
+    tenant_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
     """Eventos pendientes del tenant (polling; WebSocket en la Fase 3)."""
+    autenticar(db, authorization)  # 401 si no hay token válido
     eventos = broker.get_events(tenant_id)
     return {"tenant_id": tenant_id, "count": len(eventos), "events": eventos}

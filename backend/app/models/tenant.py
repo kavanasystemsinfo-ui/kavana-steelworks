@@ -22,9 +22,10 @@ class Tenant(UUIDMixin, TimestampMixin, Base):
 
 
 class User(UUIDMixin, TimestampMixin, Base):
-    """Usuario del sistema (operario, supervisor, admin).
+    """Usuario del sistema (operario, supervisor, materias, admin).
 
     JWT de 8 horas = un turno estándar de fábrica (decisión legacy).
+    Roles: operator | supervisor | materials | admin.
     """
 
     __tablename__ = "users"

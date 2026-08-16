@@ -4,6 +4,86 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-16 — Endurecimiento de seguridad (auditoría con 5 subagentes)
+
+- **Problema:** la demo era pública sin login y el JWT no estaba conectado al
+  flujo HTTP; faltaba revisar secretos, dependencias y superficie de ataque
+  antes de abrir la demo a cualquiera.
+- **Solución (commits 2160721 + 04618aa):**
+  - JWT secret fail-fast: `model_validator` exige `len >= 32` en producción;
+    Fly ya tiene `STEELWORKS_JWT_SECRET`.
+  - Logout por header `Authorization: Bearer` (antes query param) e
+    idempotente (evita 500 por unique).
+  - Subida de fotos anti-DoS: lectura en chunks con aborto 413 al superar
+    10 MB (antes `foto.read()` cargaba todo el cuerpo).
+  - Cabeceras de seguridad (nosniff, X-Frame-Options DENY, Referrer-Policy,
+    HSTS) en middleware global.
+  - Rate limit de subida con poda de IPs vencidas + uvicorn con
+    `--proxy-headers` para que la IP real llegue tras el edge de Fly.
+  - Límites en schemas Pydantic (max_length, ge=0, `limit` clampado a >=1).
+  - `SECURITY.md` y `.env.example` nuevos.
+- **Verificación:** sin secretos en git (`git rev-list --all` limpio), sin
+  SQLi/XSS/SSRF/path traversal, CVE único `ecdsa@0.19.2` transitiva de
+  python-jose no explotable con HS256, frontend 0 CVEs, 178 tests backend.
+
+## 2026-08-15 — Fase 5: trazabilidad ISO 9001, calidad, incidencias y foto QR
+
+### Added: trazabilidad ISO 9001 (spec 04 §3.1, commits fbeef02 + 93c47aa + 2f3bb03)
+- **Problema:** no existía registro inmutable de la cadena de producción
+  (quién, cuándo, qué, con qué bobina), requisito de la ISO 9001.
+- **Solución:** modelo `ProductionLog` (11 acciones, metadata JSONB,
+  índices tenant/orden/operario), TRIGGER de inmutabilidad en PostgreSQL
+  (UPDATE/DELETE bloqueados), servicio `log_event` best-effort tipo DLQ que
+  NUNCA rompe la planta, integrado en producción (produce), fin de bobina
+  (scrap) y retirar pico (finish). Router GET /api/v1/trace/orders/{id} y
+  UI de timeline en el panel Supervisor con selector de órdenes.
+- **Pitfall resuelto:** la columna `metadata` choca con el MetaData de
+  SQLAlchemy; usar `metadata_` en el ORM y serialización explícita.
+- **Verificación:** E2E 7/7 contra PostgreSQL real (UPDATE/DELETE
+  bloqueados), 4 tests frontend nuevos.
+
+### Added: autocontroles de calidad (spec 04 §3.2, commits 8a9eb0f + 1a8dc1f)
+- **Problema:** el operario no podía registrar los controles de calidad del
+  modelo (largo, acabado, espesor) con sus tolerancias.
+- **Solución:** modelos ManufacturingModel/QualityPlanCheck/QualityRecord/
+  QualityMeasurement (columna `tipo`, no `type`: palabra reservada SQL),
+  servicio portado del legacy con límites inclusivos, checks sin medición
+  omitidos, rejected (crítico) nunca bloquea producción. Tarjeta de
+  autocontrol en el panel Operario tras vincular bobina. Seed idempotente
+  PERFIL-DEMO-001 con 3 controles.
+- **Verificación:** 15 tests backend + 3 frontend, E2E contra PG real.
+
+### Added: incidencias de planta con cierre financiero (spec 04 §3.3, commits 194f6cd + f87be8e + fixes)
+- **Problema:** no había canal para reportar paradas/incidencias ni su
+  impacto en el OEE.
+- **Solución:** modelo Incidencia + IncidenciaHistorial con CHECK reales,
+  nace en 'abierta', asocia la orden activa de la línea, cierre con
+  responsable. OEE descuenta `tiempo_parada_min` como downtime
+  (`total_downtime_min`). Formulario clásico en Operario (auto-importa
+  operario, puesto, modelo, fecha) y gestión en Supervisor. La severidad NO
+  existe (decisión de Jorge). 9 tests + E2E.
+
+### Added: evidencia fotográfica por QR + móvil (spec 04 §3.3.2, commits 2db9162 + d627d73 + 2863af9 + 5b07203)
+- **Problema:** el operario debía poder adjuntar foto de la incidencia desde
+  el móvil sin sesión.
+- **Solución:** SIN Cloudinary: foto como BYTEA en PostgreSQL con sesiones
+  de un solo uso (TTL 15 min, estados pending/uploaded/used/expired).
+  Flujo: POST /upload-session (PC) → QR → POST /upload-mobile/{id} público
+  (validación magic bytes + 10MB + rate limit 20/10min) → polling → la foto
+  se serializa como data URL. Decisión de producto: la foto es vía MÁS del
+  formulario clásico (opcional, sin foto se reporta igual).
+- **Verificación:** 131 tests backend + 21 frontend, CI verde, flujo
+  verificado en producción con una foto real.
+
+## 2026-08-15 — WebSockets de planta en tiempo real (ADR-014, commit efaf191)
+
+- **Problema:** el panel hacía polling de eventos; la planta necesita push.
+- **Solución:** router WS `/api/v1/ws/{tenant_id}` con autenticación
+  opcional por token, reintentos con backoff en el cliente, y cola por
+  tenant del broker. El polling sigue como fallback.
+- **Verificación:** tests de conexión, token inválido/expirado/revocado
+  (códigos 4404/4403), eventos push en tiempo real.
+
 ## 2026-08-15 — Fase 3: validación de material por características
 
 ### Added: `validar_material_compatible` (anexo A punto 8)

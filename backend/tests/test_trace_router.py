@@ -6,12 +6,10 @@ es de solo lectura (los ProductionLog son inmutables).
 
 from datetime import UTC, datetime
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.routers import trace as trace_router
 from app.services import traceability
-from tests.helpers import make_order, make_order_line
+from tests.helpers import authed_client, make_order, make_order_line
 
 
 def _poblar_traza(db, tenant, user, orden):
@@ -40,7 +38,7 @@ def test_get_order_trace_devuelve_serie_ordenada(db_session, tenant, user):
 
     app.dependency_overrides[trace_router.get_db] = _override_get_db
     try:
-        client = TestClient(app)
+        client = authed_client(db_session, tenant, role="supervisor")
         r = client.get(f"/api/v1/trace/orders/{orden.id}")
     finally:
         app.dependency_overrides.clear()
@@ -55,7 +53,7 @@ def test_get_order_trace_devuelve_serie_ordenada(db_session, tenant, user):
     assert produce["metadata"] is not None or "metadata" in produce
 
 
-def test_get_order_trace_404_si_orden_no_existe(db_session):
+def test_get_order_trace_404_si_orden_no_existe(db_session, tenant, user):
     import uuid
 
     def _override_get_db():
@@ -63,7 +61,7 @@ def test_get_order_trace_404_si_orden_no_existe(db_session):
 
     app.dependency_overrides[trace_router.get_db] = _override_get_db
     try:
-        client = TestClient(app)
+        client = authed_client(db_session, tenant, role="supervisor")
         r = client.get(f"/api/v1/trace/orders/{uuid.uuid4()}")
     finally:
         app.dependency_overrides.clear()

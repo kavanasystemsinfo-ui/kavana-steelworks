@@ -114,6 +114,22 @@ def obtener_sesion(
     if sesion is None:
         raise UploadError("Sesión de subida no encontrada", 404)
 
+    return _serializar_sesion(sesion)
+
+
+def obtener_sesion_por_id(db: Session, *, session_id: uuid.UUID) -> dict:
+    """Estado de la sesión resolviendo el tenant desde la propia sesión.
+
+    El polling del móvil va sin token (solo conoce el session_id); la sesión
+    guarda su tenant_id, así que no hay que adivinar el tenant.
+    """
+    sesion = _buscar_por_session_id(db, session_id)
+    if sesion is None:
+        raise UploadError("Sesión de subida no encontrada", 404)
+    return _serializar_sesion(sesion)
+
+
+def _serializar_sesion(sesion) -> dict:
     import base64
 
     return {
@@ -140,6 +156,14 @@ def obtener_foto(
         IncidenciaUploadSession.photo.is_not(None),
     ).first()
     if sesion is None:
+        raise UploadError("Foto no encontrada", 404)
+    return sesion.photo, sesion.photo_mime
+
+
+def obtener_foto_por_id(db: Session, *, session_id: uuid.UUID) -> tuple[bytes, str]:
+    """Bytes de la foto resolviendo el tenant desde la propia sesión (móvil)."""
+    sesion = _buscar_por_session_id(db, session_id)
+    if sesion is None or sesion.photo is None:
         raise UploadError("Foto no encontrada", 404)
     return sesion.photo, sesion.photo_mime
 

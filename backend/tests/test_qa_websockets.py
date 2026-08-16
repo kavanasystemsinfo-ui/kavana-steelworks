@@ -100,8 +100,21 @@ def test_qa_ruta_registrada_exacta():
 
 
 def test_qa_endpoint_rest_de_polling_sigue_funcionando(db_session, tenant, ws_client):
-    broker.publish(tenant_id=tenant.id, tipo="consumo_fifo", data={"kg": 5})
-    r = ws_client.get(f"/api/v1/events/{tenant.id}")
+    from tests.helpers import make_user
+
+    make_user(db_session, tenant, email="poll@test.local", role="operator")
+    from app.main import get_db as main_get_db
+    from app.services.auth import login
+
+    app.dependency_overrides[main_get_db] = _override_get_db(db_session)
+    token = login(db_session, tenant.id, "poll@test.local", "kavana")
+    try:
+        broker.publish(tenant_id=tenant.id, tipo="consumo_fifo", data={"kg": 5})
+        r = ws_client.get(
+            f"/api/v1/events/{tenant.id}", headers={"Authorization": f"Bearer {token}"}
+        )
+    finally:
+        app.dependency_overrides.pop(main_get_db, None)
     assert r.status_code == 200
     body = r.json()
     assert body["count"] == 1

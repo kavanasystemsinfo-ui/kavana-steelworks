@@ -16,7 +16,7 @@ from app.main import app
 from app.models import Incidencia
 from app.models.incidencia_upload import IncidenciaUploadSession
 from app.routers import incidencias as inc_router
-from tests.helpers import make_order, make_order_line
+from tests.helpers import authed_client_for, make_order, make_order_line
 
 PNG_DEMO = b"\x89PNG\r\n\x1a\n" + b"data-de-prueba"
 
@@ -31,7 +31,7 @@ def _override_get_db(db_session):
 def _crear_sesion(db_session, tenant, user) -> dict:
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         return client.post("/api/v1/incidencias/upload-session").json()
     finally:
         app.dependency_overrides.clear()
@@ -114,7 +114,7 @@ def test_crear_incidencia_con_foto_copia_y_marca_used(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             "/api/v1/incidencias",
             json={
@@ -148,7 +148,7 @@ def test_crear_incidencia_con_sesion_pendiente_no_falla(db_session, tenant, user
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)
         r = client.post(
             "/api/v1/incidencias",
             json={

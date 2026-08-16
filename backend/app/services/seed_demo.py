@@ -63,6 +63,40 @@ def _asegurar_modelo_demo(db, tenant_id) -> None:
     db.commit()
 
 
+def _asegurar_usuarios_demo(db: Session, tenant_id) -> None:
+    """Crea/actualiza los usuarios demo por rol (idempotente).
+
+    Contraseña de TODOS los usuarios demo: 'kavana' (credenciales fáciles,
+    decisión de Jorge 2026-08-16). Emails con slug demo: <rol>@demo.local.
+    Si un usuario ya existe con otro password (p.ej. el hash '!demo' de la
+    demo pública anterior), se actualiza a kavana.
+    """
+    from app.services.auth import hash_password, verify_password
+
+    usuarios = [
+        ("operario@demo.local", "Operario Demo", "operator"),
+        ("supervisor@demo.local", "Supervisor Demo", "supervisor"),
+        ("materias@demo.local", "Materias Primas Demo", "materials"),
+        ("admin@demo.local", "Admin Demo", "admin"),
+    ]
+    for email, name, role in usuarios:
+        user = db.scalar(select(User).where(User.email == email))
+        if user is None:
+            db.add(
+                User(
+                    tenant_id=tenant_id,
+                    email=email,
+                    name=name,
+                    password_hash=hash_password("kavana"),
+                    role=role,
+                )
+            )
+        elif not verify_password("kavana", user.password_hash):
+            user.password_hash = hash_password("kavana")
+            user.role = role
+    db.commit()
+
+
 def seed_demo(db: Session) -> dict:
     """Crea el tenant demo con material, bobina, orden y operario si no existe.
 
@@ -88,20 +122,15 @@ def seed_demo(db: Session) -> dict:
             db.commit()
         # Asegurar el modelo de calidad demo (autocontroles, spec 04)
         _asegurar_modelo_demo(db, existente.id)
+        # Asegurar usuarios demo por rol (login + roles, Fase 6)
+        _asegurar_usuarios_demo(db, existente.id)
         return {"created": False, "tenant": str(existente.id)}
 
     tenant = Tenant(name="Demo Aceros")
     db.add(tenant)
     db.flush()
 
-    operario = User(
-        tenant_id=tenant.id,
-        email="operario@demo.local",
-        name="Operario Demo",
-        password_hash="!demo",  # sin login real: la demo usa el flujo sin JWT
-        role="operator",
-    )
-    db.add(operario)
+    _asegurar_usuarios_demo(db, tenant.id)
 
     material = Material(
         tenant_id=tenant.id,

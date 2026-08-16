@@ -10,12 +10,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models import Order
+from app.core.security import autenticar, require_roles
+from app.models import Order, User
 
 router = APIRouter(prefix="/api/v1/trace", tags=["traceability"])
 
@@ -29,6 +30,13 @@ def get_db():
 
 
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    return autenticar(db, authorization)
 
 
 class OperatorOut(BaseModel):
@@ -47,7 +55,14 @@ class TraceEventOut(BaseModel):
 
 
 @router.get("/orders/{order_id}", response_model=list[TraceEventOut])
-def get_order_trace(order_id: uuid.UUID, db: DbDep):
+def get_order_trace(
+    order_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
     """Serie temporal completa de eventos de una orden (timestamp asc)."""
     from app.services.traceability import get_order_trace as trace_service
 

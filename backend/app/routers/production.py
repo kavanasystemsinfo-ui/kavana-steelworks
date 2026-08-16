@@ -4,11 +4,13 @@ import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import autenticar, require_roles
+from app.models import User
 
 router = APIRouter(prefix="/api/v1/production", tags=["production"])
 
@@ -24,6 +26,13 @@ def get_db():
 DbDep = Annotated[Session, Depends(get_db)]
 
 
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    return autenticar(db, authorization)
+
+
 class RecordProductionRequest(BaseModel):
     order_id: uuid.UUID
     line_id: uuid.UUID
@@ -33,7 +42,14 @@ class RecordProductionRequest(BaseModel):
 
 
 @router.post("/record")
-def record_production(body: RecordProductionRequest, db: DbDep):
+def record_production(
+    body: RecordProductionRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Registra producción incremental: el FIFO consume el material automático.
 
     Modo auditoría (línea con bobina vinculada): consume por burbuja de
@@ -46,7 +62,7 @@ def record_production(body: RecordProductionRequest, db: DbDep):
         return record_service(
             db,
             tenant_id=None,  # TODO: tenant desde el token JWT
-            user_id=None,  # TODO: user desde el token JWT (se resuelve en servicio)
+            user_id=current_user.id,
             order_id=body.order_id,
             line_id=body.line_id,
             incremental_quantity=body.incremental_quantity,

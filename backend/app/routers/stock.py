@@ -5,12 +5,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models import Material
+from app.core.security import autenticar, require_roles
+from app.models import Material, User
 from app.services import receiving as receiving_service
 
 router = APIRouter(prefix="/api/v1/stock-items", tags=["stock"])
@@ -25,6 +26,15 @@ def get_db():
 
 
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    """Dependencia local: usuario autenticado vía Bearer (usa el DbDep del router)."""
+    return autenticar(db, authorization)
+
 
 
 class ReceiveCoilRequest(BaseModel):
@@ -56,13 +66,20 @@ class ReceiveCoilResponse(BaseModel):
 
 
 @router.post("", response_model=ReceiveCoilResponse)
-def receive(body: ReceiveCoilRequest, db: DbDep):
+def receive(
+    body: ReceiveCoilRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "materials", "supervisor", "admin")),
+    ] = None,
+):
     """Registra una bobina entrante (entrada directa a producción)."""
     try:
         bobina = receiving_service.receive_coil(
             db,
             body.tenant_id,
-            user_id=None,  # TODO: user desde el token JWT
+            user_id=current_user.id,
             material_id=body.material_id,
             lote=body.lote,
             coil_id=body.coil_id,
@@ -115,7 +132,10 @@ class MaterialOut(BaseModel):
 
 
 @router.get("/materials", response_model=list[MaterialOut])
-def list_materials(db: DbDep):
+def list_materials(
+    db: DbDep,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
     """Lista materiales activos del tenant (para el formulario de recepción)."""
     return db.query(Material).filter(Material.is_active == True).all()  # noqa: E712
 
@@ -133,7 +153,13 @@ class PicoSugerencia(BaseModel):
 
 
 @router.get("/picos", response_model=list[PicoSugerencia])
-def sugerencias_picos(db: DbDep):
+def sugerencias_picos(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Picos y retales en almacén para aconsejar su uso antes de abrir
     bobina nueva. Sugerencia visible, nunca imposición (decisión Jorge)."""
     from app.models import StockItem
@@ -162,7 +188,15 @@ def sugerencias_picos(db: DbDep):
 
 
 @router.get("/scan", response_model=dict | None)
-def scan_coil(coil_id: str | None = None, lote: str | None = None, db: DbDep = None):
+def scan_coil(
+    coil_id: str | None = None,
+    lote: str | None = None,
+    db: DbDep = None,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Escaneo de bobina (flujo operario): busca por coil_id o lote.
 
     Modo automático: devuelve material, dimensiones y peso. Modo manual:
@@ -183,7 +217,14 @@ class LinkCoilRequest(BaseModel):
 
 
 @router.post("/link")
-def link(body: LinkCoilRequest, db: DbDep):
+def link(
+    body: LinkCoilRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Vincula la bobina a la orden (cobro BULK por adelantado)."""
     from app.services.inventory import link_coil
 
@@ -191,7 +232,7 @@ def link(body: LinkCoilRequest, db: DbDep):
         return link_coil(
             db,
             tenant_id=None,  # TODO: tenant desde el token JWT
-            user_id=None,
+            user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             order_id=body.order_id,
             line_id=body.line_id,
@@ -208,7 +249,14 @@ class FinBobinaRequest(BaseModel):
 
 
 @router.post("/fin-bobina")
-def fin_bobina(body: FinBobinaRequest, db: DbDep):
+def fin_bobina(
+    body: FinBobinaRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Fin de bobina: el operario mide los milímetros de radio restantes
     y el sistema convierte a kg con la fórmula v2 (Densidad Calibrada Kavana)."""
     from app.services.inventory import create_retal
@@ -217,7 +265,7 @@ def fin_bobina(body: FinBobinaRequest, db: DbDep):
         return create_retal(
             db,
             tenant_id=None,  # TODO: tenant desde el token JWT
-            user_id=None,
+            user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             radio_mm=body.radio_mm,
             order_id=body.order_id,
@@ -234,7 +282,14 @@ class RetirarPicoRequest(BaseModel):
 
 
 @router.post("/retirar")
-def retirar(body: RetirarPicoRequest, db: DbDep):
+def retirar(
+    body: RetirarPicoRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Botón 'Retirar': segunda opción del fin de bobina (visión Jorge).
 
     Devuelve el pico al inventario (ubicación 'Retales'). Aparecerá después
@@ -247,7 +302,7 @@ def retirar(body: RetirarPicoRequest, db: DbDep):
         return retirar_pico(
             db,
             tenant_id=None,  # TODO: tenant desde el token JWT
-            user_id=None,
+            user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             order_id=body.order_id,
             line_id=body.line_id,
@@ -257,7 +312,13 @@ def retirar(body: RetirarPicoRequest, db: DbDep):
 
 
 @router.get("", response_model=list[StockItemOut])
-def list_stock(db: DbDep):
+def list_stock(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "materials", "supervisor", "admin")),
+    ] = None,
+):
     """Lista bobinas (para el panel de Materias Primas)."""
     from app.models import StockItem
 

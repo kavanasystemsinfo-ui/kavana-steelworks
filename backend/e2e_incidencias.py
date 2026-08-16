@@ -23,19 +23,37 @@ if not os.environ.get("STEELWORKS_DATABASE_URL"):
 
 
 def main() -> None:
-    from app.core.database import SessionLocal
+    from sqlalchemy import create_engine
+
+    from app.core.config import get_settings
+    from app.core.database import Base, SessionLocal
+    from app.services.auth import login
+
+    # BD limpia desde cero (mismo patrón que los demás E2E): sin datos
+    # residuales de ejecuciones anteriores.
+    engine = create_engine(get_settings().sqlalchemy_database_url)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    engine.dispose()
 
     db = SessionLocal()
     seed_demo(db)
     tenant = db.query(Tenant).filter_by(name="Demo Aceros").one()
     orden = db.query(Order).filter_by(tenant_id=tenant.id, numero="OP-DEMO-001").one()
+
+    # Login con los usuarios demo (password kavana, Fase 6)
+    token_operario = login(db, tenant.id, "operario@demo.local", "kavana")
+    token_supervisor = login(db, tenant.id, "supervisor@demo.local", "kavana")
     db.close()
 
     client = TestClient(app)
+    op = {"Authorization": f"Bearer {token_operario}"}
+    sup = {"Authorization": f"Bearer {token_supervisor}"}
 
     # 1. Alta: asocia la orden activa de LINEA-1 y nace en 'abierta'
     r = client.post(
         "/api/v1/incidencias",
+        headers=op,
         json={
             "linea_id": "LINEA-1",
             "descripcion": "Atasco de bobina en la cizalla",
@@ -55,6 +73,7 @@ def main() -> None:
     # 3. Resolución financiera + cierre (tiempo de parada y coste)
     r = client.patch(
         f"/api/v1/incidencias/{inc['id']}",
+        headers=sup,
         json={
             "estado": "cerrada",
             "resolucion_tipo": "reparacion",
@@ -68,11 +87,11 @@ def main() -> None:
     assert actualizada["estado"] == "cerrada"
     assert float(actualizada["tiempo_parada_min"]) == 45
     assert float(actualizada["coste"]) == 85.5
-    assert actualizada["responsable"]["name"] == "Operario Demo"
+    assert actualizada["responsable"]["name"] == "Supervisor Demo"
     assert len(actualizada["historial"]) == 2
 
-    # 4. Listado ordenado
-    r = client.get("/api/v1/incidencias")
+    # 4. Listado ordenado (solo supervisor)
+    r = client.get("/api/v1/incidencias", headers=sup)
     assert r.status_code == 200, r.text
     assert len(r.json()["incidencias"]) == 1
 
@@ -82,7 +101,7 @@ def main() -> None:
     assert "total_downtime_min" in oee["raw"]
 
     # 6. Flujo QR + móvil (spec 04 §3.3.2): sesión -> foto -> incidencia
-    r = client.post("/api/v1/incidencias/upload-session")
+    r = client.post("/api/v1/incidencias/upload-session", headers=op)
     assert r.status_code == 200, r.text
     sesion = r.json()
     assert sesion["status"] == "pending"
@@ -103,6 +122,7 @@ def main() -> None:
 
     r = client.post(
         "/api/v1/incidencias",
+        headers=op,
         json={
             "linea_id": "LINEA-1",
             "descripcion": "Incidencia con evidencia QR",
@@ -132,6 +152,7 @@ def main() -> None:
     # porque el servicio valida antes; verificar el CHECK con psql en la migración)
     r = client.post(
         "/api/v1/incidencias",
+        headers=op,
         json={"linea_id": "LINEA-1", "descripcion": "x", "tipo": "hack"},
     )
     assert r.status_code == 400, r.text

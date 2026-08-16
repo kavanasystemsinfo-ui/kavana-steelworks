@@ -7,11 +7,10 @@ por creación descendente y con límite duro de 50.
 
 from datetime import UTC, datetime
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.models import Order
 from app.routers import orders as orders_router
+from tests.helpers import authed_client
 
 
 def _override_get_db(db_session):
@@ -41,7 +40,7 @@ def test_list_orders_devuelve_ordenes_del_tenant(db_session, tenant, user):
 
     app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client(db_session, tenant, role="supervisor")
         r = client.get("/api/v1/orders")
     finally:
         app.dependency_overrides.clear()
@@ -61,13 +60,13 @@ def test_list_orders_devuelve_ordenes_del_tenant(db_session, tenant, user):
 
 def test_list_orders_incluye_workstation_de_la_linea(db_session, tenant, user):
     orden = _crear_orden(db_session, tenant, numero="OP-LIST-WS")
-    from tests.helpers import make_order_line
+    from tests.helpers import authed_client, make_order_line
 
     make_order_line(db_session, orden, workstation="LINEA-1")
 
     app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client(db_session, tenant, role="supervisor")
         r = client.get("/api/v1/orders")
     finally:
         app.dependency_overrides.clear()
@@ -78,10 +77,13 @@ def test_list_orders_incluye_workstation_de_la_linea(db_session, tenant, user):
     assert con_ws["workstation_id"] == "LINEA-1"
 
 
-def test_list_orders_sin_tenant_devuelve_vacio(db_session):
+def test_list_orders_sin_tenant_devuelve_vacio(db_session, tenant, user):
+    from tests.helpers import make_user
+
+    make_user(db_session, tenant, email="sup@test.local", role="supervisor")
     app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client(db_session, tenant, role="supervisor")
         r = client.get("/api/v1/orders")
     finally:
         app.dependency_overrides.clear()

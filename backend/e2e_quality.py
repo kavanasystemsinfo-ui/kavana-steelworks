@@ -21,19 +21,32 @@ if not os.environ.get("STEELWORKS_DATABASE_URL"):
 
 
 def main() -> None:
-    from app.core.database import SessionLocal
+    from sqlalchemy import create_engine
+
+    from app.core.config import get_settings
+    from app.core.database import Base, SessionLocal
+    from app.services.auth import login
+
+    # BD limpia desde cero (mismo patrón que los demás E2E): sin datos
+    # residuales de ejecuciones anteriores.
+    engine = create_engine(get_settings().sqlalchemy_database_url)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    engine.dispose()
 
     db = SessionLocal()
     seed_demo(db)  # idempotente: crea tenant, bobina, orden, modelo de calidad
     tenant = db.query(Tenant).filter_by(name="Demo Aceros").one()
     orden = db.query(Order).filter_by(tenant_id=tenant.id, numero="OP-DEMO-001").one()
     modelo = db.query(ManufacturingModel).filter_by(code="PERFIL-DEMO-001").one()
+    token = login(db, tenant.id, "operario@demo.local", "kavana")
     db.close()
 
     client = TestClient(app)
+    headers = {"Authorization": f"Bearer {token}"}
 
     # 1. Plantillas: el modelo demo expone su plan de controles
-    r = client.get("/api/v1/quality/models")
+    r = client.get("/api/v1/quality/models", headers=headers)
     assert r.status_code == 200, r.text
     planes = [m for m in r.json() if m["code"] == "PERFIL-DEMO-001"]
     assert len(planes) == 1, r.text
@@ -42,6 +55,7 @@ def main() -> None:
     # 2. Autocontrol OK: largo 1990 (dentro de 2000±10), visual True, espesor 1.2
     r = client.post(
         "/api/v1/quality/checks",
+        headers=headers,
         json={
             "order_id": str(orden.id),
             "workstation_id": "LINEA-1",
@@ -60,6 +74,7 @@ def main() -> None:
     # 3. Autocontrol RECHAZADO: se persiste igual, no bloquea (spec 04 regla 7)
     r = client.post(
         "/api/v1/quality/checks",
+        headers=headers,
         json={
             "order_id": str(orden.id),
             "workstation_id": "LINEA-1",
@@ -76,7 +91,7 @@ def main() -> None:
     assert r.json()["record"]["overall_status"] == "rejected", r.text
 
     # 4. Registros filtrados por orden
-    r = client.get(f"/api/v1/quality/records?order_id={orden.id}")
+    r = client.get(f"/api/v1/quality/records?order_id={orden.id}", headers=headers)
     assert r.status_code == 200, r.text
     assert len(r.json()["records"]) == 2, r.text
 

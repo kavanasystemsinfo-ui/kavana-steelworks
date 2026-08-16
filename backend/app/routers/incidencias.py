@@ -12,11 +12,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import autenticar, require_roles
+from app.models import User
 from app.services.photo_validator import MAX_FOTO_BYTES
 
 router = APIRouter(prefix="/api/v1/incidencias", tags=["incidencias"])
@@ -81,6 +83,13 @@ def get_db():
 DbDep = Annotated[Session, Depends(get_db)]
 
 
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    return autenticar(db, authorization)
+
+
 class IncidenciaIn(BaseModel):
     linea_id: str = Field(max_length=255)
     descripcion: str = Field(max_length=2000)
@@ -107,17 +116,20 @@ class UploadSessionOut(BaseModel):
 
 
 @router.post("/upload-session", response_model=UploadSessionOut)
-def crear_sesion_subida(db: DbDep):
+def crear_sesion_subida(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Crea una sesión QR de subida para el operario (TTL 15 min)."""
-    from app.services.demo_context import resolver_operario, resolver_tenant
     from app.services.incidencia_uploads import crear_sesion as service
 
-    tenant = resolver_tenant(db)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="No hay tenant configurado")
-    operario_id = resolver_operario(db, tenant.id)
+    tenant = current_user.tenant_id
+    operario_id = current_user.id
 
-    sesion = service(db, tenant_id=tenant.id, operario_id=operario_id)
+    sesion = service(db, tenant_id=tenant, operario_id=operario_id)
     return UploadSessionOut(
         session_id=str(sesion.session_id),
         status=sesion.status,
@@ -153,14 +165,10 @@ async def subir_foto_movil(
 @router.get("/upload-session/{session_id}")
 def estado_sesion_subida(session_id: uuid.UUID, db: DbDep):
     """Estado de la sesión para el polling del modal (incluye foto data URL)."""
-    from app.services.demo_context import resolver_tenant
-    from app.services.incidencia_uploads import UploadError, obtener_sesion
+    from app.services.incidencia_uploads import UploadError, obtener_sesion_por_id
 
-    tenant = resolver_tenant(db)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Sesión de subida no encontrada")
     try:
-        return obtener_sesion(db, tenant_id=tenant.id, session_id=session_id)
+        return obtener_sesion_por_id(db, session_id=session_id)
     except UploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
@@ -170,29 +178,32 @@ def foto_sesion_subida(session_id: uuid.UUID, db: DbDep):
     """Bytes de la foto para el preview del modal."""
     from fastapi import Response
 
-    from app.services.demo_context import resolver_tenant
-    from app.services.incidencia_uploads import UploadError, obtener_foto
+    from app.services.incidencia_uploads import UploadError, obtener_foto_por_id
 
-    tenant = resolver_tenant(db)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Foto no encontrada")
     try:
-        buf, mime = obtener_foto(db, tenant_id=tenant.id, session_id=session_id)
+        buf, mime = obtener_foto_por_id(db, session_id=session_id)
     except UploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return Response(content=buf, media_type=mime, headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.post("", status_code=201)
-def crear_incidencia(body: IncidenciaIn, db: DbDep):
+def crear_incidencia(
+    body: IncidenciaIn,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Reporta una incidencia desde el puesto (operario)."""
     from app.services.incidencias import crear_incidencia as service
 
     try:
         incidencia = service(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
-            operario_id=None,  # TODO: user desde el token JWT (se resuelve)
+            tenant_id=current_user.tenant_id,
+            operario_id=current_user.id,
             linea_id=body.linea_id,
             descripcion=body.descripcion,
             tipo=body.tipo,
@@ -205,35 +216,40 @@ def crear_incidencia(body: IncidenciaIn, db: DbDep):
 
 
 @router.get("")
-def listar_incidencias(db: DbDep, limit: int = 50):
+def listar_incidencias(
+    db: DbDep,
+    limit: int = 50,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
     """Incidencias del tenant para el Supervisor (desc, límite 50)."""
-    from app.models import Tenant
     from app.services.incidencias import listar_incidencias as service
 
-    tenant = db.query(Tenant).order_by(Tenant.created_at).first()
-    if tenant is None:
-        return {"success": True, "incidencias": []}
-    incidencias = service(db, tenant.id, limit=limit)
+    incidencias = service(db, current_user.tenant_id, limit=limit)
     return {"success": True, "incidencias": [_out(i) for i in incidencias]}
 
 
 @router.patch("/{incidencia_id}")
-def actualizar_incidencia(incidencia_id: uuid.UUID, body: IncidenciaUpdate, db: DbDep):
+def actualizar_incidencia(
+    incidencia_id: uuid.UUID,
+    body: IncidenciaUpdate,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
     """Cambia estado y/o resolución financiera (Supervisor)."""
-    from app.services.demo_context import resolver_operario, resolver_tenant
     from app.services.incidencias import actualizar_incidencia as service
-
-    tenant = resolver_tenant(db)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Incidencia no encontrada")
-    operario_id = resolver_operario(db, tenant.id)
 
     try:
         incidencia = service(
             db,
             incidencia_id=incidencia_id,
-            tenant_id=tenant.id,
-            usuario_id=operario_id,
+            tenant_id=current_user.tenant_id,
+            usuario_id=current_user.id,
             estado=body.estado,
             comentario=body.comentario,
             resolucion_tipo=body.resolucion_tipo,
@@ -252,25 +268,26 @@ async def subir_foto_incidencia(
     request: Request,
     foto: Annotated[UploadFile, File()],
     db: DbDep = None,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
 ):
     """Adjunta la foto de la incidencia (BYTEA, validación por magic bytes).
 
     Patrón de kavana-manufacturing: sin Cloudinary ni servicios externos,
     la evidencia vive en PostgreSQL. Rate limit por IP (20 subidas / 10 min).
     """
-    from app.services.demo_context import resolver_tenant
     from app.services.incidencia_uploads import UploadError
     from app.services.incidencias import subir_foto as service
 
     _enforce_upload_rate_limit(request.client.host if request.client else "unknown")
 
-    tenant = resolver_tenant(db)
-    if tenant is None:
-        raise HTTPException(status_code=404, detail="Incidencia no encontrada")
-
     buf = await _leer_foto_limitada(foto)
     try:
-        incidencia = service(db, incidencia_id=incidencia_id, tenant_id=tenant.id, buf=buf)
+        incidencia = service(
+            db, incidencia_id=incidencia_id, tenant_id=current_user.tenant_id, buf=buf
+        )
     except UploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return {

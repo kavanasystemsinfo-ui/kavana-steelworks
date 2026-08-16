@@ -10,11 +10,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.security import autenticar, require_roles
+from app.models import User
 
 router = APIRouter(prefix="/api/v1/quality", tags=["quality"])
 
@@ -28,6 +30,13 @@ def get_db():
 
 
 DbDep = Annotated[Session, Depends(get_db)]
+
+
+def get_current_user(
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+) -> User:
+    return autenticar(db, authorization)
 
 
 class MeasurementIn(BaseModel):
@@ -89,7 +98,14 @@ class ModelOut(BaseModel):
 
 
 @router.post("/checks", status_code=201)
-def registrar_autocontrol(body: QualityCheckIn, db: DbDep):
+def registrar_autocontrol(
+    body: QualityCheckIn,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Registra un autocontrol del operario y devuelve el estado evaluado."""
     from app.services.quality import registrar_autocontrol as service
 
@@ -97,7 +113,7 @@ def registrar_autocontrol(body: QualityCheckIn, db: DbDep):
         record = service(
             db,
             tenant_id=None,  # TODO: tenant desde el token JWT
-            operator_id=None,  # TODO: user desde el token JWT (se resuelve en servicio)
+            operator_id=current_user.id,
             order_id=body.order_id,
             workstation_id=body.workstation_id,
             manufacturing_model_id=body.manufacturing_model_id,
@@ -117,28 +133,32 @@ def registrar_autocontrol(body: QualityCheckIn, db: DbDep):
 
 @router.get("/records")
 def get_quality_records(
-    db: DbDep, order_id: uuid.UUID | None = None, limit: int = 20
+    db: DbDep,
+    order_id: uuid.UUID | None = None,
+    limit: int = 20,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
 ):
     """Últimos registros de calidad del tenant (spec 04 §3.2.4)."""
-    from app.models import Tenant
     from app.services.quality import listar_registros
 
-    tenant = db.query(Tenant).order_by(Tenant.created_at).first()
-    if tenant is None:
-        return {"success": True, "records": []}
-    records = listar_registros(db, tenant.id, order_id=order_id, limit=limit)
+    records = listar_registros(db, current_user.tenant_id, order_id=order_id, limit=limit)
     return {"success": True, "records": [_record_out(r) for r in records]}
 
 
 @router.get("/models", response_model=list[ModelOut])
-def get_quality_models(db: DbDep):
+def get_quality_models(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
     """Plantillas activas con su plan de controles (para el formulario)."""
-    from app.models import Tenant
     from app.services.quality import listar_modelos
 
-    tenant = db.query(Tenant).order_by(Tenant.created_at).first()
-    if tenant is None:
-        return []
     return [
         ModelOut(
             id=m.id,
@@ -159,7 +179,7 @@ def get_quality_models(db: DbDep):
                 for c in m.quality_plan
             ],
         )
-        for m in listar_modelos(db, tenant.id)
+        for m in listar_modelos(db, current_user.tenant_id)
     ]
 
 
