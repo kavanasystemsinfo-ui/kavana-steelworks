@@ -19,7 +19,7 @@ export const HOME_BY_ROLE: Record<Role, string> = {
   operator: '/operario',
   materials: '/materias-primas',
   supervisor: '/supervisor',
-  admin: '/supervisor',
+  admin: '/admin',
 }
 
 export interface NavItem {
@@ -32,6 +32,7 @@ export const ALL_NAV: NavItem[] = [
   { to: '/operario', label: 'Operario', icon: '🔧' },
   { to: '/materias-primas', label: 'Materias Primas', icon: '📦' },
   { to: '/supervisor', label: 'Supervisor', icon: '📊' },
+  { to: '/admin', label: 'Admin', icon: '⚙️' },
 ]
 
 /** Paneles permitidos por rol (las páginas también validan backend). */
@@ -39,7 +40,7 @@ const ACCESS: Record<Role, string[]> = {
   operator: ['/operario'],
   materials: ['/materias-primas'],
   supervisor: ['/operario', '/materias-primas', '/supervisor'],
-  admin: ['/operario', '/materias-primas', '/supervisor'],
+  admin: ['/operario', '/materias-primas', '/supervisor', '/admin'],
 }
 
 export function canAccess(role: Role, path: string): boolean {

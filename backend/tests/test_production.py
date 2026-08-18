@@ -122,11 +122,7 @@ def test_produccion_auditoria_consume_por_burbuja(db_session, tenant, user):
     assert float(bobina.cantidad_disponible) == pytest.approx(800.0 - consumido, abs=0.01)
 
     # MaterialConsumo con método density_formula y tipo auto_audit
-    consumos = (
-        db_session.query(MaterialConsumo)
-        .filter(MaterialConsumo.order_id == order.id)
-        .all()
-    )
+    consumos = db_session.query(MaterialConsumo).filter(MaterialConsumo.order_id == order.id).all()
     assert len(consumos) == 1
     assert consumos[0].calculation_method == "density_formula"
     assert consumos[0].tipo == "auto_audit"

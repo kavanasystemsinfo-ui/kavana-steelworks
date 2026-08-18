@@ -106,6 +106,10 @@ def seed_demo(db: Session) -> dict:
     """
     existente = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
     if existente is not None:
+        # Asegurar campos de spec 07 (despliegues pre-migración)
+        if not existente.slug:
+            existente.slug = "demo"
+            db.commit()
         # Asegurar material en la línea demo (validación de compatibilidad)
         linea = db.scalar(
             select(OrderLine)
@@ -124,9 +128,36 @@ def seed_demo(db: Session) -> dict:
         _asegurar_modelo_demo(db, existente.id)
         # Asegurar usuarios demo por rol (login + roles, Fase 6)
         _asegurar_usuarios_demo(db, existente.id)
+        # Puestos demo (spec 07)
+        _asegurar_workstations_demo(db, existente.id)
+        # Roles del sistema con permisos (spec 07)
+        _asegurar_roles_demo(db, existente.id)
         return {"created": False, "tenant": str(existente.id)}
 
-    tenant = Tenant(name="Demo Aceros")
+    tenant = Tenant(
+        name="Demo Aceros",
+        slug="demo",
+        status="active",
+        is_active=True,
+        auth={"login_method": "username_password", "require_line_number": True},
+        theme={
+            "colors": {"primary": "#e56b2e", "header": {"type": "solid", "solidColor": "#050505"}},
+            "branding": {"companyName": "Demo Aceros", "logoUrl": ""},
+        },
+        finances={
+            "overhead_hourly_cost": 0,
+            "operator_categories": [
+                {"id": "peon_especialista", "name": "Peón Especialista", "hourlyCost": 15},
+                {"id": "oficial_3", "name": "Oficial 3ª", "hourlyCost": 18},
+                {"id": "oficial_2", "name": "Oficial 2ª", "hourlyCost": 21},
+                {"id": "oficial_1", "name": "Oficial 1ª", "hourlyCost": 25},
+            ],
+        },
+        sequences_config={
+            "order": {"prefix": "OP-{MM}{YY}-", "padding": 3},
+            "lot": {"prefix": "LT-{DD}{MM}{YY}-", "padding": 3},
+        },
+    )
     db.add(tenant)
     db.flush()
 
@@ -193,6 +224,113 @@ def seed_demo(db: Session) -> dict:
 
     # Modelo de calidad demo con su plan (autocontroles, spec 04)
     _asegurar_modelo_demo(db, tenant.id)
+    # Puestos demo (spec 07)
+    _asegurar_workstations_demo(db, tenant.id)
+    # Roles del sistema con permisos (spec 07)
+    _asegurar_roles_demo(db, tenant.id)
 
     db.commit()
     return {"created": True, "tenant": str(tenant.id)}
+
+
+def _asegurar_workstations_demo(db: Session, tenant_id) -> None:
+    """Crea los puestos demo LINEA-1..3 si no existen (spec 07, idempotente)."""
+    from app.models import Workstation
+
+    puestos = [
+        ("LINEA-1", "Línea 1 - Corte", "#3498db", "quantity", 45),
+        ("LINEA-2", "Línea 2 - Corte", "#2ecc71", "quantity", 45),
+        ("LINEA-3", "Línea 3 - Conformado", "#e67e22", "quantity", 40),
+    ]
+    for code, name, color, metodo, coste in puestos:
+        existe = db.scalar(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.code == code
+            )
+        )
+        if existe is None:
+            db.add(
+                Workstation(
+                    tenant_id=tenant_id,
+                    code=code,
+                    name=name,
+                    color=color,
+                    hourly_cost=Decimal(coste),
+                    registration_method=metodo,
+                    is_active=True,
+                )
+            )
+    db.commit()
+
+
+def _asegurar_roles_demo(db: Session, tenant_id) -> None:
+    """Crea los roles del sistema con permisos (spec 07, idempotente).
+
+    La matriz replica la Fase 6 y añade los permisos de administración:
+    admin tiene TODOS los permisos del catálogo.
+    """
+    from app.models import TenantRole
+    from app.models.admin import PERMISOS_ADMIN, PERMISOS_CATALOGO
+
+    roles = [
+        (
+            "operator",
+            "Operario",
+            [
+                p
+                for p in PERMISOS_CATALOGO
+                if p.startswith(
+                    (
+                        "stock.scan",
+                        "stock.link",
+                        "stock.finish",
+                        "production.",
+                        "quality.check",
+                        "incidencia.create",
+                    )
+                )
+            ],
+        ),
+        (
+            "materials",
+            "Materias Primas",
+            [
+                p
+                for p in PERMISOS_CATALOGO
+                if p.startswith(("stock.receive", "stock.list"))
+            ],
+        ),
+        (
+            "supervisor",
+            "Supervisor",
+            [
+                p
+                for p in PERMISOS_CATALOGO
+                if p.startswith(
+                    ("oee.", "trace.", "orders.", "incidencia.manage", "quality.read")
+                )
+            ],
+        ),
+        ("admin", "Admin", PERMISOS_ADMIN),
+    ]
+    for role_key, name, permisos in roles:
+        existe = db.scalar(
+            select(TenantRole).where(
+                TenantRole.tenant_id == tenant_id, TenantRole.role_key == role_key
+            )
+        )
+        if existe is None:
+            db.add(
+                TenantRole(
+                    tenant_id=tenant_id,
+                    role_key=role_key,
+                    name=name,
+                    permissions=permisos,
+                    is_system=True,
+                )
+            )
+        else:
+            existe.name = name
+            if role_key == "admin":
+                existe.permissions = PERMISOS_ADMIN
+    db.commit()

@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.security import autenticar
+from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import incidencias as incidencias_router
 from app.routers import orders as orders_router
@@ -60,6 +61,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth_router.router)
+app.include_router(admin_router.router)
 app.include_router(incidencias_router.router)
 app.include_router(orders_router.router)
 app.include_router(production_router.router)

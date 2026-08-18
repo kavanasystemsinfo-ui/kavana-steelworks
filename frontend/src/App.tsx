@@ -4,6 +4,7 @@ import { MobilePhotoUpload } from './pages/MobilePhotoUpload'
 import { OperarioPage } from './pages/OperarioPage'
 import { MateriasPrimasPage } from './pages/MateriasPrimasPage'
 import { SupervisorPage } from './pages/SupervisorPage'
+import { AdminPage } from './pages/AdminPage'
 import { Layout } from './components/layout/Layout'
 import { getJwtPayload } from './lib/api'
 import { HOME_BY_ROLE, canAccess, type Role } from './lib/roles'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/operario" element={<OperarioPage />} />
         <Route path="/materias-primas" element={<MateriasPrimasPage />} />
         <Route path="/supervisor" element={<SupervisorPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

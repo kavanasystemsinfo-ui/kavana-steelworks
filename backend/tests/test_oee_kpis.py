@@ -12,9 +12,8 @@ OEE = A × P × Q, cada componente clamp a [0, 100].
 
 from decimal import Decimal
 
-from app.models import Tenant
 from app.services.oee_kpis import calcular_kpis, calcular_oee
-from tests.helpers import make_order, make_order_line
+from tests.helpers import make_order, make_order_line, make_tenant
 
 
 def _tenant_con_orden(
@@ -28,7 +27,7 @@ def _tenant_con_orden(
     est=1000.0,
     real_cost=900.0,
 ):
-    tenant = Tenant(name="Aceros OEE")
+    tenant = make_tenant(db, name="Aceros OEE")
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
@@ -63,7 +62,7 @@ def test_oee_calcula_componentes(db_session):
 
 def test_oee_sin_datos_cero_sin_inventar(db_session):
     """Sin producción ni tiempo: 0, nunca datos ficticios (AUDIT FIX 2.3)."""
-    tenant = Tenant(name="Aceros Vacio")
+    tenant = make_tenant(db_session, name="Aceros Vacio")
     db_session.add(tenant)
     db_session.commit()
 
@@ -105,7 +104,7 @@ def test_kpis_financieros(db_session):
 
 def test_kpis_sin_costes_no_divide_por_cero(db_session):
     """Sin costes: ratios a 0, sin excepciones."""
-    tenant = Tenant(name="Aceros Sin Costes")
+    tenant = make_tenant(db_session, name="Aceros Sin Costes")
     db_session.add(tenant)
     db_session.commit()
 

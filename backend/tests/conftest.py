@@ -30,7 +30,16 @@ def db_session():
 
 @pytest.fixture()
 def tenant(db_session):
-    t = Tenant(name="Aceros Test")
+    t = Tenant(
+        name="Aceros Test",
+        slug="aceros-test",
+        status="active",
+        is_active=True,
+        auth={},
+        theme={},
+        finances={},
+        sequences_config={},
+    )
     db_session.add(t)
     db_session.commit()
     db_session.refresh(t)

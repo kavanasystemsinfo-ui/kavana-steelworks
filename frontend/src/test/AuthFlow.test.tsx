@@ -58,6 +58,23 @@ describe('Guard de rutas por rol (Fase 6)', () => {
     expect(screen.getByText(/materias primas/i)).toBeInTheDocument()
   })
 
+  it('admin entra al panel /admin y ve la gestión de empresa', () => {
+    sessionStorage.setItem('kavana_token', makeToken('admin'))
+    renderApp('/admin')
+    expect(screen.getAllByText(/empresa/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/usuarios/i)).toBeInTheDocument()
+    expect(screen.getByText(/secuencias/i)).toBeInTheDocument()
+    expect(screen.getByText(/puestos/i)).toBeInTheDocument()
+    expect(screen.getByText(/roles/i)).toBeInTheDocument()
+  })
+
+  it('supervisor NO puede entrar a /admin y cae a su home', () => {
+    sessionStorage.setItem('kavana_token', makeToken('supervisor'))
+    renderApp('/admin')
+    expect(screen.getByText(/oee/i)).toBeInTheDocument()
+    expect(screen.queryByText(/gestión de empresa/i)).not.toBeInTheDocument()
+  })
+
   it('login redirige al panel según rol y guarda el token', async () => {
     const user = userEvent.setup()
     vi.spyOn(api, 'login').mockResolvedValue({

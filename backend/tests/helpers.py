@@ -1,8 +1,28 @@
 """Helpers para tests del motor FIFO de bobinas."""
 
+import uuid
 from datetime import UTC, datetime
 
-from app.models import CoilLink, Material, Order, OrderLine, StockItem, User
+from app.models import CoilLink, Material, Order, OrderLine, StockItem, Tenant, User
+
+
+def make_tenant(db, name="Aceros Test", slug=None):
+    """Crea un Tenant válido con los campos de spec 07 (slug NOT NULL)."""
+    t = Tenant(
+        name=name,
+        slug=slug or f"slug-{uuid.uuid4().hex[:8]}",
+        status="active",
+        is_active=True,
+        auth={},
+        theme={},
+        finances={},
+        sequences_config={},
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
 
 
 def make_user(db, tenant, email="operario@test.local", role="operator", name="Usuario Test"):

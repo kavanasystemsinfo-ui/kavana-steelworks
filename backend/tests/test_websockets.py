@@ -15,10 +15,11 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
-from app.models import Tenant, User
+from app.models import User
 from app.routers import ws as ws_router
 from app.services.auth import hash_password, login
 from app.services.events import EventBroker, broker
+from tests.helpers import make_tenant
 
 
 def _override_get_db(db_session):
@@ -151,7 +152,7 @@ def test_ws_push_en_tiempo_real_al_publicar(db_session, tenant, ws_client):
 
 
 def test_ws_separa_canales_por_tenant(db_session, tenant, ws_client):
-    t2 = Tenant(name="Otra Planta")
+    t2 = make_tenant(db_session, name="Otra Planta")
     db_session.add(t2)
     db_session.commit()
     db_session.refresh(t2)
@@ -217,7 +218,7 @@ def test_ws_token_invalido_cierra_4403(db_session, tenant, ws_client):
 
 
 def test_ws_token_de_otro_tenant_cierra_4403(db_session, tenant, ws_client):
-    t2 = Tenant(name="Otra Planta")
+    t2 = make_tenant(db_session, name="Otra Planta")
     db_session.add(t2)
     db_session.commit()
     db_session.refresh(t2)

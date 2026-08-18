@@ -171,9 +171,9 @@ def test_get_order_trace_filtra_por_tenant(db_session, tenant, user):
     )
 
     # Aislamiento multi-tenant: otro tenant no ve los logs
-    from app.models import Tenant
+    from tests.helpers import make_tenant
 
-    t2 = Tenant(name="Otra Empresa")
+    t2 = make_tenant(db_session, name="Otra Empresa")
     db_session.add(t2)
     db_session.commit()
     db_session.refresh(t2)

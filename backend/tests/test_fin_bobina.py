@@ -114,6 +114,7 @@ def test_fin_bobina_mide_cero_agota_bobina(db_session, tenant, user):
     assert bobina.estado == "agotado"
     assert bobina.es_pico is False
 
+
 def test_fin_bobina_registra_merma_en_kardex_y_consumo(db_session, tenant, user):
     """La merma queda como MaterialConsumo merma_puntas y Kardex ajuste."""
     from app.services.inventory import create_retal
@@ -228,6 +229,7 @@ def test_fin_bobina_requiere_ancho_para_medir_radio(db_session, tenant, user):
 
 
 # ── Botón "Retirar" ──────────────────────────────────────────────────────────
+
 
 def test_retirar_pico_devuelve_a_inventario(db_session, tenant, user):
     """Retirar mueve el pico a 'Retales' y lo deja como sugerible."""

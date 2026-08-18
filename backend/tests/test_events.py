@@ -27,10 +27,10 @@ def test_broker_publica_y_recupera_eventos_por_canal(db_session, tenant):
 def test_broker_separa_eventos_por_tenant(db_session, tenant):
 
     # segundo tenant
-    from app.models import Tenant as TenantModel
     from app.services.events import EventBroker
+    from tests.helpers import make_tenant
 
-    t2 = TenantModel(name="Otra Planta")
+    t2 = make_tenant(db_session, name="Otra Planta")
     db_session.add(t2)
     db_session.commit()
     db_session.refresh(t2)

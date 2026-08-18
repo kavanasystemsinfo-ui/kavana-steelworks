@@ -4,6 +4,45 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-17 — Fase 7: administración multi-tenant (spec 07 + ADR-015)
+
+- **Problema:** la empresa demo no tenía panel de administración; el v2
+  guardaba toda la configuración (roles, secuencias, puestos) en un JSON
+  monolito dentro de Tenant.js. Había que normalizar las entidades
+  consultables y exponerlas a un admin por tenant.
+- **Solución (ADR-015, normalización del monolito):**
+  - Modelos nuevos: `app/models/admin.py` (TenantRole con permisos
+    granulares + catálogo, Sequence con prefix/padding/next_number,
+    WorkstationGroup y Workstation con coste/hora y mantenimiento).
+    `tenant.py` ampliado: slug único, status, auth/theme/finances/
+    sequences_config como JSON; User con employee_number y
+    default_workstation_code.
+  - Servicio `app/services/sequences.py`: `next_sequence` con SELECT FOR
+    UPDATE (mejora sobre el $inc de MongoDB) y `peek_sequence` (siguiente
+    número sin consumir). Fix de concurrencia real: al crear la fila por
+    primera vez, dos hilos concurrentes violaban el unique constraint;
+    se resuelve con savepoint + recarga con FOR UPDATE (verificado con 10
+    hilos en E2E contra PostgreSQL real).
+  - Router `/api/v1/admin` (solo rol admin, tenant SIEMPRE del JWT):
+    tenant GET/PUT, users CRUD (soft delete, sin auto-desactivación, puesto
+    validado contra el tenant), sequences GET/PUT + GET next/{type},
+    workstations CRUD + grupos, roles GET/PUT (solo custom editables; los
+    del sistema son fijos y el seed los crea).
+  - Migración `59bee63a26fb` con el patrón seguro add-column + backfill del
+    slug + NOT NULL: validada upgrade → downgrade → upgrade en BD limpia
+    contra PostgreSQL real.
+  - Seed demo ampliado: _asegurar_workstations_demo (LINEA-1..3) y
+    _asegurar_roles_demo (4 roles del sistema con permisos), idempotente.
+  - Frontend: panel Admin con pestañas (Empresa, Usuarios, Secuencias,
+    Puestos, Roles), ruta /admin, home del admin = /admin, nav visible solo
+    para rol admin (matriz de roles espejo en lib/roles.ts).
+- **Verificación:** 29 tests nuevos backend (221 total; suite completa
+  verde), 10 tests frontend nuevos (67 total; suite completa verde),
+  E2E `backend/e2e_admin.py` contra PostgreSQL real: seed → login admin →
+  tenant/usuarios/secuencias/puestos/roles → 403 para no-admin y
+  concurrencia de secuencias con 10 hilos y 10 números únicos. CI verde
+  (ruff + pytest + build TS + vitest).
+
 ## 2026-08-16 — Fase 6: login y roles por panel (credenciales demo)
 
 - **Problema:** la demo era pública sin login (decisión anterior) y el JWT
