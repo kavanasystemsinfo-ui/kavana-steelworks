@@ -148,6 +148,26 @@ def get_quality_records(
     return {"success": True, "records": [_record_out(r) for r in records]}
 
 
+@router.get("/reminder-state")
+def get_reminder_state(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Estado para recordatorios de autocontrol (spec 04 §3.2.5).
+
+    Solo el operario lo consume (el recordatorio es UI del panel de
+    operario): expone el inicio del turno activo y el último autocontrol
+    del usuario autenticado; el frontend calcula los 15 min del primer
+    aviso y el ciclo de 2 h. No bloqueantes, sin cadencia en backend.
+    """
+    from app.services.quality import estado_recordatorios
+
+    return estado_recordatorios(db, current_user.id)
+
+
 @router.get("/models", response_model=list[ModelOut])
 def get_quality_models(
     db: DbDep,

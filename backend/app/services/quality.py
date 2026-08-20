@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.quality import ManufacturingModel, QualityMeasurement, QualityRecord
+from app.models.user_shift import UserShift
 from app.services import traceability
 from app.services.demo_context import resolver_operario, resolver_tenant
 
@@ -210,3 +211,35 @@ def listar_modelos(db: Session, tenant_id: uuid.UUID) -> list[ManufacturingModel
         .order_by(ManufacturingModel.created_at)
         .all()
     )
+
+
+def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
+    """Estado para los recordatorios de autocontrol (spec 04 §3.2.5).
+
+    El backend NO impone cadencia (los recordatorios son puramente de UI).
+    Expone solo lo que el frontend necesita para calcular el primer aviso
+    (15 min desde el inicio del turno sin controles) y el ciclo periódico
+    (2 h desde el último control):
+
+    - shift_started_at: login_time del UserShift ACTIVO del operario.
+    - last_check_at: created_at del último QualityRecord del operario.
+
+    Ambos null si no existen. La fuente de verdad de \"cuándo se hizo el
+    último control\" son los QualityRecord; el turno activo lo crea login().
+    """
+    turno = (
+        db.query(UserShift)
+        .filter(UserShift.operator_id == operator_id, UserShift.status == "active")
+        .order_by(UserShift.login_time.desc())
+        .first()
+    )
+    ultimo = (
+        db.query(QualityRecord)
+        .filter(QualityRecord.operator_id == operator_id)
+        .order_by(QualityRecord.created_at.desc())
+        .first()
+    )
+    return {
+        "shift_started_at": turno.login_time.isoformat() if turno else None,
+        "last_check_at": ultimo.created_at.isoformat() if ultimo else None,
+    }
