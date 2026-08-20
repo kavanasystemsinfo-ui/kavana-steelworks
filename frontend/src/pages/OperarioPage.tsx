@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, getTenantId, type EventData } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
+import { useQualityReminders } from '../lib/useQualityReminders'
 
 interface UploadSession {
   session_id: string
@@ -67,6 +68,11 @@ export function OperarioPage() {
   const [scan, setScan] = useState<CoilScan | null>(null)
   const [scanError, setScanError] = useState('')
   const [vinculada, setVinculada] = useState(false)
+
+  // Recordatorios de autocontrol NO bloqueantes (spec 04 §3.2.5): el
+  // backend expone el estado; aquí se calculan los 15 min del primer aviso
+  // y el ciclo de 2 h. Nunca bloquean la interfaz.
+  const { notifyCheckRegistered, reminderToast } = useQualityReminders()
 
   // Alertas de planta por WebSocket (ADR-014): el polling de 5 s desaparece.
   // El hook reconecta solo con backoff; aquí orquestamos conexión y el
@@ -216,6 +222,8 @@ export function OperarioPage() {
       const data = await res.json()
       setQcMsg(estadoCalidad(data.record?.overall_status ?? ''))
       setMediciones({})
+      // Un autocontrol registrado reinicia el temporizador de recordatorios
+      notifyCheckRegistered()
     } catch (err) {
       setQcError(err instanceof Error ? err.message : 'Error de conexión')
     }
@@ -431,6 +439,17 @@ export function OperarioPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
+      {/* Recordatorio de autocontrol NO bloqueante (spec 04 §3.2.5): toast
+          fijo visible, no interrumpe el flujo ni detiene la línea. */}
+      {reminderToast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] border border-kavana-orange/60 bg-kavana-dark px-4 py-3 text-sm shadow-lg"
+        >
+          {reminderToast}
+        </div>
+      )}
+
       {/* Guía de acción: el siguiente paso siempre identificable */}
       <div className="step-guide">
         <p className="label-industrial text-xs text-kavana-text-dim">
