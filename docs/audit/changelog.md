@@ -4,6 +4,29 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-08-20 — Fase 5 cierre: recordatorios de autocontrol (spec 04 §3.2.5)
+
+- **Problema:** de la Fase 5 quedaba pendiente el único ítem que requería
+  sesión de turno: los recordatorios de autocontrol (15 min tras el inicio
+  del turno sin controles + ciclo periódico de 2 h). El login por roles de
+  la Fase 6 ya existía (UserShift activo en `login()`), así que ya se podían
+  implementar sobre él.
+- **Solución (recordatorios NO bloqueantes, decisión 2026-05-18):**
+  - Backend expone SOLO estado, no impone cadencia: `estado_recordatorios`
+    en `app/services/quality.py` (inicio del UserShift activo + último
+    QualityRecord del operario, ambos null si no existen) y endpoint
+    `GET /api/v1/quality/reminder-state` restringido a rol operator. Un
+    bloqueo rígido afectaría al OEE del turno, así que el aviso es
+    puramente de UI.
+  - Frontend: hook `useQualityReminders` (`frontend/src/lib/useQualityReminders.ts`):
+    primer aviso 15 min tras el turno sin controles (una sola vez,
+    persistido en sessionStorage) y ciclo periódico 2 h desde el último
+    autocontrol. Toast fijo en el panel de Operario, no bloqueante.
+    `notifyCheckRegistered` reinicia el temporizador al registrar un control.
+- **Verificación:** 5 tests backend nuevos (226 total, suite completa verde),
+  4 tests frontend nuevos (71 total), build TS + oxlint limpios, ruff limpio.
+  La suite completa backend (226) y frontend (71) pasan tras el cambio.
+
 ## 2026-08-17 — Fase 7: administración multi-tenant (spec 07 + ADR-015)
 
 - **Problema:** la empresa demo no tenía panel de administración; el v2
