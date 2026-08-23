@@ -1,12 +1,13 @@
 # KAVANA Steelworks
 
 MES/MOM para el sector metalúrgico: control de bobinas de acero, consumo FIFO,
-reconciliación industrial, OEE y trazabilidad ISO 9001.
+reconciliación industrial, OEE, calidad y trazabilidad ISO 9001. Desplegado en
+producción como demo (Fly.io + Vercel) y construido con TDD estricto.
 
 **Este repo es la reconstrucción moderna (v4) de un sistema legacy.** La lógica
 de dominio única (bobinas, FIFO, reconciliación) proviene de años de
-experiencia real en planta, y se está portando a un stack moderno con TDD,
-ADRs y despliegue profesional.
+experiencia real en planta, y se portó a un stack moderno con TDD, ADRs y
+despliegue profesional.
 
 ## El origen
 
@@ -33,19 +34,52 @@ frontera es la planta.
 | Capa | Tecnología |
 |---|---|
 | Backend | Python + FastAPI + WebSockets |
-| Base de datos | PostgreSQL |
+| Base de datos | PostgreSQL (Alembic) |
 | Frontend | React + TypeScript (Vite) |
 | Tests | pytest + Vitest (TDD) |
-| Despliegue | Docker + CI/CD |
+| Despliegue | Fly.io (backend) + Vercel (frontend) + GitHub Actions |
 
 ## Estado
 
-🚧 **En reconstrucción.** Este repo arranca con la documentación de base
-(historia, ADR de clasificación, plan de fases) y se construye por fases con
-TDD estricto. El código legacy de referencia vive en el repo privado
-`kavanasystems` (v2).
+✅ **Reconstrucción completa por fases (0-7).** Backend en
+[steelworks-api.fly.dev](https://steelworks-api.fly.dev) con PostgreSQL
+gestionado (migraciones + seed demo en el entrypoint) y frontend en Vercel
+([steelworks.kavanasystems.com](https://steelworks.kavanasystems.com)) con
+rewrites `/api/*`. CI verde en cada push: ruff + pytest + migraciones + build
+TS + vitest.
 
-[Ver plan de reconstrucción](docs/plan-reconstruccion-v4.md)
+### Qué incluye
+
+- **Motor FIFO de bobinas**: cascada por fecha de entrada con burbuja de
+  vinculación, herencia entre bobinas, JIT Move y tolerancia de superávit
+  `max(15%, 150kg)`.
+- **Reconciliación industrial**: retales medidos en milímetros de radio,
+  merma oculta entre lo que el FIFO cree y lo que pesa la báscula, coste real
+  por lote.
+- **Fin de bobina**: el operario mide el radio en mm y el sistema calcula kg
+  con densidad calibrada (7.7807 kg/dm³). Botón Retirar devuelve picos como
+  sugerencia, nunca imposición.
+- **OEE y KPIs**: disponibilidad, rendimiento y calidad con datos reales; sin
+  datos muestra 0, nunca inventa.
+- **Trazabilidad ISO 9001**: ProductionLog inmutable (trigger de UPDATE/DELETE)
+  y timeline en el panel Supervisor.
+- **Autocontroles de calidad** e **incidencias de planta** con evidencia
+  fotográfica desde el móvil (sesión QR + validación magic bytes).
+- **WebSockets de planta** (ADR-014) con fallback a polling.
+- **Auth JWT 8h con roles** (operario, materiales, supervisor, admin) y
+  **administración multi-tenant** (Fase 7): usuarios, secuencias, puestos,
+  roles.
+- **297 tests** (226 pytest + 71 vitest) contra el contrato de las specs,
+  ejecutados en CI.
+
+Métricas verificables: los números reales se mantienen al día en el changelog
+[`docs/audit/changelog.md`](docs/audit/changelog.md).
+
+## Problemas conocidos / pendientes
+
+- Capturas reales de la demo y post de LinkedIn (Fase 5 portfolio).
+- Ver [`docs/audit/changelog.md`](docs/audit/changelog.md) para el detalle por
+  fase y [`docs/decisions-log.md`](docs/decisions-log.md) para decisiones.
 
 ## Documentación
 
