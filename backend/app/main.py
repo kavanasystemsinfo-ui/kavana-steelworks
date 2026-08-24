@@ -24,6 +24,7 @@ from app.routers import stock as stock_router
 from app.routers import supervisor as supervisor_router
 from app.routers import trace as trace_router
 from app.routers import ws as ws_router
+from app.routers import health as health_router
 from app.services.events import broker
 
 settings = get_settings()
@@ -70,6 +71,7 @@ app.include_router(stock_router.router)
 app.include_router(supervisor_router.router)
 app.include_router(trace_router.router)
 app.include_router(ws_router.router)
+app.include_router(health_router.router)
 
 
 def get_db():
