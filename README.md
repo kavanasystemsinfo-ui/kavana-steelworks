@@ -2,7 +2,8 @@
 
 MES/MOM para el sector metalúrgico: control de bobinas de acero, consumo FIFO,
 reconciliación industrial, OEE, calidad y trazabilidad ISO 9001. Desplegado en
-producción como demo (Fly.io + Vercel) y construido con TDD estricto.
+producción como demo (Fly.io + Vercel) y construido con desarrollo guiado
+por tests en las partes críticas (dominio, seguridad y concurrencia).
 
 **Este repo es la reconstrucción moderna (v4) de un sistema legacy.** La lógica
 de dominio única (bobinas, FIFO, reconciliación) proviene de años de
@@ -36,7 +37,7 @@ frontera es la planta.
 | Backend | Python + FastAPI + WebSockets |
 | Base de datos | PostgreSQL (Alembic) |
 | Frontend | React + TypeScript (Vite) |
-| Tests | pytest + Vitest (TDD) |
+| Tests | pytest + Vitest |
 | Despliegue | Fly.io (backend) + Vercel (frontend) + GitHub Actions |
 
 ## Estado
@@ -69,8 +70,9 @@ TS + vitest.
 - **Auth JWT 8h con roles** (operario, materiales, supervisor, admin) y
   **administración multi-tenant** (Fase 7): usuarios, secuencias, puestos,
   roles.
-- **297 tests** (226 pytest + 71 vitest) contra el contrato de las specs,
-  ejecutados en CI.
+- **233+ tests backend** (pytest, incluye E2E contra PostgreSQL real y
+  tests de aislamiento cross-tenant) **+ 71 frontend** (vitest), ejecutados
+  en CI.
 
 Métricas verificables: los números reales se mantienen al día en el changelog
 [`docs/audit/changelog.md`](docs/audit/changelog.md).

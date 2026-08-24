@@ -20,4 +20,8 @@ PY
 echo "[entrypoint] arrancando uvicorn en 0.0.0.0:8000"
 # --proxy-headers + --forwarded-allow-ips: tras el edge de Fly.io, request.client.host
 # refleja la IP real del cliente (X-Forwarded-For) para que el rate limit sea efectivo.
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="*"
+# Trust boundary documentada en ADR-016: solo entra tráfico por el edge de Fly.
+# El valor es configurable (FORWARDED_ALLOW_IPS); "*" sigue siendo válido porque
+# el contenedor no expone puertos más allá del proxy de Fly.
+FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-*}"
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips="$FORWARDED_ALLOW_IPS"

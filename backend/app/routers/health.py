@@ -46,6 +46,9 @@ def health_ready() -> dict:
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail={"status": "unavailable", "database": f"no disponible: {exc.__class__.__name__}"},
+            detail={
+                "status": "unavailable",
+                "database": f"no disponible: {exc.__class__.__name__}",
+            },
         ) from None
     return {"status": "ready", "database": "ok", "version": get_settings().app_version}

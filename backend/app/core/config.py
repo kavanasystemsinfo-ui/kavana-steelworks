@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _exigir_secret_fuerte_en_produccion(self) -> "Settings":
         """Fail-fast: en producción no se firman JWTs con un secreto débil o ausente."""
-        if self.environment == "production" and len(self.jwt_secret) < 32:
+        if (
+            self.environment == "production" or self.environment.startswith("prod")
+        ) and len(self.jwt_secret) < 32:
             raise ValueError(
                 "STEELWORKS_JWT_SECRET ausente o demasiado corto en producción. "
                 "Establece un secreto de al menos 256 bits: "
