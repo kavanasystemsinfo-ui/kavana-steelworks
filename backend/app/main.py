@@ -6,7 +6,7 @@ inventario/recepción se exponen en la Fase 3 (frontend) o según necesidad.
 
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -88,10 +88,17 @@ def health() -> dict:
 @app.get("/api/v1/events/{tenant_id}")
 def get_events(
     tenant_id: str,
-    authorization: Annotated[str | None, Header()] = None,
+    authorization: str | None = Header(default=None),
     db: Annotated[Session, Depends(get_db)] = None,
 ):
-    """Eventos pendientes del tenant (polling; WebSocket en la Fase 3)."""
-    autenticar(db, authorization)  # 401 si no hay token válido
+    """Eventos pendientes del tenant (polling; WebSocket en la Fase 3).
+
+    Autorización (no solo autenticación): el tenant autorizado sale del JWT.
+    Un token válido de otro tenant recibe 403 aunque el path apunte a un
+    tenant existente (auditoría 2026-08-24, hallazgo 1).
+    """
+    usuario = autenticar(db, authorization)  # 401 si no hay token válido
+    if str(usuario.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=403, detail="Tenant ajeno")
     eventos = broker.get_events(tenant_id)
     return {"tenant_id": tenant_id, "count": len(eventos), "events": eventos}

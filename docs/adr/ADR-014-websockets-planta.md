@@ -50,12 +50,14 @@ Decisiones concretas:
    `kavana.v1`. El tenant se identifica por query param (el navegador no puede
    fijar headers en el handshake de WebSocket). El subprotocolo se usa para
    versionar el formato de mensajes, no para identidad.
-2. **Autenticación opcional**: si llega `?access_token={jwt}` se verifica la
-   firma y la expiración, y se exige que el `tenant_id` del token coincida con
-   el del query; si no, se cierra con código 4403. Si no llega token, la
-   conexión se acepta en modo demo (la demo es pública). El token por query
-   param queda en logs de proxy; se documenta como compromiso aceptado para la
-   demo, con la alternativa de subprotocolo para producción futura.
+2. **Autenticación obligatoria (enmienda 2026-08-24)**: originalmente el token
+   era opcional (modo demo público). La auditoría externa del 2026-08-24 lo
+   marcó P0: un socket sin token podía leer eventos de cualquier tenant.
+   Desde la enmienda, `?access_token={jwt}` es OBLIGATORIO: sin token o con
+   token de otro tenant se cierra con 4403, y el tenant autorizado sale del
+   JWT (el del query se valida solo contra él). El token por query param
+   queda en logs de proxy; se documenta como compromiso aceptado, con la
+   alternativa de subprotocolo para producción futura.
 3. **Protocolo**: JSON de ida y vuelta, siempre con campo `type`. El servidor
    entrega la cola pendiente al conectar (con `consume`) y hace push en tiempo
    real en `publish` vía listeners.
@@ -81,7 +83,8 @@ Decisiones concretas:
 
 - Ruta: `WS /api/v1/ws/events` (el polling `GET /api/v1/events/{tenant_id}`
   sigue intacto; el subárbol `/ws` separa el transporte).
-- Query params: `tenant_id` (obligatorio), `access_token` (opcional).
+- Query params: `tenant_id` y `access_token` (ambos obligatorios desde la
+  enmienda 2026-08-24).
 - Handshake: el cliente manda `Sec-WebSocket-Protocol: kavana.v1`; el servidor
   responde 101 con `kavana.v1`. Si el cliente no manda subprotocolo, se acepta
   igual (compatibilidad) pero el servidor responde sin subprotocolo.

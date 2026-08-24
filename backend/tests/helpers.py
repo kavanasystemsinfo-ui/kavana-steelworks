@@ -183,3 +183,18 @@ def link_coil(db, tenant, stock_item, order, line, estado="vinculada"):
     db.commit()
     db.refresh(cl)
     return cl
+
+
+def ws_token(db, tenant, email="ws@test.local", role="operator"):
+    """JWT real de un usuario del tenant para conectar el WebSocket.
+
+    El WS exige token obligatorio desde la auditoría 2026-08-24 (hallazgo 2).
+    """
+    from sqlalchemy import select
+
+    from app.services.auth import login
+
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        user = make_user(db, tenant, email=email, role=role)
+    return login(db, tenant.id, email, "kavana")

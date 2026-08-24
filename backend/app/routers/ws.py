@@ -1,8 +1,9 @@
 """WebSocket de planta: push de eventos en tiempo real (ADR-014).
 
 Contrato:
-- WS /api/v1/ws/events?tenant_id={id} (+access_token opcional), subprotocolo
-  kavana.v1.
+- WS /api/v1/ws/events?tenant_id={id}&access_token={jwt}, subprotocolo
+  kavana.v1. El token es OBLIGATORIO (auditoría 2026-08-24): sin token o con
+  token de otro tenant se cierra 4403; el tenant autorizado sale del JWT.
 - Al conectar: hello con el número de pendientes y lote events (cola por
   consume). Después push realtime por callback del broker.
 - Heartbeat: ping cada 30 s; sin pong en 60 s se cierra con 1001.
@@ -131,14 +132,18 @@ async def ws_events(
     if db.scalar(select(Tenant).where(Tenant.id == tenant_uuid)) is None:
         await websocket.close(code=4404)
         return
-    if access_token is not None:
-        payload = auth_service.verify_token(access_token)
-        if payload is None or auth_service.is_revoked(db, access_token):
-            await websocket.close(code=4403)
-            return
-        if str(payload.get("tenant_id", "")) != str(tenant_uuid):
-            await websocket.close(code=4403)
-            return
+    if access_token is None:
+        # Auditoría 2026-08-24 (hallazgo 2): el canal autenticado no admite
+        # conexiones anónimas. El tenant autorizado sale SIEMPRE del JWT.
+        await websocket.close(code=4403)
+        return
+    payload = auth_service.verify_token(access_token)
+    if payload is None or auth_service.is_revoked(db, access_token):
+        await websocket.close(code=4403)
+        return
+    if str(payload.get("tenant_id", "")) != str(tenant_uuid):
+        await websocket.close(code=4403)
+        return
 
     subprotocol = (
         "kavana.v1"

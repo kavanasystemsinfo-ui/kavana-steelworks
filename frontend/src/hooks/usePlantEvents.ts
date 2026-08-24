@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { EventData } from '../lib/api'
+import { getToken, type EventData } from '../lib/api'
 
 export type ConexionEstado = 'desconectado' | 'conectando' | 'conectado' | 'reconectando'
 
@@ -124,7 +124,10 @@ export function usePlantEvents(options: UsePlantEventsOptions = {}): UsePlantEve
       limpiarTimers()
       setError(null)
       setEstado('conectando')
-      const url = `${wsBaseUrl()}/api/v1/ws/events?tenant_id=${encodeURIComponent(tenantId)}`
+      // Token OBLIGATORIO (auditoría 2026-08-24): el WS cierra 4403 sin JWT.
+      const token = getToken()
+      const qs = token ? `&access_token=${encodeURIComponent(token)}` : ''
+      const url = `${wsBaseUrl()}/api/v1/ws/events?tenant_id=${encodeURIComponent(tenantId)}${qs}`
       const ws = new WebSocket(url, SUBPROTOCOLO)
       wsRef.current = ws
 

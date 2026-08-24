@@ -27,6 +27,20 @@ from app.routers import ws as ws_router
 from app.services import auth as auth_service
 from app.services.auth import hash_password, login
 from app.services.events import EventBroker, broker
+from tests.helpers import ws_token
+
+
+@pytest.fixture(autouse=True)
+def _ws_auth_tokens(request, db_session):
+    """Tokens reales por tenant para _conectar: el WS exige JWT obligatorio
+    desde la auditoría 2026-08-24. Población PEREZOSA en la primera conexión:
+    este fixture corre antes que `tenant`, así que ahí aún no hay tenants."""
+    global _DBG_SESSION
+    _DBG_SESSION = db_session
+    yield
+    _DBG_SESSION = None
+    _TOKENS.clear()
+
 
 
 def _override_get_db(db_session):
@@ -53,7 +67,41 @@ def _url(tenant_id, token=None) -> str:
 
 
 def _conectar(ws_client, tenant_id, token=None, subprotocols=None):
+    # Token obligatorio (auditoría 2026-08-24): si no llega uno explícito se
+    # usa un JWT real del tenant para las pruebas de flujo normal.
+    # Token obligatorio (auditoría 2026-08-24): si no llega uno explícito se
+    # usa un JWT real del tenant para las pruebas de flujo normal.
+    try:
+        uuid.UUID(str(tenant_id))
+        es_uuid = True
+    except (ValueError, AttributeError):
+        es_uuid = False  # el server cierra 4404 antes de validar token
+    if token is None and es_uuid and _token_para(tenant_id) != "":
+        token = _token_para(tenant_id)
     return ws_client.websocket_connect(_url(tenant_id, token), subprotocols=subprotocols)
+
+
+_TOKENS = {}
+
+
+def _token_para(tenant_id):
+    """Token cacheado por tenant; se crea al vuelo si es la primera conexión
+    de ese tenant en el test (población perezosa, ver _ws_auth_tokens)."""
+    tok = _TOKENS.get(str(tenant_id))
+    if tok is None and _DBG_SESSION is not None:
+        from tests.helpers import ws_token as _ws_token
+
+        tok = _ws_token(_DBG_SESSION, _FakeTenant(tenant_id), email=f"ws-{tenant_id}@test.local")
+        _TOKENS[str(tenant_id)] = tok
+    return tok or ""
+
+
+
+class _FakeTenant:
+    """Envoltorio mínimo para reusar ws_token con un id ya existente."""
+
+    def __init__(self, tid):
+        self.id = tid
 
 
 def _espera_hasta(pred, timeout=2.0):
