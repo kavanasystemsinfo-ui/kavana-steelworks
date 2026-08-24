@@ -19,7 +19,7 @@ from app.models import User
 from app.routers import ws as ws_router
 from app.services.auth import hash_password, login
 from app.services.events import EventBroker, broker
-from tests.helpers import make_tenant, ws_token
+from tests.helpers import make_tenant
 
 
 @pytest.fixture(autouse=True)

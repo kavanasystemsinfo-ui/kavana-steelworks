@@ -16,6 +16,7 @@ from app.core.database import SessionLocal
 from app.core.security import autenticar
 from app.routers import admin as admin_router
 from app.routers import auth as auth_router
+from app.routers import health as health_router
 from app.routers import incidencias as incidencias_router
 from app.routers import orders as orders_router
 from app.routers import production as production_router
@@ -24,7 +25,6 @@ from app.routers import stock as stock_router
 from app.routers import supervisor as supervisor_router
 from app.routers import trace as trace_router
 from app.routers import ws as ws_router
-from app.routers import health as health_router
 from app.services.events import broker
 
 settings = get_settings()

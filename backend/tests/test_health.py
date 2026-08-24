@@ -7,9 +7,8 @@ Contrato:
   Si la BD no responde → 503 con detalle. Sin datos inventados.
 """
 
-from fastapi.testclient import TestClient
-
 import pytest
+from fastapi.testclient import TestClient
 
 from app.main import app
 
@@ -36,7 +35,6 @@ def test_health_ready_con_bd_ok():
     """Requiere una BD real accesible via STEELWORKS_DATABASE_URL (o default).
     En CI unitario puro (solo sqlite de tests) se salta: readiness sin BD
     real no aporta nada."""
-    import os
 
     try:
         from app.routers.health import _check_db

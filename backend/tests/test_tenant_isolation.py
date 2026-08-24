@@ -7,13 +7,13 @@ Contrato nuevo (P0):
   otro tenant → 4403 (ya existía, se mantiene como regresión).
 """
 
-import uuid
 
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app.main import app, get_db as main_get_db
+from app.main import app
+from app.main import get_db as main_get_db
 from app.services.auth import login
 from tests.helpers import make_tenant, make_user
 

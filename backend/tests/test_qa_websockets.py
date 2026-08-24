@@ -27,7 +27,6 @@ from app.routers import ws as ws_router
 from app.services import auth as auth_service
 from app.services.auth import hash_password, login
 from app.services.events import EventBroker, broker
-from tests.helpers import ws_token
 
 
 @pytest.fixture(autouse=True)
