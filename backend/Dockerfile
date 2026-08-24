@@ -7,16 +7,22 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Dependencias primero (cache de capas)
-COPY pyproject.toml ./
+COPY backend/pyproject.toml ./
 RUN pip install --no-cache-dir .
 
-# Código de la app
-COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini ./
+# Código de la app (rutas relativas al CONTEXTO RAÍZ del repo: este
+# Dockerfile se construye con `docker build -f backend/Dockerfile .`)
+COPY backend/app ./app
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./
+
+# Documentación del repo: corpus del asistente RAG (bots usuario + técnico).
+# Sin estos archivos el asistente responde "no documentado" a todo.
+COPY README.md SECURITY.md /docs/
+COPY docs /docs/
 
 # Entrypoint: aplica migraciones y arranca uvicorn
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY backend/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 8000

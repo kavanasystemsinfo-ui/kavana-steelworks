@@ -74,6 +74,13 @@ TS + vitest.
   tests de aislamiento cross-tenant) **+ 71 frontend** (vitest), ejecutados
   en CI.
 
+- **Asistentes IA con RAG sobre la documentación real** (2 bots sobre el mismo
+  corpus): bot de **usuario** (`POST /api/v1/assistant/ask`) que explica el
+  producto desde el punto de vista de planta, y **asistente técnico para
+  reclutadores** (`POST /api/v1/assistant/ask-tech`) que responde arquitectura,
+  decisiones (ADRs), seguridad y limitaciones documentadas. TF-IDF en memoria +
+  OpenRouter; regla de honestidad: si no está en la documentación, lo dice.
+
 Métricas verificables: los números reales se mantienen al día en el changelog
 [`docs/audit/changelog.md`](docs/audit/changelog.md).
 

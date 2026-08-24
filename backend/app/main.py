@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.security import autenticar
 from app.routers import admin as admin_router
+from app.routers import assistant as assistant_router
 from app.routers import auth as auth_router
 from app.routers import health as health_router
 from app.routers import incidencias as incidencias_router
@@ -72,6 +73,7 @@ app.include_router(supervisor_router.router)
 app.include_router(trace_router.router)
 app.include_router(ws_router.router)
 app.include_router(health_router.router)
+app.include_router(assistant_router.router)
 
 
 def get_db():
