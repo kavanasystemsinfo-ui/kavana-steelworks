@@ -9,6 +9,8 @@ Contrato:
 
 from fastapi.testclient import TestClient
 
+import pytest
+
 from app.main import app
 
 
@@ -31,6 +33,17 @@ def test_health_live_no_toca_bd():
 
 
 def test_health_ready_con_bd_ok():
+    """Requiere una BD real accesible via STEELWORKS_DATABASE_URL (o default).
+    En CI unitario puro (solo sqlite de tests) se salta: readiness sin BD
+    real no aporta nada."""
+    import os
+
+    try:
+        from app.routers.health import _check_db
+
+        _check_db()
+    except Exception:
+        pytest.skip("Sin PostgreSQL disponible para el check de readiness")
     r = _client().get("/health/ready")
     assert r.status_code == 200
     body = r.json()
