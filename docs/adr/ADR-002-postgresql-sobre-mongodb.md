@@ -41,6 +41,17 @@ Usar **PostgreSQL** como base de datos del sistema reconstruido.
   migraciones se prueban contra PostgreSQL real en CI; los tests de dominio
   (FIFO, reconciliación) pasan contra la BD relacional.
 
+## Señal de revisión
+
+- Qué vigilar: la aparición de necesidades de datos no relacionales a gran
+  volumen (telemetría de planta, series temporales) y la evolución del coste
+  operativo de PostgreSQL en el plan actual.
+- Dónde comprobarlo: requisitos de nuevas funcionalidades y métricas de
+  coste/rendimiento de la BD en producción.
+- Dispara la revisión: si un caso recurrente obliga a forzar el modelo
+  relacional (esquemas tipo EAV o JSONB masivo) o el coste de la solución
+  actual deja de justificarse frente al volumen de datos nuevo.
+
 ## Referencias
 
 - Código: modelo de datos en `backend/src/models/` del repo legacy v2.
