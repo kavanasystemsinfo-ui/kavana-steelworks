@@ -5,8 +5,9 @@
 - GET  /api/v1/assistant/stats     → tamaño del corpus (transparencia).
 
 Públicos (sin JWT): el objetivo es que un reclutador interrogue al sistema
-sin crear cuenta. Protegidos con rate limit por IP (20 preguntas / 10 min,
-mismo patrón que la subida de fotos). Nunca exponen la API key.
+sin crear cuenta. Protegidos con rate limit por IP (15 preguntas / hora),
+tope global diario (300) y longitud máxima por pregunta (500 caracteres).
+Nunca exponen la API key.
 """
 
 import logging
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class Pregunta(BaseModel):
-    pregunta: str = Field(min_length=5, max_length=1000)
+    pregunta: str = Field(min_length=5, max_length=500)
 
 
 @router.post("/ask")

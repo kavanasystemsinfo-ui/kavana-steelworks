@@ -131,11 +131,43 @@ def test_router_rate_limit_por_ip(client, monkeypatch):
         return "ok"
 
     monkeypatch.setattr(assistant, "llamar_openrouter", _fake_llm)
-    # rellenar la ventana directamente para no hacer 20 llamadas
+    # rellenar la ventana directamente para no hacer 15 llamadas
     import time as _time
 
     assistant._preguntas_ip["testclient"] = [
         _time.time() for _ in range(assistant.MAX_PREGUNTAS_VENTANA)
     ]
     r = client.post("/api/v1/assistant/ask-tech", json={"pregunta": "otra pregunta cualquiera"})
+    assert r.status_code == 429
+    assert "hora" in r.json()["detail"].lower()
+
+
+def test_router_longitud_maxima_500(client):
+    r = client.post("/api/v1/assistant/ask-tech", json={"pregunta": "a" * 501})
+    assert r.status_code == 422
+
+
+def test_tope_diario_global_bloquea(monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(assistant, "_dia_actual", _time.strftime("%Y-%m-%d"))
+    monkeypatch.setattr(assistant, "_preguntas_dia", assistant.MAX_PREGUNTAS_DIA)
+    with pytest.raises(assistant.RateLimitExceeded):
+        assistant.enforce_rate_limit("ip-cualquiera")
+
+
+def test_tope_diario_se_reinicia_con_el_dia(monkeypatch):
+    monkeypatch.setattr(assistant, "_dia_actual", "2000-01-01")
+    monkeypatch.setattr(assistant, "_preguntas_dia", assistant.MAX_PREGUNTAS_DIA)
+    # día distinto al actual => reinicia el contador y permite
+    assistant.enforce_rate_limit("ip-nueva")
+    assert assistant._preguntas_dia == 1
+
+
+def test_router_tope_diario_devuelve_429(client, monkeypatch):
+    import time as _time
+
+    monkeypatch.setattr(assistant, "_dia_actual", _time.strftime("%Y-%m-%d"))
+    monkeypatch.setattr(assistant, "_preguntas_dia", 999)
+    r = client.post("/api/v1/assistant/ask-tech", json={"pregunta": "¿qué es steelworks?"})
     assert r.status_code == 429

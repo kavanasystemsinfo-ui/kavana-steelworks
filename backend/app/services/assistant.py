@@ -31,10 +31,16 @@ REPO_ROOT = Path(os.getenv("STEELWORKS_DOCS_ROOT") or Path(__file__).resolve().p
 MODELO_FREE = os.getenv("ASSISTANT_MODEL_FREE", "poolside/laguna-s-2.1:free")
 MODELO_PRO = os.getenv("ASSISTANT_MODEL_PRO", "poolside/laguna-s-2.1:free")
 
-# Rate limit por IP (mismo patrón que incidencia_uploads)
-MAX_PREGUNTAS_VENTANA = 20
-VENTANA_SEGUNDOS = 10 * 60
+# Protección del asistente público (decisión Jorge 2026-08-25):
+# - por IP: 15 preguntas / hora (evita el martilleo de un visitante)
+# - global: 300 preguntas / día (evita abuso de coste del LLM)
+# - longitud: 500 caracteres por pregunta (validada también en el router)
+MAX_PREGUNTAS_VENTANA = 15
+VENTANA_SEGUNDOS = 60 * 60
+MAX_PREGUNTAS_DIA = 300
 _preguntas_ip: dict[str, list[float]] = {}
+_dia_actual: str = ""
+_preguntas_dia = 0
 
 
 class RateLimitExceeded(Exception):
@@ -42,6 +48,15 @@ class RateLimitExceeded(Exception):
 
 
 def enforce_rate_limit(ip: str) -> None:
+    global _preguntas_dia, _dia_actual
+    hoy = time.strftime("%Y-%m-%d")
+    if hoy != _dia_actual:
+        _dia_actual = hoy
+        _preguntas_dia = 0
+    if _preguntas_dia >= MAX_PREGUNTAS_DIA:
+        raise RateLimitExceeded(
+            "El asistente alcanzó su límite diario de preguntas. Vuelve mañana."
+        )
     ahora = time.time()
     vivas = {
         ip: [t for t in ts if ahora - t < VENTANA_SEGUNDOS]
@@ -52,10 +67,11 @@ def enforce_rate_limit(ip: str) -> None:
     recientes = [t for t in _preguntas_ip.get(ip, []) if ahora - t < VENTANA_SEGUNDOS]
     if len(recientes) >= MAX_PREGUNTAS_VENTANA:
         raise RateLimitExceeded(
-            f"Demasiadas preguntas. Límite {MAX_PREGUNTAS_VENTANA}/{VENTANA_SEGUNDOS // 60} min."
+            f"Demasiadas preguntas. Límite {MAX_PREGUNTAS_VENTANA}/hora por visitante."
         )
     recientes.append(ahora)
     _preguntas_ip[ip] = recientes
+    _preguntas_dia += 1
 
 
 # ---------------------------------------------------------------- corpus
