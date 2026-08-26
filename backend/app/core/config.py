@@ -53,6 +53,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "https://steelworks.kavanasystems.com",
         "https://steelworks-kavana.vercel.app",
+        "https://www.kavanasystems.com",
+        "https://kavanasystems.com",
     ]
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="STEELWORKS_", extra="ignore")
