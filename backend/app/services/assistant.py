@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 # /docs (el Dockerfile copia README/SECURITY/docs allí) señalado por env.
 REPO_ROOT = Path(os.getenv("STEELWORKS_DOCS_ROOT") or Path(__file__).resolve().parents[3])
 
-MODELO_FREE = os.getenv("ASSISTANT_MODEL_FREE", "poolside/laguna-s-2.1:free")
-MODELO_PRO = os.getenv("ASSISTANT_MODEL_PRO", "poolside/laguna-s-2.1:free")
+MODELO_FREE = os.getenv("ASSISTANT_MODEL_FREE", "nvidia/nemotron-3-super-120b-a12b:free")
+MODELO_PRO = os.getenv("ASSISTANT_MODEL_PRO", "nvidia/nemotron-3-super-120b-a12b:free")
 
 # Protección del asistente público (decisión Jorge 2026-08-25):
 # - por IP: 15 preguntas / hora (evita el martilleo de un visitante)
