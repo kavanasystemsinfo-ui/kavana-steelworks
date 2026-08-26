@@ -35,6 +35,12 @@ def test_estadisticas_corpus_devuelve_conteo():
     assert stats["fuentes"] >= 8
 
 
+def test_corpus_excluye_plantillas():
+    corpus = assistant.cargar_corpus()
+    fuentes = {c["fuente"] for c in corpus}
+    assert not any("template" in f.lower() for f in fuentes)
+
+
 def test_busqueda_recupera_fifo():
     docs = assistant.buscar(assistant.get_indice(), "cómo funciona el consumo FIFO de bobinas")
     assert docs

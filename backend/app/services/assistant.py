@@ -88,7 +88,11 @@ def _fuentes_corpus() -> list[str]:
     for subdir in ("docs/adr", "docs/specs"):
         d = REPO_ROOT / subdir
         if d.is_dir():
-            fuentes.extend(f"{subdir}/{f.name}" for f in sorted(d.glob("*.md")))
+            fuentes.extend(
+                f"{subdir}/{f.name}"
+                for f in sorted(d.glob("*.md"))
+                if "template" not in f.name.lower()
+            )
     return fuentes
 
 
