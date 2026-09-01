@@ -48,7 +48,7 @@ async def _responder(body: Pregunta, request: Request, modo: str) -> dict:
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from None
 
-    api_key = __import__("os").getenv("OPENROUTER_API_KEY", "")
+    api_key = __import__("os").getenv("DEEPSEEK_API_KEY", "") or __import__("os").getenv("OPENROUTER_API_KEY", "")
     if not api_key:
         raise HTTPException(
             status_code=503,

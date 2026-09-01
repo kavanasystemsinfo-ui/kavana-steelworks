@@ -32,16 +32,11 @@ REPO_ROOT = Path(os.getenv("STEELWORKS_DOCS_ROOT") or Path(__file__).resolve().p
 MODELO_FREE = os.getenv("ASSISTANT_MODEL_FREE", "nvidia/nemotron-3-super-120b-a12b:free")
 MODELO_PRO = os.getenv("ASSISTANT_MODEL_PRO", "nvidia/nemotron-3-super-120b-a12b:free")
 
-# Protección del asistente público (decisión Jorge 2026-08-25):
-# - por IP: 15 preguntas / hora (evita el martilleo de un visitante)
-# - global: 300 preguntas / día (evita abuso de coste del LLM)
+# Protección del asistente público (decisión Jorge 2026-09-01):
+# - por IP: 15 preguntas / día (evita el abuso de coste con DeepSeek)
 # - longitud: 500 caracteres por pregunta (validada también en el router)
-MAX_PREGUNTAS_VENTANA = 15
-VENTANA_SEGUNDOS = 60 * 60
-MAX_PREGUNTAS_DIA = 300
-_preguntas_ip: dict[str, list[float]] = {}
-_dia_actual: str = ""
-_preguntas_dia = 0
+MAX_PREGUNTAS_DIA_POR_IP = 15
+_preguntas_ip: dict[str, int] = {}  # "fecha|ip" -> contador
 
 
 class RateLimitExceeded(Exception):
@@ -49,30 +44,18 @@ class RateLimitExceeded(Exception):
 
 
 def enforce_rate_limit(ip: str) -> None:
-    global _preguntas_dia, _dia_actual
     hoy = time.strftime("%Y-%m-%d")
-    if hoy != _dia_actual:
-        _dia_actual = hoy
-        _preguntas_dia = 0
-    if _preguntas_dia >= MAX_PREGUNTAS_DIA:
+    clave = f"{hoy}|{ip}"
+    contador = _preguntas_ip.get(clave, 0)
+    if contador >= MAX_PREGUNTAS_DIA_POR_IP:
         raise RateLimitExceeded(
-            "El asistente alcanzó su límite diario de preguntas. Vuelve mañana."
+            f"Has alcanzado el límite de preguntas de hoy (15 por visitante). Vuelve mañana."
         )
-    ahora = time.time()
-    vivas = {
-        ip: [t for t in ts if ahora - t < VENTANA_SEGUNDOS]
-        for ip, ts in _preguntas_ip.items()
-    }
-    _preguntas_ip.clear()
-    _preguntas_ip.update(vivas)
-    recientes = [t for t in _preguntas_ip.get(ip, []) if ahora - t < VENTANA_SEGUNDOS]
-    if len(recientes) >= MAX_PREGUNTAS_VENTANA:
-        raise RateLimitExceeded(
-            f"Demasiadas preguntas. Límite {MAX_PREGUNTAS_VENTANA}/hora por visitante."
-        )
-    recientes.append(ahora)
-    _preguntas_ip[ip] = recientes
-    _preguntas_dia += 1
+    _preguntas_ip[clave] = contador + 1
+    # Limpieza perezosa: borrar entradas de días anteriores (máx ~1k entradas)
+    if len(_preguntas_ip) > 1000:
+        for k in [k for k in _preguntas_ip if not k.startswith(hoy)]:
+            del _preguntas_ip[k]
 
 
 # ---------------------------------------------------------------- corpus

@@ -1,0 +1,28 @@
+# KAVANA Steelworks — backend en Fly.io (formato machines)
+# fly.toml en la RAÍZ del repo (contexto de build = repo completo), igual que
+# Calculadora/BusRoad. El Dockerfile referencia backend/... y README/docs.
+app = "steelworks-api"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+  STEELWORKS_ENVIRONMENT = "production"
+  # El Dockerfile copia README/SECURITY/docs a /app (WORKDIR); REPO_ROOT apunta
+  # ahí para que el corpus RAG encuentre README.md, docs/adr y docs/specs.
+  STEELWORKS_DOCS_ROOT = "/app"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

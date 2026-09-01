@@ -18,8 +18,10 @@ COPY backend/alembic.ini ./
 
 # Documentación del repo: corpus del asistente RAG (bots usuario + técnico).
 # Sin estos archivos el asistente responde "no documentado" a todo.
-COPY README.md SECURITY.md /docs/
-COPY docs /docs/
+# README/SECURITY van a la RAÍZ del contenedor (/) y docs/ a /docs, para que
+# REPO_ROOT (parents[3] = /) encuentre tanto README.md como docs/adr y docs/specs.
+COPY README.md SECURITY.md ./
+COPY docs ./docs
 
 # Entrypoint: aplica migraciones y arranca uvicorn
 COPY backend/docker-entrypoint.sh /docker-entrypoint.sh
