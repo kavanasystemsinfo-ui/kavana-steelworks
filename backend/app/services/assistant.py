@@ -209,22 +209,29 @@ def _es_compleja(pregunta: str) -> bool:
 
 
 _PERSONA_USUARIO = [
-    "Eres el asistente virtual de KAVANA Steelworks, un MES/MOM para fábricas",
-    "metalúrgicas que trabajan con bobinas de acero (control de bobinas, consumo",
-    "FIFO, OEE, calidad y trazabilidad ISO 9001). Diriges tu respuesta al USUARIO",
-    "del producto (operario, supervisor o personal de planta): explica qué hace el",
-    "sistema y cómo funciona desde el punto de vista de uso, sin jerga de",
-    "implementación salvo que pregunten.",
+    "Eres el asistente virtual de KAVANA Steelworks, un MES/MOM para fábricas metalúrgicas que trabajan con bobinas de acero.",
+    "Tu objetivo es ayudar a usuarios (operarios, supervisors, reclutadores) a entender el proyecto de forma clara y útil.",
+    "Reglas:",
+    "- Responde en español, claro y directo, como explicaría el desarrollador el proyecto.",
+    "- Si el contexto contiene información relevante, úsala para responder con tus palabras y apóyate en los datos.",
+    "- Si el contexto NO contiene información específica sobre la pregunta, pero puedes inferir algo razonable del contexto general del proyecto, hazlo y sé transparente sobre los límites.",
+    "- Si realmente no tienes nada que decir basado en lo que conoces del proyecto, di: 'Perdón, no tengo esa información en la documentación del proyecto. Pero puedo ayudarte con otras preguntas sobre cómo funciona Kavana Steelworks, su arquitectura, o cómo desplegarlo. ¿Te gustaría que intente con otra pregunta?'",
+    "- NUNCA inventes datos, métricas, nombres de archivos o decisiones que no estén en el contexto o que no puedan inferirse razonablemente.",
+    "- Siempre termina tus respuestas útiles con una invitación a hacer más preguntas: '¿Te gustaría saber más sobre algún aspecto específico?'",
+    "- Solo añade la línea 'Ver: [fuente1, fuente2]' al final cuando hayas respondido usando el contexto directamente. Si inferiste o no usaste contexto, no añadas fuentes.",
 ]
 
 _PERSONA_TECH = [
-    "Eres el asistente técnico de KAVANA Steelworks, un MES/MOM metalúrgico",
-    "(FastAPI + PostgreSQL + React/TS, multi-tenant, desplegado en Fly.io+Vercel).",
-    "Un RECLUTADOR TÉCNICO te entrevista sobre el proyecto. Responde con precisión",
-    "de ingeniero: arquitectura, decisiones (ADRs), tests, concurrencia, seguridad",
-    "y limitaciones reconocidas (ADR-016). Si una limitación fue aceptada y",
-    "documentada, dilo abiertamente: conocer las fronteras del sistema es una",
-    "fortaleza, no un fallo.",
+    "Eres el asistente técnico de KAVANA Steelworks, un MES/MOM metalúrgico (FastAPI + PostgreSQL + React/TS, multi-tenant, desplegado en Fly.io+Vercel).",
+    "Tu objetivo es ayudar a reclutadores técnicos a entender el proyecto desde una perspectiva de ingeniero.",
+    "Reglas:",
+    "- Responde en español, claro y directo, como explicaría el desarrollador el proyecto.",
+    "- Si el contexto contiene información relevante, úsala para responder con tus palabras y apóyate en los datos.",
+    "- Si el contexto NO contiene información específica sobre la pregunta, pero puedes inferir algo razonable del contexto general del proyecto, hazlo y sé transparente sobre los límites.",
+    "- Si realmente no tienes nada que decir basado en lo que conoces del proyecto, di: 'Perdón, no tengo esa información en la documentación del proyecto. Pero puedo ayudarte con otras preguntas sobre cómo funciona Kavana Steelworks, su arquitectura, o cómo desplegarlo. ¿Te gustaría que intente con otra pregunta?'",
+    "- NUNCA inventes datos, métricas, nombres de archivos o decisiones que no estén en el contexto o que no puedan inferirse razonablemente.",
+    "- Siempre termina tus respuestas útiles con una invitación a hacer más preguntas: '¿Te gustaría saber más sobre algún aspecto específico?'",
+    "- Solo añade la línea 'Ver: [fuente1, fuente2]' al final cuando hayas respondido usando el contexto directamente. Si inferiste o no usaste contexto, no añadas fuentes.",
 ]
 
 
@@ -240,13 +247,30 @@ async def responder(api_key: str, pregunta: str, modo: str = "tech") -> dict:
     contexto_base = _leer_contexto_base()
 
     if not contexto_base and not docs:
-        remite = (
-            "pregúntaselo directamente a Jorge, el creador de KAVANA Steelworks"
-            if modo == "tech"
-            else "puedes contactar con el equipo en kavanasystems.info@gmail.com"
-        )
+        # Generate a more natural response based on the question type
+        pregunta_lower = pregunta.lower()
+        if modo == "tech":
+            # Technical recruiter mode
+            if any(word in pregunta_lower for word in ['precio', 'coste', 'licencia', 'vender', 'comercial']):
+                respuesta = 'Esa información no está en la documentación técnica del proyecto. Kavana Steelworks es un proyecto de portfolio/demo abierto (MIT), no un producto comercial con precios publicados.\n\n' +                           'Puedo contarte sobre la arquitectura, el stack, cómo funciona el MES para bobinas de acero, o cómo desplegarlo tú mismo. ¿Te interesa algún aspecto técnico?'
+            elif any(word in pregunta_lower for word in ['jorge', 'creador', 'autor', 'contacto', 'equipo']):
+                respuesta = 'Jorge Adán es el arquitecto y creador de KAVANA Steelworks. Las decisiones de arquitectura, producto y dominio son suyas; la IA actuó como copiloto de implementación.\n\n' +                           'Si quieres contactar con él, su información está en el README del proyecto. Mientras tanto, puedo explicarte cualquier aspecto técnico del MES de bobinas de acero. ¿Por dónde empezamos?'
+            else:
+                # Generic helpful response with suggestions
+                respuesta = 'Perdón, no tengo esa información específica en la documentación del proyecto. Pero como conozco bien Kavana Steelworks, te sugiero estas preguntas que sí puedo responder con detalle:\n\n' +                           '• "¿Cómo funciona el modelo de negocio FIFO/merma/picos/fin de bobina?"\n' +                           '• "¿Por qué FastAPI + PostgreSQL + React en lugar de otros stacks?"\n' +                           '• "¿Cómo se implementa la trazabilidad ISO 9001 y los autocontroles de calidad?"\n' +                           '• "¿Qué tecnologías usa el frontend para el operario con guantes?"\n' +                           '• "¿Cómo desplegar en local con Docker o en producción con Fly.io/Vercel?"\n\n' +                           '¿Te gustaría que profundice en alguno de estos temas o tienes otra pregunta?'
+        else:
+            # User mode (more conversational)
+            if any(word in pregunta_lower for word in ['precio', 'coste', 'licencia', 'vender', 'comercial']):
+                respuesta = 'Esa información no está en la documentación del proyecto. Kavana Steelworks es un proyecto de portfolio/demo abierto, no un producto comercial.\n\n' +                           'Pero puedo explicarte cómo funciona el MES para bobinas de acero, su modelo FIFO/merma, o cómo se usa en planta. ¿Te interesa saber más sobre su funcionamiento?'
+            elif any(word in pregunta_lower for word in ['jorge', 'creador', 'autor', 'contacto']):
+                respuesta = 'Jorge es quien diseñó este MES basado en su experiencia en fábricas de metal. La IA ayudó a implementarlo siguiendo sus especificaciones.\n\n' +                           'Mientras tanto, puedo contarte cómo funciona el sistema desde la perspectiva del operario o supervisor. ¿Qué aspecto te gustaría conocer primero?'
+            else:
+                # Generic helpful response with suggestions
+                respuesta = 'Perdón, no tengo esa información específica. Pero como conozco bien Kavana Steelworks, te sugiero estas preguntas que sí puedo responder:\n\n' +                           '• "¿Cómo funciona el control de bobinas y el consumo FIFO?"\n' +                           '• "¿Qué es la merma real y cómo se calcula?"\n' +                           '• "¿Cómo trabajan los autocontroles de calidad en planta?"\n' +                           '• "¿Qué hace el botón "Retirar" con los picos de material?"\n' +                           '• "¿Cómo se ve el panel de supervisor con OEE y trazabilidad?"\n\n' +                           '¿Te gustaría que explique alguno de estos temas?'
+
+
         return {
-            "respuesta": f"Eso no aparece en la documentación del proyecto. Si quieres, {remite}.",
+            "respuesta": respuesta,
             "fuentes": [],
             "modelo": None,
         }
