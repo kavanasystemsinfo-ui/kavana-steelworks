@@ -11,6 +11,7 @@ código verificable en este repositorio.
 | 001 | Clasificación MES/MOM (ISA-95), no ERP | [ADR-001](docs/adr/ADR-001-clasificacion-mes-mom.md) |
 | 002 | PostgreSQL sobre MongoDB | [ADR-002](docs/adr/ADR-002-postgresql-sobre-mongodb.md) |
 | 003 | Feature flags por plan (básico/pro/industrial) | [ADR-003](docs/adr/ADR-003-feature-flags-planes.md) |
+| 017 | Coste cero y decisiones tomadas por presupuesto | [ADR-017](docs/adr/ADR-017-coste-cero-decisiones-presupuesto.md) |
 
 ## Decisiones de implementación (Problema → Decisión → Por qué → Trade-off)
 
