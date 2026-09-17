@@ -4,13 +4,14 @@
 - POST /api/v1/assistant/ask-tech  → bot TÉCNICO para reclutadores.
 - GET  /api/v1/assistant/stats     → tamaño del corpus (transparencia).
 
-Públicos (sin JWT): el objetivo es que un reclutador interrogue al sistema
-sin crear cuenta. Protegidos con rate limit por IP (15 preguntas / hora),
-tope global diario (300) y longitud máxima por pregunta (500 caracteres).
+Públicos (sin JWT): el objetivo es que un reclutador interrogue el sistema
+sin crear cuenta. Protegidos con rate limit por IP (15 preguntas al día por
+visitante) y longitud máxima por pregunta (500 caracteres).
 Nunca exponen la API key.
 """
 
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -48,7 +49,7 @@ async def _responder(body: Pregunta, request: Request, modo: str) -> dict:
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from None
 
-    api_key = __import__("os").getenv("DEEPSEEK_API_KEY", "") or __import__("os").getenv("OPENROUTER_API_KEY", "")
+    api_key = os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
         raise HTTPException(
             status_code=503,

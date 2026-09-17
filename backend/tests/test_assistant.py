@@ -49,19 +49,49 @@ def test_busqueda_recupera_fifo():
     assert "fifo" in texto_total or "bobina" in texto_total
 
 
-def test_pregunta_sin_match_no_llama_llm(monkeypatch):
-    def _explota(*a, **k):
-        raise AssertionError("No debe llamarse al LLM sin contexto relevante")
+def test_pregunta_fuera_del_corpus_no_recupera_nada():
+    """Una pregunta ajena al proyecto no debe traer documentos con puntuacion."""
+    docs = assistant.buscar(
+        assistant.get_indice(), "¿cuál es la receta de la paella valenciana?"
+    )
+    assert all(d["score"] == 0 for d in docs)
 
-    monkeypatch.setattr(assistant, "llamar_openrouter", _explota)
+
+def test_persona_prohibe_inventar(monkeypatch):
+    """La persona lleva la regla dura: admitir que no lo sabe antes que inventar."""
+    capturado = {}
+
+    async def _fake_llm(api_key, model, system_prompt, user_prompt):
+        capturado["system"] = system_prompt
+        return "respuesta"
+
+    monkeypatch.setattr(assistant, "llamar_openrouter", _fake_llm)
     import asyncio
 
     resultado = asyncio.run(
         assistant.responder("key-falsa", "¿cuál es la receta de la paella valenciana?", modo="tech")
     )
-    assert resultado["fuentes"] == []
-    assert "documentación" in resultado["respuesta"]
-    assert resultado["modelo"] is None
+    assert resultado["respuesta"]
+    assert "no tengo esa información" in capturado["system"].lower()
+    assert "nunca inventes" in capturado["system"].lower()
+
+
+def test_modo_degradado_no_llama_al_llm(monkeypatch):
+    """Sin corpus cargado (contexto base y busqueda vacios) responde enlatado y
+    no gasta ninguna llamada al modelo."""
+    def _explota(*a, **k):
+        raise AssertionError("No debe llamarse al LLM si no hay contexto alguno")
+
+    monkeypatch.setattr(assistant, "llamar_openrouter", _explota)
+    monkeypatch.setattr(assistant, "_leer_contexto_base", lambda: "")
+    monkeypatch.setattr(assistant, "buscar", lambda *a, **k: [])
+    import asyncio
+
+    for modo in ("tech", "user"):
+        resultado = asyncio.run(assistant.responder("key-falsa", "hola", modo=modo))
+        assert resultado["fuentes"] == []
+        assert resultado["modelo"] is None
+        assert resultado["respuesta"]
 
 
 # ---------------------------------------------------------------- modos
@@ -137,15 +167,18 @@ def test_router_rate_limit_por_ip(client, monkeypatch):
         return "ok"
 
     monkeypatch.setattr(assistant, "llamar_openrouter", _fake_llm)
-    # rellenar la ventana directamente para no hacer 15 llamadas
+    # se rellena el contador directamente para no hacer 15 llamadas
     import time as _time
 
-    assistant._preguntas_ip["testclient"] = [
-        _time.time() for _ in range(assistant.MAX_PREGUNTAS_VENTANA)
-    ]
+    hoy = _time.strftime("%Y-%m-%d")
+    monkeypatch.setattr(
+        assistant,
+        "_preguntas_ip",
+        {f"{hoy}|testclient": assistant.MAX_PREGUNTAS_DIA_POR_IP},
+    )
     r = client.post("/api/v1/assistant/ask-tech", json={"pregunta": "otra pregunta cualquiera"})
     assert r.status_code == 429
-    assert "hora" in r.json()["detail"].lower()
+    assert "límite" in r.json()["detail"].lower()
 
 
 def test_router_longitud_maxima_500(client):
@@ -153,27 +186,37 @@ def test_router_longitud_maxima_500(client):
     assert r.status_code == 422
 
 
-def test_tope_diario_global_bloquea(monkeypatch):
+def test_tope_diario_por_ip_bloquea(monkeypatch):
     import time as _time
 
-    monkeypatch.setattr(assistant, "_dia_actual", _time.strftime("%Y-%m-%d"))
-    monkeypatch.setattr(assistant, "_preguntas_dia", assistant.MAX_PREGUNTAS_DIA)
+    hoy = _time.strftime("%Y-%m-%d")
+    monkeypatch.setattr(
+        assistant,
+        "_preguntas_ip",
+        {f"{hoy}|ip-cualquiera": assistant.MAX_PREGUNTAS_DIA_POR_IP},
+    )
     with pytest.raises(assistant.RateLimitExceeded):
         assistant.enforce_rate_limit("ip-cualquiera")
 
 
 def test_tope_diario_se_reinicia_con_el_dia(monkeypatch):
-    monkeypatch.setattr(assistant, "_dia_actual", "2000-01-01")
-    monkeypatch.setattr(assistant, "_preguntas_dia", assistant.MAX_PREGUNTAS_DIA)
-    # día distinto al actual => reinicia el contador y permite
+    import time as _time
+
+    hoy = _time.strftime("%Y-%m-%d")
+    # el contador de un dia anterior no cuenta para hoy
+    monkeypatch.setattr(
+        assistant,
+        "_preguntas_ip",
+        {"2000-01-01|ip-nueva": assistant.MAX_PREGUNTAS_DIA_POR_IP},
+    )
     assistant.enforce_rate_limit("ip-nueva")
-    assert assistant._preguntas_dia == 1
+    assert assistant._preguntas_ip[f"{hoy}|ip-nueva"] == 1
 
 
 def test_router_tope_diario_devuelve_429(client, monkeypatch):
     import time as _time
 
-    monkeypatch.setattr(assistant, "_dia_actual", _time.strftime("%Y-%m-%d"))
-    monkeypatch.setattr(assistant, "_preguntas_dia", 999)
+    hoy = _time.strftime("%Y-%m-%d")
+    monkeypatch.setattr(assistant, "_preguntas_ip", {f"{hoy}|testclient": 999})
     r = client.post("/api/v1/assistant/ask-tech", json={"pregunta": "¿qué es steelworks?"})
     assert r.status_code == 429
