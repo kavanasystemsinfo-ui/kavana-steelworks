@@ -4,13 +4,11 @@ import { api, getTenantId, type EventData } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 
-interface UploadSession {
-  session_id: string
-  status: string
-  expires_at: string
-  has_photo: boolean
-  incidencia_id: string | null
-  photo_data_url?: string | null
+interface CoilScan {
+}
+interface PlanCheck {
+}
+interface QualityModel {
 }
 
 interface CoilScan {
@@ -121,19 +119,12 @@ export function OperarioPage() {
     setScanError('')
     setScan(null)
     try {
-      const res = await fetch(
-        `/api/v1/stock-items/scan?coil_id=${encodeURIComponent(coilId.trim())}`,
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al escanear')
-      }
-      const data = await res.json()
-      if (!data) {
+      const res = await api.scanCoil(coilId.trim(), '')
+      if (!res) {
         setScanError('Bobina no encontrada. Comprueba el código.')
         return
       }
-      setScan(data)
+      setScan(res)
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'Error de conexión')
     }
@@ -165,14 +156,12 @@ export function OperarioPage() {
   const [qcError, setQcError] = useState('')
 
   useEffect(() => {
-    fetch('/api/v1/quality/models')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+    api.getQualityModels()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setModels(data)
       })
       .catch(() => {})
-    fetch('/api/v1/orders')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+    api.listOrders()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setOrdenActual({
@@ -198,29 +187,20 @@ export function OperarioPage() {
     if (!modelo || !ordenActual || !scan) return
     const lista = Object.entries(mediciones)
       .filter(([, v]) => v !== '' && v !== undefined)
-      .map(([name, value]) => ({ check_name: name, value_entered: value }))
+      .map(([name, value]) => ({ name: name, value_entered: value }))
     if (lista.length === 0) {
       setQcError('Mide al menos un control antes de registrar.')
       return
     }
     try {
-      const res = await fetch('/api/v1/quality/checks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: ordenActual.id,
-          workstation_id: ordenActual.workstation_id,
-          manufacturing_model_id: modelo.id,
-          stock_item_id: scan.id,
-          measurements: lista,
-        }),
+      const res = await api.createQualityCheck({
+        order_id: ordenActual.id,
+        workstation_id: ordenActual.workstation_id ?? '',
+        manufacturing_model_id: modelo.id,
+        stock_item_id: scan.id,
+        measurements: lista,
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al registrar autocontrol')
-      }
-      const data = await res.json()
-      setQcMsg(estadoCalidad(data.record?.overall_status ?? ''))
+      setQcMsg(estadoCalidad(res.record?.overall_status ?? ''))
       setMediciones({})
       // Un autocontrol registrado reinicia el temporizador de recordatorios
       notifyCheckRegistered()
@@ -233,7 +213,7 @@ export function OperarioPage() {
   // El operario reporta siempre (observaciones + tipo); la foto es una vía
   // MÁS, no la única: el QR solo se activa si el operario pulsa "Adjuntar foto".
   const [incModalOpen, setIncModalOpen] = useState(false)
-  const [incSession, setIncSession] = useState<UploadSession | null>(null)
+  const [incSession, setIncSession] = useState<{ sessionId: string; expiresAt: string } | null>(null)
   const [incPhotoUrl, setIncPhotoUrl] = useState<string | null>(null)
   const [incStatus, setIncStatus] = useState<
     'form' | 'creating' | 'waiting' | 'photo' | 'expired' | 'error' | 'submitting'
@@ -257,14 +237,12 @@ export function OperarioPage() {
     setIncStatus('creating')
     setIncSession(null)
     setIncPhotoUrl(null)
-    fetch('/api/v1/incidencias/upload-session', { method: 'POST' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+    api.createIncidenciaUploadSession()
       .then((sesion) => {
         setIncSession(sesion)
         setIncStatus('waiting')
         incPollRef.current = setInterval(() => {
-          fetch(`/api/v1/incidencias/upload-session/${sesion.session_id}`)
-            .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+          api.getIncidenciaUploadSession(sesion.sessionId)
             .then((estado) => {
               if (estado.has_photo && estado.photo_data_url) {
                 setIncPhotoUrl(estado.photo_data_url)
@@ -317,21 +295,12 @@ export function OperarioPage() {
     }
     setIncStatus('submitting')
     try {
-      const res = await fetch('/api/v1/incidencias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          linea_id: ordenActual?.workstation_id,
-          descripcion: incDescripcion.trim(),
-          tipo: incTipo,
-          photo_session_id: incSession?.session_id ?? null,
-        }),
+      await api.createIncidencia({
+        linea_id: ordenActual?.workstation_id ?? '',
+        descripcion: incDescripcion.trim(),
+        tipo: incTipo,
+        photo_session_id: incSession?.sessionId ?? null,
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al reportar incidencia')
-      }
-      await res.json()
       setIncMsg('Incidencia registrada')
       setIncModalOpen(false)
       stopIncPoll()
@@ -347,23 +316,14 @@ export function OperarioPage() {
     if (!scan) return
     try {
       // TODO(Fase 3): order_id/line_id desde la orden activa del operario
-      const res = await fetch('/api/v1/production/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: '00000000-0000-0000-0000-000000000000',
-          line_id: '00000000-0000-0000-0000-000000000000',
-          incremental_quantity: Number(piezas),
-          hours_worked: Number(horas || 0),
-        }),
+      const res = await api.recordProduction({
+        order_id: '00000000-0000-0000-0000-000000000000',
+        line_id: '00000000-0000-0000-0000-000000000000',
+        incremental_quantity: Number(piezas),
+        hours_worked: Number(horas || 0),
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al registrar producción')
-      }
-      const data = await res.json()
       setFinBobinaMsg(
-        `${data.incremental_quantity} piezas registradas · ${data.consumed_amount} ${data.consumption_unit} consumidos (${data.calculation_method})`,
+        `${res.incremental_quantity ?? 0} piezas registradas · ${res.consumed_amount ?? 0} ${res.consumption_unit ?? ''} consumidos (${res.calculation_method ?? ''})`,
       )
       setPiezas('')
       setHoras('')
@@ -380,23 +340,14 @@ export function OperarioPage() {
     if (!scan) return
     try {
       // TODO(Fase 3): order_id/line_id desde la orden activa del operario
-      const res = await fetch('/api/v1/stock-items/fin-bobina', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stock_item_id: scan.id,
-          order_id: '00000000-0000-0000-0000-000000000000',
-          line_id: '00000000-0000-0000-0000-000000000000',
-          radio_mm: Number(radioMm),
-        }),
+      const res = await api.finBobina({
+        stock_item_id: scan.id,
+        order_id: '00000000-0000-0000-0000-000000000000',
+        line_id: '00000000-0000-0000-0000-000000000000',
+        radio_mm: Number(radioMm),
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error en fin de bobina')
-      }
-      const data = await res.json()
       setFinBobinaMsg(
-        `${data.msg}: quedan ${data.peso_restante_kg} kg, ${data.merma_kg} kg de merma (${data.merma_cost} €)`,
+        `${res.msg}: quedan ${res.peso_restante_kg} kg, ${res.merma_kg} kg de merma (${res.merma_cost} €)`,
       )
       setVinculada(false)
       setScan(null)
@@ -412,21 +363,8 @@ export function OperarioPage() {
     setFinBobinaMsg('')
     if (!scan) return
     try {
-      const res = await fetch('/api/v1/stock-items/retirar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stock_item_id: scan.id,
-          order_id: '00000000-0000-0000-0000-000000000000',
-          line_id: '00000000-0000-0000-0000-000000000000',
-        }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al retirar pico')
-      }
-      const data = await res.json()
-      setFinBobinaMsg(data.msg)
+      const res = await api.retirarPico({ stock_item_id: scan.id })
+      setFinBobinaMsg(res.msg)
       setVinculada(false)
       setScan(null)
       setCoilId('')
@@ -837,7 +775,7 @@ export function OperarioPage() {
                     <>
                       <div className="mx-auto w-fit rounded-sm bg-white p-3">
                         <QRCodeSVG
-                          value={`${window.location.origin}/mobile-upload/${incSession.session_id}`}
+                          value={`${window.location.origin}/mobile-upload/${incSession.sessionId}`}
                           size={150}
                           title="QR de subida de foto"
                         />

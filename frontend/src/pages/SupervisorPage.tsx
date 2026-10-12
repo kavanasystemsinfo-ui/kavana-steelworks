@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
 
 interface OeeData {
   availability: number
@@ -106,12 +107,9 @@ export function SupervisorPage() {
   })
 
   const cargarIncidencias = () => {
-    fetch('/api/v1/incidencias')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Incidencias ${r.status}`))))
-      .then((data) => {
-        if (data && Array.isArray(data.incidencias)) setIncidencias(data.incidencias)
-      })
-      .catch(() => setIncError('No se pudieron cargar las incidencias'))
+    api.listIncidencias?.().then((data) => {
+      if (data && Array.isArray(data.incidencias)) setIncidencias(data.incidencias)
+    }).catch(() => setIncError('No se pudieron cargar las incidencias'))
   }
 
   useEffect(() => {
@@ -123,25 +121,16 @@ export function SupervisorPage() {
     setIncMsg('')
     setIncError('')
     try {
-      const res = await fetch(`/api/v1/incidencias/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estado: resForm.estado,
-          resolucion_tipo: resForm.resolucion_tipo || null,
-          resolucion_descripcion: resForm.resolucion_descripcion || null,
-          tiempo_parada_min:
-            resForm.tiempo_parada_min === ''
-              ? null
-              : Number(resForm.tiempo_parada_min),
-          coste: resForm.coste === '' ? null : Number(resForm.coste),
-        }),
+      await api.updateIncidencia(id, {
+        estado: resForm.estado,
+        resolucion_tipo: resForm.resolucion_tipo || null,
+        resolucion_descripcion: resForm.resolucion_descripcion || null,
+        tiempo_parada_min:
+          resForm.tiempo_parada_min === ''
+            ? null
+            : Number(resForm.tiempo_parada_min),
+        coste: resForm.coste === '' ? null : Number(resForm.coste),
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.detail ?? 'Error al resolver incidencia')
-      }
-      await res.json()
       setIncMsg('Incidencia actualizada')
       setResolviendoId(null)
       setResForm({
@@ -159,12 +148,10 @@ export function SupervisorPage() {
 
   useEffect(() => {
     const cargar = () => {
-      fetch('/api/v1/supervisor/oee')
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`OEE ${r.status}`))))
+      api.getOee()
         .then(setOee)
         .catch((e) => setError(e instanceof Error ? e.message : 'Error OEE'))
-      fetch('/api/v1/supervisor/kpis')
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`KPIs ${r.status}`))))
+      api.getKpis()
         .then(setKpis)
         .catch((e) => setError(e instanceof Error ? e.message : 'Error KPIs'))
     }
@@ -174,8 +161,7 @@ export function SupervisorPage() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/v1/orders')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Órdenes ${r.status}`))))
+    api.listOrders()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setOrders(data)
@@ -194,8 +180,7 @@ export function SupervisorPage() {
     }
     setTrace(null)
     setTraceError('')
-    fetch(`/api/v1/trace/orders/${selectedOrder}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Traza ${r.status}`))))
+    api.getTrace(selectedOrder)
       .then(setTrace)
       .catch(() => setTraceError('No se pudo cargar la trazabilidad'))
   }, [selectedOrder])

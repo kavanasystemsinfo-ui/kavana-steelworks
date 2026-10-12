@@ -1,68 +1,6 @@
 import { useEffect, useState } from 'react'
-
-/** Tipos de la API de administración (spec 07, ADR-015). */
-
-interface TenantOut {
-  id: string
-  name: string
-  slug: string
-  status: string
-  is_active: boolean
-  auth: Record<string, unknown>
-  theme: Record<string, unknown>
-  finances: Record<string, unknown>
-  sequences_config: Record<string, unknown>
-}
-
-interface UserOut {
-  id: string
-  email: string
-  name: string
-  role: string
-  is_active: boolean
-  employee_number: string | null
-  default_workstation_code: string | null
-  last_login_at: string | null
-}
-
-interface SeqCfg {
-  prefix: string
-  padding: number
-}
-
-interface SequencesOut {
-  order: SeqCfg
-  lot: SeqCfg
-}
-
-interface WorkstationOut {
-  id: string
-  group_id: string | null
-  code: string
-  name: string
-  color: string
-  hourly_cost: number
-  registration_method: string
-  maintenance_interval_hours: number
-  maintenance_pre_warning_hours: number
-  last_maintenance_reset: string | null
-  accumulated_hours: number
-  is_active: boolean
-}
-
-interface WorkstationGroupOut {
-  id: string
-  name: string
-  color: string
-}
-
-interface RoleOut {
-  id: string
-  role_key: string
-  name: string
-  permissions: string[]
-  is_system: boolean
-}
+import { api } from '../lib/api'
+import type { TenantOut, UserOut, SequencesOut, WorkstationOut, WorkstationGroupOut, RoleOut, SeqCfg } from '../lib/api'
 
 const inputCls =
   'mono-data mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 min-h-[48px] text-kavana-text focus:border-kavana-orange outline-none'
@@ -120,21 +58,6 @@ function PanelCard({
   )
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/v1/admin${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Error ${res.status}`)
-  }
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
-}
-
 /** Pestaña Empresa: nombre, slug, estado y JSONs de configuración. */
 function EmpresaTab() {
   const [tenant, setTenant] = useState<TenantOut | null>(null)
@@ -150,7 +73,7 @@ function EmpresaTab() {
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    apiFetch<TenantOut>('/tenant')
+    api.getTenant()
       .then((t) => {
         setTenant(t)
         setForm({
@@ -181,15 +104,12 @@ function EmpresaTab() {
     }
     const finances = { ...(tenant?.finances ?? {}), overhead_hourly_cost: Number(form.overhead) }
     try {
-      const updated = await apiFetch<TenantOut>('/tenant', {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: form.name,
-          slug: form.slug,
-          status: form.status,
-          theme,
-          finances,
-        }),
+      const updated = await api.updateTenant({
+        name: form.name,
+        slug: form.slug,
+        status: form.status,
+        theme,
+        finances,
       })
       setTenant(updated)
       setMsg('Empresa actualizada')
@@ -281,7 +201,7 @@ function UsuariosTab() {
   const [editPassword, setEditPassword] = useState('')
 
   const load = () => {
-    apiFetch<UserOut[]>('/users')
+    api.getUsers()
       .then(setUsers)
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al cargar usuarios'))
   }
@@ -296,16 +216,13 @@ function UsuariosTab() {
     setErr('')
     setMsg('')
     try {
-      await apiFetch<UserOut>('/users', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: form.email,
-          name: form.name,
-          password: form.password,
-          role: form.role,
-          employee_number: form.employee_number || null,
-          default_workstation_code: form.default_workstation_code || null,
-        }),
+      await api.createUser({
+        email: form.email,
+        name: form.name,
+        password: form.password,
+        role: form.role,
+        employee_number: form.employee_number || null,
+        default_workstation_code: form.default_workstation_code || null,
       })
       setMsg(`Usuario ${form.email} creado`)
       setForm({ email: '', name: '', password: '', role: 'operator', employee_number: '', default_workstation_code: '' })
@@ -319,7 +236,7 @@ function UsuariosTab() {
     setErr('')
     setMsg('')
     try {
-      await apiFetch<UserOut>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+      await api.updateUser(id, patch)
       setMsg('Usuario actualizado')
       load()
     } catch (e) {
@@ -350,7 +267,7 @@ function UsuariosTab() {
   const deactivate = (u: UserOut) => {
     setErr('')
     setMsg('')
-    apiFetch<UserOut>(`/users/${u.id}`, { method: 'DELETE' })
+    api.deleteUser(u.id)
       .then(() => {
         setMsg(`Usuario ${u.email} desactivado`)
         load()
@@ -458,17 +375,17 @@ function SecuenciasTab() {
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    apiFetch<SequencesOut>('/sequences')
+    api.getSequences()
       .then(setCfg)
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al cargar secuencias'))
   }, [])
 
   const refreshNext = () => {
-    apiFetch<{ type: string; next: string }>('/sequences/next/order')
-      .then((r) => setNextOrder(r.next))
+    api.getNextOrder()
+      .then((next) => setNextOrder(next))
       .catch(() => setNextOrder('—'))
-    apiFetch<{ type: string; next: string }>('/sequences/next/lot')
-      .then((r) => setNextLot(r.next))
+    api.getNextLot()
+      .then((next) => setNextLot(next))
       .catch(() => setNextLot('—'))
   }
 
@@ -483,10 +400,7 @@ function SecuenciasTab() {
     setErr('')
     setMsg('')
     try {
-      const updated = await apiFetch<SequencesOut>('/sequences', {
-        method: 'PUT',
-        body: JSON.stringify(cfg),
-      })
+      const updated = await api.updateSequences(cfg)
       setCfg(updated)
       setMsg('Configuración de secuencias guardada')
       refreshNext()
@@ -564,10 +478,10 @@ function PuestosTab() {
   const [err, setErr] = useState('')
 
   const load = () => {
-    apiFetch<WorkstationOut[]>('/workstations')
+    api.getWorkstations()
       .then(setWss)
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al cargar puestos'))
-    apiFetch<WorkstationGroupOut[]>('/workstations/groups')
+    api.getWorkstationGroups()
       .then(setGroups)
       .catch(() => undefined)
   }
@@ -582,18 +496,19 @@ function PuestosTab() {
     setErr('')
     setMsg('')
     try {
-      await apiFetch<WorkstationOut>('/workstations', {
-        method: 'POST',
-        body: JSON.stringify({
-          code: form.code,
-          name: form.name,
-          color: form.color,
-          hourly_cost: Number(form.hourly_cost),
-          registration_method: form.registration_method,
-          maintenance_interval_hours: Number(form.maintenance_interval_hours),
-          group_id: form.group_id || null,
-        }),
-      })
+    await api.createWorkstation({
+      code: form.code,
+      name: form.name,
+      color: form.color,
+      hourly_cost: Number(form.hourly_cost),
+      registration_method: form.registration_method,
+      maintenance_interval_hours: Number(form.maintenance_interval_hours),
+      maintenance_pre_warning_hours: 24, // Un día por defecto
+      last_maintenance_reset: null, // Se establecerá al crear o al realizar el primer mantenimiento
+      accumulated_hours: 0,
+      group_id: form.group_id || null,
+      is_active: true,
+    })
       setMsg(`Puesto ${form.code} creado`)
       setForm({ ...form, code: '', name: '' })
       load()
@@ -603,16 +518,13 @@ function PuestosTab() {
   }
 
   const toggleActive = (w: WorkstationOut) => {
-    apiFetch<WorkstationOut>(`/workstations/${w.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_active: !w.is_active }),
-    })
+    api.updateWorkstation(w.id, { is_active: !w.is_active })
       .then(() => load())
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al actualizar puesto'))
   }
 
   const deactivate = (w: WorkstationOut) => {
-    apiFetch<WorkstationOut>(`/workstations/${w.id}`, { method: 'DELETE' })
+    api.deleteWorkstation(w.id)
       .then(() => {
         setMsg(`Puesto ${w.code} desactivado`)
         load()
@@ -662,7 +574,7 @@ function PuestosTab() {
           <div key={w.id} className="border border-kavana-border rounded-sm p-3 flex flex-wrap items-center gap-3">
             <span className="mono-data text-sm">{w.code}</span>
             <span className="text-sm">{w.name}</span>
-            <span className={`w-4 h-4 rounded-sm inline-block`} style={{ backgroundColor: w.color }} />
+            <span className="w-4 h-4 rounded-sm inline-block" style={{ backgroundColor: w.color }} />
             <span className="text-xs text-kavana-text-dim">{w.registration_method} · {w.hourly_cost} €/h</span>
             <span className={`text-xs ${w.is_active ? 'text-kavana-ok' : 'text-red-400'}`}>
               {w.is_active ? 'activo' : 'inactivo'}
@@ -696,7 +608,7 @@ function RolesTab() {
   const [editPerms, setEditPerms] = useState<string[]>([])
 
   const load = () => {
-    apiFetch<RoleOut[]>('/roles')
+    api.getRoles()
       .then(setRoles)
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al cargar roles'))
   }
@@ -717,10 +629,7 @@ function RolesTab() {
     setErr('')
     setMsg('')
     try {
-      await apiFetch<RoleOut>(`/roles/${editKey}`, {
-        method: 'PUT',
-        body: JSON.stringify({ permissions: editPerms }),
-      })
+      await api.updateRole(editKey, { permissions: editPerms })
       setMsg('Permisos actualizados')
       setEditKey(null)
       load()

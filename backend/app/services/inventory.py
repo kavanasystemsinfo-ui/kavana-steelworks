@@ -147,6 +147,8 @@ def consume_stock_fifo(
     'auto_audit' en modo auditoría.
     """
     requerida = Decimal(str(cantidad_requerida))
+    if requerida <= Decimal("0"):
+        raise ValueError("cantidad_requerida debe ser mayor que cero")
     elegibles = _elegibles_fifo(
         db,
         tenant_id,
@@ -298,6 +300,8 @@ def find_coil(
         stmt = stmt.where(StockItem.lote == lote)
     else:
         raise ValueError("Indica coil_id o lote")
+    if tenant_id is None:
+        raise ValueError("tenant_id es requerido")
 
     bobina = db.scalar(stmt)
     if bobina is None:

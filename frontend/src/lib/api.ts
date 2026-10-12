@@ -49,6 +49,151 @@ export interface MaterialOut {
   stock_current: number | null
 }
 
+export interface IncidenciaItem {
+  id: string
+  linea_id: string | null
+  puesto: string
+  descripcion: string
+  tipo: string
+  estado: string
+  foto_data_url: string | null
+  resolucion_tipo: string | null
+  resolucion_descripcion: string | null
+  tiempo_parada_min: number | null
+  coste: number | null
+  created_at: string
+  operario: { id: string; name: string } | null
+  responsable: { id: string; name: string } | null
+}
+
+export interface OeeData {
+  availability: number
+  performance: number
+  quality: number
+  oee: number
+  raw: {
+    total_pieces: number
+    total_objetivo: number
+    total_tiempo_min: number
+    scrap_kg: number
+    material_kg: number
+  }
+}
+
+export interface KpisData {
+  orders_total: number
+  orders_active: number
+  orders_completed: number
+  estimated_cost: number
+  real_cost: number
+  cost_variance: number
+  cost_efficiency: number
+  material_variance: number
+  material_efficiency: number
+  scrap_rate: number
+}
+
+export interface PlanCheck {
+  id: string
+  name: string
+  tipo: string
+  tool_id: string | null
+  nominal_value: number | null
+  tolerance_plus: number | null
+  tolerance_minus: number | null
+  is_critical: boolean
+}
+
+export interface QualityModel {
+  id: string
+  code: string
+  name: string
+  material_code: string | null
+  quality_plan: PlanCheck[]
+}
+
+export interface OrderItem {
+  id: string
+  numero: string
+  estado: string
+  cliente: string | null
+  fecha_entrega: string | null
+  workstation_id: string | null
+}
+
+export interface TraceEvent {
+  id: string
+  action: string
+  quantity: string
+  timestamp: string
+  metadata: Record<string, unknown> | null
+  shift: string | null
+  operator: { id: string; name: string } | null
+}
+
+// Admin types
+export interface TenantOut {
+  id: string
+  name: string
+  slug: string
+  status: string
+  is_active: boolean
+  auth: Record<string, unknown>
+  theme: Record<string, unknown>
+  finances: Record<string, unknown>
+  sequences_config: Record<string, unknown>
+}
+
+export interface UserOut {
+  id: string
+  email: string
+  name: string
+  role: string
+  is_active: boolean
+  employee_number: string | null
+  default_workstation_code: string | null
+  last_login_at: string | null
+}
+
+export interface SeqCfg {
+  prefix: string
+  padding: number
+}
+
+export interface SequencesOut {
+  order: SeqCfg
+  lot: SeqCfg
+}
+
+export interface WorkstationOut {
+  id: string
+  group_id: string | null
+  code: string
+  name: string
+  color: string
+  hourly_cost: number
+  registration_method: string
+  maintenance_interval_hours: number
+  maintenance_pre_warning_hours: number
+  last_maintenance_reset: string | null
+  accumulated_hours: number
+  is_active: boolean
+}
+
+export interface WorkstationGroupOut {
+  id: string
+  name: string
+  color: string
+}
+
+export interface RoleOut {
+  id: string
+  role_key: string
+  name: string
+  permissions: string[]
+  is_system: boolean
+}
+
 const BASE = '/api/v1'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -100,6 +245,182 @@ export const api = {
 
   getEvents(tenantId: string): Promise<{ events: EventData[] }> {
     return request(`/events/${tenantId}`)
+  },
+
+  listIncidencias(): Promise<{ incidencias: IncidenciaItem[] }> {
+    return request('/incidencias')
+  },
+
+  getOee(): Promise<OeeData> {
+    return request('/supervisor/oee')
+  },
+
+  getKpis(): Promise<KpisData> {
+    return request('/supervisor/kpis')
+  },
+
+  listOrders(): Promise<OrderItem[]> {
+    return request('/orders')
+  },
+
+  getTrace(orderId: string): Promise<TraceEvent[]> {
+    return request(`/trace/orders/${orderId}`)
+  },
+
+  getQualityModels(): Promise<QualityModel[]> {
+    return request('/quality/models')
+  },
+
+  createQualityCheck(data: { order_id: string; workstation_id: string; manufacturing_model_id: string; stock_item_id: string; measurements: { name: string; value_entered: number | boolean | string }[] }): Promise<{ record: { overall_status: string } }> {
+    return request('/quality/checks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  createIncidencia(data: { descripcion: string; tipo: string; linea_id: string; foto_data_url?: string | null; photo_session_id?: string | null }): Promise<{ id: string }> {
+    return request('/incidencias', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  createIncidenciaUploadSession(): Promise<{ sessionId: string; expiresAt: string }> {
+    return request('/incidencias/upload-session', {
+      method: 'POST',
+    })
+  },
+
+  getIncidenciaUploadSession(sessionId: string): Promise<{ sessionId: string; status: string; expires_at: string; has_photo: boolean; photo_data_url?: string | null }> {
+    return request(`/incidencias/upload-session/${sessionId}`)
+  },
+
+  scanCoil(coil_id?: string, lote?: string): Promise<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string } | null> {
+    return request(`/stock-items/scan?coil_id=${coil_id ?? ''}&lote=${lote ?? ''}`)
+  },
+
+  recordProduction(data: { order_id: string; line_id: string; incremental_quantity: number; hours_worked?: number; observaciones?: string }): Promise<{ incremental_quantity: number; consumed_amount: number; consumption_unit: string; calculation_method: string }> {
+    return request('/production/record', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  finBobina(data: { stock_item_id: string; order_id: string; line_id: string; radio_mm: number }): Promise<{ msg: string; peso_restante_kg: number; merma_kg: number; merma_cost: number }> {
+    return request('/stock/fin-bobina', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  retirarPico(data: { stock_item_id: string }): Promise<{ msg: string }> {
+    return request('/stock/retirar', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // Admin endpoints
+  getTenant(): Promise<TenantOut> {
+    return request('/admin/tenant')
+  },
+
+  updateTenant(data: Partial<TenantOut>): Promise<TenantOut> {
+    return request('/admin/tenant', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  getUsers(): Promise<UserOut[]> {
+    return request('/admin/users')
+  },
+
+  createUser(data: Omit<UserOut, 'id' | 'is_active' | 'last_login_at'> & { password: string }): Promise<UserOut> {
+    return request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  updateUser(id: string, data: Partial<UserOut>): Promise<UserOut> {
+    return request(`/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  deleteUser(id: string): Promise<void> {
+    return request<void>(`/admin/users/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  getSequences(): Promise<SequencesOut> {
+    return request('/admin/sequences')
+  },
+
+  updateSequences(data: SequencesOut): Promise<SequencesOut> {
+    return request('/admin/sequences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  getWorkstations(): Promise<WorkstationOut[]> {
+    return request('/admin/workstations')
+  },
+
+  createWorkstation(data: Omit<WorkstationOut, 'id'>): Promise<WorkstationOut> {
+    return request('/admin/workstations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  updateWorkstation(id: string, data: Partial<WorkstationOut>): Promise<WorkstationOut> {
+    return request(`/admin/workstations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  deleteWorkstation(id: string): Promise<void> {
+    return request<void>(`/admin/workstations/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  updateIncidencia(id: string, data: Partial<IncidenciaItem & { resolucion_tipo?: string | null; resolucion_descripcion?: string | null; tiempo_parada_min?: number | null; coste?: number | null }>): Promise<IncidenciaItem> {
+    return request(`/incidencias/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  getNextOrder(): Promise<string> {
+    return request<{ next: string }>('/admin/sequences/next/order')
+      .then(r => r.next)
+  },
+
+  getNextLot(): Promise<string> {
+    return request<{ next: string }>('/admin/sequences/next/lot')
+      .then(r => r.next)
+  },
+
+  getWorkstationGroups(): Promise<WorkstationGroupOut[]> {
+    return request('/admin/workstations/groups')
+  },
+
+  getRoles(): Promise<RoleOut[]> {
+    return request('/admin/roles')
+  },
+
+  updateRole(id: string, data: Partial<RoleOut>): Promise<RoleOut> {
+    return request(`/admin/roles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
   },
 }
 
