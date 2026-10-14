@@ -98,7 +98,6 @@ jobs:
         run: npm ci
 
       - name: Deploy to Vercel
-        working-directory: frontend
         run: npx vercel deploy --prod --yes
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
