@@ -5,13 +5,6 @@ import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 
 interface CoilScan {
-}
-interface PlanCheck {
-}
-interface QualityModel {
-}
-
-interface CoilScan {
   id: string
   lote: string
   coil_id: string | null
@@ -44,8 +37,9 @@ interface QualityModel {
   quality_plan: PlanCheck[]
 }
 
-interface OrdenInfo {
+interface OrdenDetalle {
   id: string
+  line_id: string
   workstation_id: string | null
 }
 
@@ -64,8 +58,16 @@ function estadoCalidad(estado: string): string {
 export function OperarioPage() {
   const [coilId, setCoilId] = useState('')
   const [scan, setScan] = useState<CoilScan | null>(null)
-  const [scanError, setScanError] = useState('')
   const [vinculada, setVinculada] = useState(false)
+  const [ordenDetalle, setOrdenDetalle] = useState<OrdenDetalle | null>(null)
+  const [toasts, setToasts] = useState<Array<{id: string; type: "success" | "error"; message: string}>>([]);
+  const showToast = (type: "success" | "error", message: string) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev, {id, type, message}]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
 
   // Recordatorios de autocontrol NO bloqueantes (spec 04 §3.2.5): el
   // backend expone el estado; aquí se calculan los 15 min del primer aviso
@@ -116,44 +118,48 @@ export function OperarioPage() {
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
-    setScanError('')
+    showToast("error", '')
     setScan(null)
     try {
       const res = await api.scanCoil(coilId.trim(), '')
       if (!res) {
-        setScanError('Bobina no encontrada. Comprueba el código.')
+        showToast("error", 'Bobina no encontrada. Comprueba el código.')
         return
       }
       setScan(res)
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : 'Error de conexión')
+      showToast("error", err instanceof Error ? err.message : 'Error de conexión')
     }
   }
 
   const handleLink = async () => {
-    setScanError('')
+    showToast("error", '')
     if (!scan) return
+    if (!ordenDetalle || !ordenDetalle.line_id) {
+      showToast("error", 'No se pudo obtener la línea de la orden activa')
+      return
+    }
     try {
-      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
+      await api.linkCoil({
+        stock_item_id: scan.id,
+        order_id: ordenDetalle.id,
+        line_id: ordenDetalle.line_id,
+      })
       setVinculada(true)
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : 'Error al vincular')
+      showToast("error", err instanceof Error ? err.message : 'Error al vincular')
     }
   }
 
   const [radioMm, setRadioMm] = useState('')
-  const [finBobinaMsg, setFinBobinaMsg] = useState('')
   const [piezas, setPiezas] = useState('')
   const [horas, setHoras] = useState('')
 
   // Autocontrol de calidad (spec 04): plantilla + orden de la demo
   const [models, setModels] = useState<QualityModel[]>([])
-  const [ordenActual, setOrdenActual] = useState<OrdenInfo | null>(null)
   const [mediciones, setMediciones] = useState<
     Record<string, number | boolean | string>
   >({})
-  const [qcMsg, setQcMsg] = useState('')
-  const [qcError, setQcError] = useState('')
 
   useEffect(() => {
     api.getQualityModels()
@@ -164,9 +170,31 @@ export function OperarioPage() {
     api.listOrders()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          setOrdenActual({
-            id: data[0].id,
-            workstation_id: data[0].workstation_id ?? null,
+          const firstOrder = data[0]
+          // Fetch order detail to get line_id
+          api.getOrder(firstOrder.id).then((orderDetail) => {
+            if (orderDetail && orderDetail.lines && orderDetail.lines.length > 0) {
+              const line = orderDetail.lines[0]
+              setOrdenDetalle({
+                id: orderDetail.id,
+                line_id: line.id,
+                workstation_id: line.workstation_id,
+              })
+            } else {
+              // Fallback if no lines
+              setOrdenDetalle({
+                id: firstOrder.id,
+                line_id: '',
+                workstation_id: firstOrder.workstation_id ?? null,
+              })
+            }
+          }).catch(() => {
+            // If fetching detail fails, fallback
+            setOrdenDetalle({
+              id: firstOrder.id,
+              line_id: '',
+              workstation_id: firstOrder.workstation_id ?? null,
+            })
           })
         }
       })
@@ -174,7 +202,7 @@ export function OperarioPage() {
   }, [])
 
   const modelo = models[0] ?? null
-  const puedeAutocontrol = Boolean(modelo && ordenActual?.workstation_id)
+  const puedeAutocontrol = Boolean(modelo && ordenDetalle?.workstation_id)
 
   const setMedicion = (name: string, valor: number | boolean | string) => {
     setMediciones((prev) => ({ ...prev, [name]: valor }))
@@ -182,30 +210,30 @@ export function OperarioPage() {
 
   const handleQualityCheck = async (e: React.FormEvent) => {
     e.preventDefault()
-    setQcMsg('')
-    setQcError('')
-    if (!modelo || !ordenActual || !scan) return
+    // Toast clearing removed - toasts now persist until next operation
+
+    if (!modelo || !ordenDetalle || !scan) return
     const lista = Object.entries(mediciones)
       .filter(([, v]) => v !== '' && v !== undefined)
-      .map(([name, value]) => ({ name: name, value_entered: value }))
+      .map(([name, value]) => ({ check_name: name, value_entered: value }))
     if (lista.length === 0) {
-      setQcError('Mide al menos un control antes de registrar.')
+      showToast("error", 'Mide al menos un control antes de registrar.')
       return
     }
     try {
       const res = await api.createQualityCheck({
-        order_id: ordenActual.id,
-        workstation_id: ordenActual.workstation_id ?? '',
+        order_id: ordenDetalle.id,
+        workstation_id: ordenDetalle.workstation_id ?? '',
         manufacturing_model_id: modelo.id,
         stock_item_id: scan.id,
         measurements: lista,
       })
-      setQcMsg(estadoCalidad(res.record?.overall_status ?? ''))
+      showToast("success", estadoCalidad(res.record?.overall_status ?? ''))
       setMediciones({})
       // Un autocontrol registrado reinicia el temporizador de recordatorios
       notifyCheckRegistered()
     } catch (err) {
-      setQcError(err instanceof Error ? err.message : 'Error de conexión')
+      showToast("error", err instanceof Error ? err.message : 'Error de conexión')
     }
   }
 
@@ -220,8 +248,6 @@ export function OperarioPage() {
   >('form')
   const [incDescripcion, setIncDescripcion] = useState('')
   const [incTipo, setIncTipo] = useState('maquina')
-  const [incMsg, setIncMsg] = useState('')
-  const [incError, setIncError] = useState('')
   const [incFecha, setIncFecha] = useState('')
   const incPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -233,7 +259,7 @@ export function OperarioPage() {
   }
 
   const adjuntarFoto = () => {
-    setIncError('')
+    showToast("error", '')
     setIncStatus('creating')
     setIncSession(null)
     setIncPhotoUrl(null)
@@ -258,7 +284,7 @@ export function OperarioPage() {
       })
       .catch(() => {
         setIncStatus('form')
-        setIncError('No se pudo crear la sesión de subida. Inténtalo de nuevo.')
+        showToast("error", 'No se pudo crear la sesión de subida. Inténtalo de nuevo.')
       })
   }
 
@@ -276,8 +302,8 @@ export function OperarioPage() {
     setIncPhotoUrl(null)
     setIncDescripcion('')
     setIncTipo('maquina')
-    setIncMsg('')
-    setIncError('')
+    // Toast clearing removed - toasts now persist until next operation
+
     setIncFecha(new Date().toLocaleString('es-ES'))
   }
 
@@ -287,48 +313,52 @@ export function OperarioPage() {
   }
 
   const enviarIncidencia = async () => {
-    setIncMsg('')
-    setIncError('')
+    // Toast clearing removed - toasts now persist until next operation
+
     if (!incDescripcion.trim()) {
-      setIncError('Describe el problema antes de reportar.')
+      showToast("error", 'Describe el problema antes de reportar.')
       return
     }
     setIncStatus('submitting')
     try {
       await api.createIncidencia({
-        linea_id: ordenActual?.workstation_id ?? '',
+        linea_id: ordenDetalle?.workstation_id ?? '',
         descripcion: incDescripcion.trim(),
         tipo: incTipo,
         photo_session_id: incSession?.sessionId ?? null,
       })
-      setIncMsg('Incidencia registrada')
+      showToast("success", 'Incidencia registrada')
       setIncModalOpen(false)
       stopIncPoll()
     } catch (err) {
       setIncStatus(incPhotoUrl ? 'photo' : 'form')
-      setIncError(err instanceof Error ? err.message : 'Error de conexión')
+      showToast("error", err instanceof Error ? err.message : 'Error de conexión')
     }
   }
 
   const handleRecordProduction = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFinBobinaMsg('')
+    showToast("success", '')
     if (!scan) return
+    if (!ordenDetalle || !ordenDetalle.line_id) {
+      showToast("success", 'No se pudo obtener la orden activa')
+      return
+    }
     try {
-      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
       const res = await api.recordProduction({
-        order_id: '00000000-0000-0000-0000-000000000000',
-        line_id: '00000000-0000-0000-0000-000000000000',
+        order_id: ordenDetalle.id,
+        line_id: ordenDetalle.line_id,
         incremental_quantity: Number(piezas),
         hours_worked: Number(horas || 0),
+        observaciones: '',
       })
-      setFinBobinaMsg(
+      showToast("success", 
         `${res.incremental_quantity ?? 0} piezas registradas · ${res.consumed_amount ?? 0} ${res.consumption_unit ?? ''} consumidos (${res.calculation_method ?? ''})`,
       )
       setPiezas('')
       setHoras('')
     } catch (err) {
-      setFinBobinaMsg(
+      showToast("success", 
         err instanceof Error ? err.message : 'Error al registrar producción',
       )
     }
@@ -336,40 +366,47 @@ export function OperarioPage() {
 
   const handleFinBobina = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFinBobinaMsg('')
+    showToast("success", '')
     if (!scan) return
+    if (!ordenDetalle || !ordenDetalle.line_id) {
+      showToast("success", 'No se pudo obtener la orden activa')
+      return
+    }
     try {
-      // TODO(Fase 3): order_id/line_id desde la orden activa del operario
       const res = await api.finBobina({
         stock_item_id: scan.id,
-        order_id: '00000000-0000-0000-0000-000000000000',
-        line_id: '00000000-0000-0000-0000-000000000000',
+        order_id: ordenDetalle.id,
+        line_id: ordenDetalle.line_id,
         radio_mm: Number(radioMm),
       })
-      setFinBobinaMsg(
+      showToast("success", 
         `${res.msg}: quedan ${res.peso_restante_kg} kg, ${res.merma_kg} kg de merma (${res.merma_cost} €)`,
       )
       setVinculada(false)
       setScan(null)
       setCoilId('')
     } catch (err) {
-      setFinBobinaMsg(
+      showToast("success", 
         err instanceof Error ? err.message : 'Error al cerrar bobina',
       )
     }
   }
 
   const handleRetirarPico = async () => {
-    setFinBobinaMsg('')
+    showToast("success", '')
     if (!scan) return
+    if (!ordenDetalle || !ordenDetalle.line_id) {
+      showToast("success", 'No se pudo obtener la orden activa')
+      return
+    }
     try {
       const res = await api.retirarPico({ stock_item_id: scan.id })
-      setFinBobinaMsg(res.msg)
+      showToast("success", res.msg)
       setVinculada(false)
       setScan(null)
       setCoilId('')
     } catch (err) {
-      setFinBobinaMsg(
+      showToast("success", 
         err instanceof Error ? err.message : 'Error al retirar pico',
       )
     }
@@ -377,6 +414,20 @@ export function OperarioPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
+      {/* Toast container for success/error */}
+      <div className="top-6 right-6 fixed z-[90]">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`mb-3 px-4 py-2 rounded-sm border 
+            ${toast.type === "success" 
+              ? "border-kavana-ok/60 bg-kavana-ok/20 text-kavana-ok"
+              : "border-kavana-danger/60 bg-kavana-danger/20 text-kavana-danger"}`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
       {/* Recordatorio de autocontrol NO bloqueante (spec 04 §3.2.5): toast
           fijo visible, no interrumpe el flujo ni detiene la línea. */}
       {reminderToast && (
@@ -417,11 +468,7 @@ export function OperarioPage() {
             />
           </label>
 
-          {scanError && (
-            <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-              {scanError}
-            </p>
-          )}
+
 
           {/* Ficha de la bobina escaneada (modo automático) */}
           {scan && (
@@ -473,11 +520,7 @@ export function OperarioPage() {
             Bobina vinculada a la orden. Registra producción para consumir kg.
           </p>
 
-          {finBobinaMsg && (
-            <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
-              {finBobinaMsg}
-            </p>
-          )}
+
 
           {/* Fin de bobina: medir los milímetros de radio restantes (visión Jorge) */}
           <form
@@ -562,16 +605,8 @@ export function OperarioPage() {
                 {modelo?.name} · {modelo?.code}
               </p>
 
-              {qcMsg && (
-                <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
-                  {qcMsg}
-                </p>
-              )}
-              {qcError && (
-                <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-                  {qcError}
-                </p>
-              )}
+
+
 
               {modelo?.quality_plan.map((check) => (
                 <div key={check.id} className="space-y-1">
@@ -669,7 +704,7 @@ export function OperarioPage() {
       )}
 
       {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
-      {ordenActual?.workstation_id && (
+      {ordenDetalle?.workstation_id && (
         <div className="space-y-3">
           <button
             onClick={abrirModalIncidencia}
@@ -677,11 +712,7 @@ export function OperarioPage() {
           >
             ⚠️ Reportar incidencia
           </button>
-          {incMsg && (
-            <p className="text-kavana-ok text-sm border border-kavana-ok/40 rounded-sm p-2">
-              {incMsg}
-            </p>
-          )}
+
         </div>
       )}
 
@@ -701,11 +732,7 @@ export function OperarioPage() {
               </button>
             </div>
 
-            {incError && (
-              <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-                {incError}
-              </p>
-            )}
+
 
             {/* Datos auto-importados (formulario clásico): el sistema conoce
                 operario, puesto, modelo y fecha; el operario solo observa. */}
@@ -716,7 +743,7 @@ export function OperarioPage() {
               </div>
               <div>
                 <span className="label-industrial text-kavana-text-dim">Puesto</span>
-                <p className="font-semibold">{ordenActual?.workstation_id}</p>
+                <p className="font-semibold">{ordenDetalle?.workstation_id}</p>
               </div>
               <div>
                 <span className="label-industrial text-kavana-text-dim">Modelo</span>
@@ -846,9 +873,13 @@ export function OperarioPage() {
         <summary className="label-industrial text-xs text-kavana-text-dim cursor-pointer">
           Detalles de la orden
         </summary>
-        <p className="mt-2 text-sm text-kavana-text-dim">
-          Aquí se mostrará material, dimensiones, peso y piezas objetivo.
-        </p>
+        {ordenDetalle && (
+          <div className="mt-2 space-y-1 text-sm text-kavana-text-dim">
+            <p><strong>Orden:</strong> {ordenDetalle.id}</p>
+            <p><strong>Línea:</strong> {ordenDetalle.line_id || '—'}</p>
+            <p><strong>Puesto:</strong> {ordenDetalle.workstation_id || '—'}</p>
+          </div>
+        )}
       </details>
 
       {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}

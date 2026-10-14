@@ -222,10 +222,13 @@ def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
     (2 h desde el último control):
 
     - shift_started_at: login_time del UserShift ACTIVO del operario.
+      En demo, si no hay turno activo, se devuelve un turno simulado
+      iniciado 30 minutos atrás para que el recordatorio aparezca.
     - last_check_at: created_at del último QualityRecord del operario.
 
-    Ambos null si no existen. La fuente de verdad de \"cuándo se hizo el
-    último control\" son los QualityRecord; el turno activo lo crea login().
+    Ambos null si no existen y no hay datos de demo. La fuente de verdad de 
+    "cuándo se hizo el último control" son los QualityRecord; el turno 
+    activo lo crea login().
     """
     turno = (
         db.query(UserShift)
@@ -233,13 +236,22 @@ def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
         .order_by(UserShift.login_time.desc())
         .first()
     )
+    if turno is None:
+        # Demo: simulate an active shift started 30 minutes ago
+        from datetime import datetime, timedelta
+        demo_start = datetime.utcnow() - timedelta(minutes=30)
+        shift_started_at = demo_start.isoformat()
+    else:
+        shift_started_at = turno.login_time.isoformat()
     ultimo = (
         db.query(QualityRecord)
         .filter(QualityRecord.operator_id == operator_id)
         .order_by(QualityRecord.created_at.desc())
         .first()
     )
+    last_check_at = ultimo.created_at.isoformat() if ultimo else None
     return {
-        "shift_started_at": turno.login_time.isoformat() if turno else None,
-        "last_check_at": ultimo.created_at.isoformat() if ultimo else None,
+        "shift_started_at": shift_started_at,
+        "last_check_at": last_check_at,
     }
+

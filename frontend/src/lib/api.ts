@@ -263,6 +263,10 @@ export const api = {
     return request('/orders')
   },
 
+  getOrder(orderId: string): Promise<any> {
+    return request(`/orders/${orderId}`)
+  },
+
   getTrace(orderId: string): Promise<TraceEvent[]> {
     return request(`/trace/orders/${orderId}`)
   },
@@ -303,21 +307,28 @@ export const api = {
     return request('/production/record', {
       method: 'POST',
       body: JSON.stringify(data),
-    })
+    });
   },
 
   finBobina(data: { stock_item_id: string; order_id: string; line_id: string; radio_mm: number }): Promise<{ msg: string; peso_restante_kg: number; merma_kg: number; merma_cost: number }> {
     return request('/stock/fin-bobina', {
       method: 'POST',
       body: JSON.stringify(data),
-    })
+    });
   },
 
   retirarPico(data: { stock_item_id: string }): Promise<{ msg: string }> {
     return request('/stock/retirar', {
       method: 'POST',
       body: JSON.stringify(data),
-    })
+    });
+  },
+
+  linkCoil(data: { stock_item_id: string; order_id: string; line_id: string }): Promise<{ success: boolean; coil_weight: number; order: string }> {
+    return request('/stock-items/link', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   // Admin endpoints

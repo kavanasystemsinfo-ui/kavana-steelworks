@@ -26,3 +26,5 @@ fly.toml.local
 .pytest_cache/
 .ruff_cache/
 .coverage
+.vercel
+.env*
