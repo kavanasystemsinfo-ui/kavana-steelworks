@@ -11,15 +11,14 @@ todavía, se usa el primer tenant. Pendiente Fase 5: tenant desde el JWT.
 import uuid
 from datetime import datetime
 from typing import Annotated
-from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.security import autenticar, require_roles
-from app.models import User, Order, OrderLine
+from app.models import Order, User
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
 
@@ -129,7 +128,9 @@ def get_order(
                 "real_material_cost": float(line.real_material_cost),
                 "real_cost": float(line.real_cost),
                 "scrap_material_qty": float(line.scrap_material_qty),
-                "target_material_qty": float(line.target_material_qty) if line.target_material_qty else None,
+                "target_material_qty": (
+                    float(line.target_material_qty) if line.target_material_qty else None
+                ),
                 "target_material_unit": line.target_material_unit,
                 "meters_per_piece": float(line.meters_per_piece) if line.meters_per_piece else None,
             }

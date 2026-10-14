@@ -275,7 +275,7 @@ export const api = {
     return request('/quality/models')
   },
 
-  createQualityCheck(data: { order_id: string; workstation_id: string; manufacturing_model_id: string; stock_item_id: string; measurements: { name: string; value_entered: number | boolean | string }[] }): Promise<{ record: { overall_status: string } }> {
+  createQualityCheck(data: { order_id: string; workstation_id: string; manufacturing_model_id: string; stock_item_id: string; measurements: { check_name: string; value_entered: number | boolean | string }[] }): Promise<{ record: { overall_status: string } }> {
     return request('/quality/checks', {
       method: 'POST',
       body: JSON.stringify(data),
