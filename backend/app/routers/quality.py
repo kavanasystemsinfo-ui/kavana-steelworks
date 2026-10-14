@@ -112,7 +112,7 @@ def registrar_autocontrol(
     try:
         record = service(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
+            tenant_id=current_user.tenant_id,
             operator_id=current_user.id,
             order_id=body.order_id,
             workstation_id=body.workstation_id,

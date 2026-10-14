@@ -61,7 +61,7 @@ def record_production(
     try:
         return record_service(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
+            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             order_id=body.order_id,
             line_id=body.line_id,
