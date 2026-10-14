@@ -146,7 +146,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
           }),
         })
       }
-      if (url === '/api/v1/orders') {
+      if (url === '/api/v1/orders/available') {
         return Promise.resolve({
           ok: true,
           json: async () => [
@@ -240,7 +240,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
             }),
           })
         }
-        if (url === '/api/v1/orders') {
+        if (url === '/api/v1/orders/available') {
           return Promise.resolve({
             ok: true,
             json: async () => [
@@ -373,7 +373,7 @@ describe('Autocontrol de calidad (spec 04)', () => {
             }),
           })
         }
-        if (url === '/api/v1/orders') {
+        if (url === '/api/v1/orders/available') {
           return Promise.resolve({
             ok: true,
             json: async () => [
@@ -445,7 +445,7 @@ describe('Autocontrol de calidad (spec 04)', () => {
           }),
         })
       }
-      if (url === '/api/v1/orders') {
+      if (url === '/api/v1/orders/available') {
         return Promise.resolve({
           ok: true,
           json: async () => [
@@ -542,7 +542,7 @@ describe('Autocontrol de calidad (spec 04)', () => {
           }),
         })
       }
-      if (url === '/api/v1/orders') {
+      if (url === '/api/v1/orders/available') {
         return Promise.resolve({
           ok: true,
           json: async () => [

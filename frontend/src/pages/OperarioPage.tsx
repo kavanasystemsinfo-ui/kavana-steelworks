@@ -167,7 +167,7 @@ export function OperarioPage() {
         if (Array.isArray(data) && data.length > 0) setModels(data)
       })
       .catch(() => {})
-    api.listOrders()
+    api.availableOrders()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           const firstOrder = data[0]

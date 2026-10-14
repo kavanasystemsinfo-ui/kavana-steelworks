@@ -83,13 +83,60 @@ def list_orders(
     ]
 
 
+@router.get("/available", response_model=list[OrderOut])
+def list_available_orders(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
+    """Órdenes disponibles para el panel del operario (port de manufacturing).
+
+    A diferencia del listado global (solo supervisor/admin), el operario solo
+    ve las órdenes activas de su propia estación de trabajo, derivada de
+    default_workstation_code del usuario. Esto evita que el panel del operario
+    dependa del listado supervisor (que le devolvía 403) y termine enviando
+    un order_id nulo al registrar producción.
+    """
+    from app.models import Order, OrderLine
+
+    ws_code = current_user.default_workstation_code
+    if not ws_code:
+        return []
+
+    ordenes = (
+        db.query(Order)
+        .join(OrderLine, OrderLine.order_id == Order.id)
+        .filter(
+            Order.tenant_id == current_user.tenant_id,
+            Order.estado.in_(("active", "draft")),
+            OrderLine.workstation_id == ws_code,
+        )
+        .order_by(Order.created_at.desc())
+        .limit(LIMITE_ORDENES)
+        .all()
+    )
+    return [
+        OrderOut(
+            id=o.id,
+            numero=o.numero,
+            estado=o.estado,
+            cliente=o.cliente,
+            fecha_entrega=o.fecha_entrega,
+            workstation_id=o.lines[0].workstation_id if o.lines else None,
+        )
+        for o in ordenes
+    ]
+
+
 @router.get("/{order_id}", response_model=dict)
 def get_order(
     order_id: uuid.UUID,
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
     ] = None,
 ):
     """Obtener una orden específica con sus líneas para edición/vinculación."""

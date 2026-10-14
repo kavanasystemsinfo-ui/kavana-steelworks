@@ -263,6 +263,10 @@ export const api = {
     return request('/orders')
   },
 
+  availableOrders(): Promise<OrderItem[]> {
+    return request('/orders/available')
+  },
+
   getOrder(orderId: string): Promise<any> {
     return request(`/orders/${orderId}`)
   },
