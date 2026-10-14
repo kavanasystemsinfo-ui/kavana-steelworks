@@ -205,7 +205,7 @@ def scan_coil(
     from app.services.inventory import find_coil
 
     try:
-        return find_coil(db, None, coil_id=coil_id, lote=lote)
+        return find_coil(db, current_user.tenant_id, coil_id=coil_id, lote=lote)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -231,7 +231,7 @@ def link(
     try:
         return link_coil(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
+            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             order_id=body.order_id,
@@ -264,7 +264,7 @@ def fin_bobina(
     try:
         return create_retal(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
+            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             radio_mm=body.radio_mm,
@@ -301,7 +301,7 @@ def retirar(
     try:
         return retirar_pico(
             db,
-            tenant_id=None,  # TODO: tenant desde el token JWT
+            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             stock_item_id=body.stock_item_id,
             order_id=body.order_id,
