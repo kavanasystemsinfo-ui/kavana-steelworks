@@ -10,7 +10,6 @@ producción enviaba order_id nulo.
 """
 
 from app.main import app
-from app.models import Order
 from app.routers import orders as orders_router
 from tests.helpers import (
     authed_client_for,
