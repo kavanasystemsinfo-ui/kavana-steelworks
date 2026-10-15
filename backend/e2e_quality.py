@@ -36,7 +36,7 @@ def main() -> None:
 
     db = SessionLocal()
     seed_demo(db)  # idempotente: crea tenant, bobina, orden, modelo de calidad
-    tenant = db.query(Tenant).filter_by(name="Demo Aceros").one()
+    tenant = db.query(Tenant).filter_by(slug="demo").one()
     orden = db.query(Order).filter_by(tenant_id=tenant.id, numero="OP-DEMO-001").one()
     modelo = db.query(ManufacturingModel).filter_by(code="PERFIL-DEMO-001").one()
     token = login(db, tenant.id, "operario@demo.local", "kavana")

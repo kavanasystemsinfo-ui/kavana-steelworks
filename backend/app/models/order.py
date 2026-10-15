@@ -66,7 +66,9 @@ class OrderLine(UUIDMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("orders.id"), nullable=False, index=True
     )
     linea_numero: Mapped[int] = mapped_column(nullable=False)
-    product_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("products.id")
+    )
     modelo_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
     material_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("materials.id"), index=True

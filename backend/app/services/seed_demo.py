@@ -103,8 +103,15 @@ def seed_demo(db: Session) -> dict:
     Idempotente: si el tenant ya existe, solo asegura que la línea demo declare
     el material (necesario para la validación de compatibilidad en despliegues
     donde el seed original creó la línea sin material_id).
+
+    El lookup es por slug (identidad estable): seed_estanterias renombra el
+    tenant a "Kavana Estanterías", de modo que buscar por name crearía un
+    duplicado con slug 'demo' en cada arranque. Se mantiene el name legacy
+    como fallback para despliegues antiguos sin slug.
     """
-    existente = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
+    existente = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
+    if existente is None:
+        existente = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
     if existente is not None:
         # Asegurar campos de spec 07 (despliegues pre-migración)
         if not existente.slug:

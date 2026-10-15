@@ -12,6 +12,7 @@ from app.models.incidencia import Incidencia, IncidenciaHistorial  # noqa: F401
 from app.models.incidencia_upload import IncidenciaUploadSession  # noqa: F401
 from app.models.material import Material, StockItem  # noqa: F401
 from app.models.order import Order, OrderLine  # noqa: F401
+from app.models.product import Product, ProductComponent  # noqa: F401
 from app.models.quality import (  # noqa: F401
     ManufacturingModel,
     QualityMeasurement,
@@ -35,6 +36,8 @@ __all__ = [
     "StockItem",
     "Order",
     "OrderLine",
+    "Product",
+    "ProductComponent",
     "Tenant",
     "User",
     "TenantFeature",

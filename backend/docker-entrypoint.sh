@@ -11,10 +11,13 @@ python - <<'PY'
 from sqlalchemy.orm import Session
 from app.core.database import engine
 from app.services.seed_demo import seed_demo
+from app.services.seed_estanterias import seed_estanterias
 
 with Session(engine) as db:
     resultado = seed_demo(db)
     print(f"[seed] created={resultado['created']} tenant={resultado['tenant']}")
+    resultado2 = seed_estanterias(db)
+    print(f"[seed-estanterias] created={resultado2['created']} tenant={resultado2['tenant']}")
 PY
 
 echo "[entrypoint] arrancando uvicorn en 0.0.0.0:8000"

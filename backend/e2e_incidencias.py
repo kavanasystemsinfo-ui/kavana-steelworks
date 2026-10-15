@@ -38,7 +38,7 @@ def main() -> None:
 
     db = SessionLocal()
     seed_demo(db)
-    tenant = db.query(Tenant).filter_by(name="Demo Aceros").one()
+    tenant = db.query(Tenant).filter_by(slug="demo").one()
     orden = db.query(Order).filter_by(tenant_id=tenant.id, numero="OP-DEMO-001").one()
 
     # Login con los usuarios demo (password kavana, Fase 6)
