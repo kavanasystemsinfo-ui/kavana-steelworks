@@ -137,13 +137,13 @@ def test_idempotente(db_session):
     assert segundo["created"] is False
     assert db_session.scalar(select(Product)) is not None
     assert db_session.query(Product).count() == 10
-    assert db_session.query(ProductComponent).count() == db_session.query(
-        ProductComponent
-    ).count()
+    boms_1 = db_session.query(ProductComponent).count()
+    assert boms_1 >= 30
     # Sin duplicados de bobina
     bobs_antes = db_session.query(StockItem).count()
     seed_estanterias(db_session)
     assert db_session.query(StockItem).count() == bobs_antes
+    assert db_session.query(ProductComponent).count() == boms_1
 
 
 def test_seed_demo_y_estanterias_encadenados(db_session):
@@ -155,4 +155,34 @@ def test_seed_demo_y_estanterias_encadenados(db_session):
 
     tenants = db_session.query(Tenant).filter(Tenant.slug == "demo").all()
     assert len(tenants) == 1
+    assert db_session.query(Product).count() == 10
+
+
+def test_rename_con_slug_legacy_de_produccion(db_session):
+    """Produccion real: el tenant se creo con slug demo-aceros, no demo.
+
+    El seed debe encontrarlo por slug legacy o por name, renombrarlo y no
+    duplicar el tenant.
+    """
+    db_session.add(
+        Tenant(
+            name="Demo Aceros",
+            slug="demo-aceros",
+            status="active",
+            is_active=True,
+            auth={},
+            theme={"branding": {"companyName": "Demo Aceros"}},
+            finances={},
+            sequences_config={},
+        )
+    )
+    db_session.commit()
+
+    seed_demo(db_session)
+    resultado = seed_estanterias(db_session)
+
+    assert resultado["created"] is True
+    tenants = db_session.query(Tenant).all()
+    assert len(tenants) == 1, "no debe duplicar el tenant"
+    assert tenants[0].name == "Kavana Estanterías"
     assert db_session.query(Product).count() == 10

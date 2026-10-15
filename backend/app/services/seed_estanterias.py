@@ -230,10 +230,13 @@ PRODUCTOS = [
 def seed_estanterias(db: Session) -> dict:
     """Siembra el catalogo de estanterias. Idempotente.
 
-    Requiere que seed_demo haya creado el tenant slug 'demo'. Si el catalogo
-    ya existe solo asegura el rename del tenant.
+    Busca el tenant por identidad estable (ver buscar_tenant_demo en
+    seed_demo): en produccion el slug es 'demo-aceros'. Si el catalogo ya
+    existe solo asegura el rename del tenant.
     """
-    tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
+    from app.services.seed_demo import buscar_tenant_demo
+
+    tenant = buscar_tenant_demo(db)
     if tenant is None:
         return {"created": False, "tenant": None}
 

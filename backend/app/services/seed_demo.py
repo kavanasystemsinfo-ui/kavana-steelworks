@@ -97,6 +97,22 @@ def _asegurar_usuarios_demo(db: Session, tenant_id) -> None:
     db.commit()
 
 
+def buscar_tenant_demo(db: Session) -> Tenant | None:
+    """Localiza el tenant demo por identidad estable, tolerando la historia.
+
+    Orden: slug 'demo' (identity actual) -> slug 'demo-aceros' (como se creo
+    en produccion) -> name legacy 'Demo Aceros' (despliegues sin slug). Tras
+    el rename de seed_estanterias el name ya no sirve, por eso el slug es la
+    identidad primaria.
+    """
+    tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
+    if tenant is None:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo-aceros"))
+    if tenant is None:
+        tenant = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
+    return tenant
+
+
 def seed_demo(db: Session) -> dict:
     """Crea el tenant demo con material, bobina, orden y operario si no existe.
 
@@ -104,14 +120,11 @@ def seed_demo(db: Session) -> dict:
     el material (necesario para la validación de compatibilidad en despliegues
     donde el seed original creó la línea sin material_id).
 
-    El lookup es por slug (identidad estable): seed_estanterias renombra el
-    tenant a "Kavana Estanterías", de modo que buscar por name crearía un
-    duplicado con slug 'demo' en cada arranque. Se mantiene el name legacy
-    como fallback para despliegues antiguos sin slug.
+    El lookup es por identidad estable (ver buscar_tenant_demo): el rename de
+    seed_estanterias cambia el name, de modo que buscar por name crearía un
+    duplicado del tenant en cada arranque.
     """
-    existente = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
-    if existente is None:
-        existente = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
+    existente = buscar_tenant_demo(db)
     if existente is not None:
         # Asegurar campos de spec 07 (despliegues pre-migración)
         if not existente.slug:
