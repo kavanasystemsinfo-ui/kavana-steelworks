@@ -21,6 +21,7 @@ from app.routers import health as health_router
 from app.routers import incidencias as incidencias_router
 from app.routers import orders as orders_router
 from app.routers import production as production_router
+from app.routers import products as products_router
 from app.routers import quality as quality_router
 from app.routers import stock as stock_router
 from app.routers import supervisor as supervisor_router
@@ -66,6 +67,7 @@ app.include_router(auth_router.router)
 app.include_router(admin_router.router)
 app.include_router(incidencias_router.router)
 app.include_router(orders_router.router)
+app.include_router(products_router.router)
 app.include_router(production_router.router)
 app.include_router(quality_router.router)
 app.include_router(stock_router.router)
