@@ -121,6 +121,100 @@ export interface OrderItem {
   workstation_id: string | null
 }
 
+export interface OrderLineOut {
+  id: string
+  linea_numero: number
+  product_id: string | null
+  modelo_id: string | null
+  workstation_id: string
+  estado: string
+  total_quantity: number
+  produced_quantity: number
+  material_id: string | null
+  meters_per_piece: number | null
+}
+
+export interface OrderDetailOut {
+  id: string
+  numero: string
+  estado: string
+  cliente: string | null
+  fecha_entrega: string | null
+  notas: string | null
+  lines: OrderLineOut[]
+}
+
+export interface OrderLineIn {
+  workstation_id: string
+  total_quantity: number
+  linea_numero?: number
+  product_id?: string
+  modelo_id?: string
+  material_id?: string
+  meters_per_piece?: number
+}
+
+export interface OrderCreateIn {
+  cliente?: string | null
+  fecha_entrega?: string | null
+  notas?: string | null
+  estado_inicial?: 'draft' | 'active'
+  lines: OrderLineIn[]
+}
+
+export interface ProductComponentOut {
+  id: string
+  manufacturing_model_id: string | null
+  material_id: string | null
+  quantity: number
+  unit: string
+  position: number
+}
+
+export interface ProductOut {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  is_active: boolean
+  components: ProductComponentOut[]
+}
+
+export interface ProductComponentIn {
+  manufacturing_model_id?: string
+  material_id?: string
+  quantity: number
+  unit?: string
+}
+
+export interface ProductCreateIn {
+  code: string
+  name: string
+  description?: string | null
+  is_active?: boolean
+  components?: ProductComponentIn[]
+}
+
+export interface QualityMeasurementOut {
+  check_name: string
+  value_entered: number | boolean | string
+  is_passed: boolean
+  nominal: number | null
+  tol_plus: number | null
+  tol_minus: number | null
+}
+
+export interface QualityRecordOut {
+  id: string
+  order_id: string | null
+  workstation_id: string | null
+  overall_status: string
+  notes: string | null
+  created_at: string
+  operator: { id: string; name: string } | null
+  measurements: QualityMeasurementOut[]
+}
+
 export interface TraceEvent {
   id: string
   action: string
@@ -261,6 +355,42 @@ export const api = {
 
   listOrders(): Promise<OrderItem[]> {
     return request('/orders')
+  },
+
+  createOrder(data: OrderCreateIn): Promise<OrderDetailOut> {
+    return request('/orders', { method: 'POST', body: JSON.stringify(data) })
+  },
+
+  updateOrder(orderId: string, data: { cliente?: string | null; fecha_entrega?: string | null; notas?: string | null }): Promise<OrderDetailOut> {
+    return request(`/orders/${orderId}`, { method: 'PUT', body: JSON.stringify(data) })
+  },
+
+  transitionOrder(orderId: string, to: 'active' | 'completed' | 'cancelled'): Promise<OrderDetailOut> {
+    return request(`/orders/${orderId}/transition`, { method: 'POST', body: JSON.stringify({ to }) })
+  },
+
+  deleteOrder(orderId: string): Promise<void> {
+    return request<void>(`/orders/${orderId}`, { method: 'DELETE' })
+  },
+
+  listProducts(): Promise<ProductOut[]> {
+    return request('/products')
+  },
+
+  createProduct(data: ProductCreateIn): Promise<ProductOut> {
+    return request('/products', { method: 'POST', body: JSON.stringify(data) })
+  },
+
+  updateProduct(productId: string, data: Partial<ProductCreateIn>): Promise<ProductOut> {
+    return request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) })
+  },
+
+  deleteProduct(productId: string): Promise<void> {
+    return request<void>(`/products/${productId}`, { method: 'DELETE' })
+  },
+
+  getQualityRecords(limit = 20): Promise<{ success: boolean; records: QualityRecordOut[] }> {
+    return request(`/quality/records?limit=${limit}`)
   },
 
   availableOrders(): Promise<OrderItem[]> {
