@@ -429,3 +429,21 @@ def test_update_rol_no_existe_404(db_session, tenant, admin_user):
         json={"permissions": []},
     )
     assert r.status_code == 404, r.text
+
+
+# ── Lectura de puestos para el form de órdenes (Fase A1) ────────────────────
+
+
+def test_list_workstations_permitido_para_supervisor(db_session, tenant):
+    """GET /workstations es lectura de planta: el supervisor lo necesita para
+    el selector de puestos del form de creación de órdenes (Fase A1). El
+    alta/baja de puestos sigue siendo solo de admin."""
+    supervisor = make_user(db_session, tenant, email="sup-work@test.local", role="supervisor")
+    r = _do(db_session, supervisor, "get", "/api/v1/admin/workstations")
+    assert r.status_code == 200, r.text
+
+
+def test_list_workstations_denegado_para_operario(db_session, tenant):
+    operario = make_user(db_session, tenant, email="op-work@test.local", role="operator")
+    r = _do(db_session, operario, "get", "/api/v1/admin/workstations")
+    assert r.status_code == 403, r.text

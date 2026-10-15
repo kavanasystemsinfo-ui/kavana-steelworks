@@ -51,6 +51,9 @@ def get_current_user(
 
 
 AdminDep = Annotated[User, Depends(require_roles(get_current_user, ROL_ADMIN))]
+# Lectura de puestos abierta al supervisor: el form de creación de órdenes
+# (Fase A1) necesita el listado; el alta/baja sigue en AdminDep.
+PlantaReadDep = Annotated[User, Depends(require_roles(get_current_user, "supervisor", ROL_ADMIN))]
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
@@ -364,7 +367,7 @@ def next_sequence_endpoint(sequence_type: str, db: DbDep, current_user: AdminDep
 
 
 @router.get("/workstations", response_model=list[WorkstationOut])
-def list_workstations(db: DbDep, current_user: AdminDep):
+def list_workstations(db: DbDep, current_user: PlantaReadDep):
     """Lista los puestos del tenant junto con sus grupos."""
     return list(
         db.scalars(
