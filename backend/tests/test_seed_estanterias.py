@@ -29,10 +29,10 @@ def test_renombra_tenant_a_kavana_estanterias(db_session):
     assert tenant.theme["branding"]["companyName"] == "Kavana Estanterías"
 
 
-def test_crea_10_productos_con_bom(db_session):
+def test_crea_12_productos_con_bom(db_session):
     _sembrar(db_session)
     productos = db_session.scalars(select(Product)).all()
-    assert len(productos) == 10
+    assert len(productos) == 12
     codigos = {p.code for p in productos}
     assert "EST-PORTICO" in codigos
     assert "EST-ALTILLO" in codigos
@@ -136,7 +136,7 @@ def test_idempotente(db_session):
     assert primero["created"] is True
     assert segundo["created"] is False
     assert db_session.scalar(select(Product)) is not None
-    assert db_session.query(Product).count() == 10
+    assert db_session.query(Product).count() == 12
     boms_1 = db_session.query(ProductComponent).count()
     assert boms_1 >= 30
     # Sin duplicados de bobina
@@ -155,7 +155,7 @@ def test_seed_demo_y_estanterias_encadenados(db_session):
 
     tenants = db_session.query(Tenant).filter(Tenant.slug == "demo").all()
     assert len(tenants) == 1
-    assert db_session.query(Product).count() == 10
+    assert db_session.query(Product).count() == 12
 
 
 def test_rename_con_slug_legacy_de_produccion(db_session):
@@ -185,4 +185,4 @@ def test_rename_con_slug_legacy_de_produccion(db_session):
     tenants = db_session.query(Tenant).all()
     assert len(tenants) == 1, "no debe duplicar el tenant"
     assert tenants[0].name == "Kavana Estanterías"
-    assert db_session.query(Product).count() == 10
+    assert db_session.query(Product).count() == 12

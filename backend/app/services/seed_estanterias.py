@@ -8,10 +8,12 @@ Contenido:
 - Rename tenant "Demo Aceros" -> "Kavana Estanterías" (slug 'demo' intacto).
 - Grupos de trabajo = procesos (Corte, Punzonado, Doblado, Soldadura,
   Galvanizado, Montaje) + 7 puestos nuevos; LINEA-1..3 intactos.
-- Materias primas (bobinas de acero, perfiles, tubo, malla, tornillería)
-  con sus lotes/bobinas de stock y kardex de entrada.
-- 14 piezas (ManufacturingModel) con plan de autocontroles.
-- 10 productos terminados con BOM (piezas fabricadas + materiales directos).
+- Materias primas: flejes slit (galva DX51D+Z275 y decapado DC01) con
+  anchos desarrollados por perfilado, más perfiles, tubo, malla y
+  tornillería, con sus lotes/bobinas de stock y kardex de entrada.
+- 21 piezas (ManufacturingModel) con plan de autocontroles: familia real de
+  travesaños (91/101/108), largueros (135/205/212) y puntales (135/150/165).
+- 12 productos terminados con BOM (piezas fabricadas + materiales directos).
 - 3 órdenes nuevas (2 activas + 1 completada) con líneas ligadas a producto.
 - Histórico: production_logs, material_consumos, kardex de salida,
   autocontroles (quality_records) y una incidencia resuelta.
@@ -69,11 +71,24 @@ PUESTOS = [
     ("MONT-2", "Montaje y embalaje", "Montaje", "#16a085", "34", "quantity"),
 ]
 
+# Materia prima de perfilado: flejes slit de bobina madre. Los anchos son
+# el perímetro desarrollado de la sección plegada (web + 2 alas + 2 labios
+# menos retracción de doblez, ~1,7 mm/doblez 90°). Travesaños: ala 30,
+# labio 15. Largueros/puntales: fondo 70, labio 15.
 # (code, name, unit, cost, stock_min, ancho, espesor)
 MATERIALES = [
+    ("FLEJE-G175-12", "Fleje galva DX51D+Z275 175x1,2", "kg", "1.42", "400", "175", "1.2"),
+    ("FLEJE-G185-12", "Fleje galva DX51D+Z275 185x1,2", "kg", "1.42", "400", "185", "1.2"),
+    ("FLEJE-G190-12", "Fleje galva DX51D+Z275 190x1,2", "kg", "1.42", "400", "190", "1.2"),
+    ("FLEJE-G190-18", "Fleje galva DX51D+Z275 190x1,8", "kg", "1.40", "300", "190", "1.8"),
+    ("FLEJE-D265-15", "Fleje decapado DC01 265x1,5", "kg", "1.23", "400", "265", "1.5"),
+    ("FLEJE-D265-18", "Fleje decapado DC01 265x1,8", "kg", "1.22", "400", "265", "1.8"),
+    ("FLEJE-D310-15", "Fleje decapado DC01 310x1,5", "kg", "1.23", "350", "310", "1.5"),
+    ("FLEJE-D320-20", "Fleje decapado DC01 320x2,0", "kg", "1.19", "350", "320", "2.0"),
+    ("FLEJE-D365-18", "Fleje decapado DC01 365x1,8", "kg", "1.20", "400", "365", "1.8"),
+    ("FLEJE-D365-20", "Fleje decapado DC01 365x2,0", "kg", "1.19", "400", "365", "2.0"),
+    ("FLEJE-D370-20", "Fleje decapado DC01 370x2,0", "kg", "1.19", "350", "370", "2.0"),
     ("ACERO-S355", "Bobina acero S355 3.0x1500", "kg", "1.05", "500", "1500", "3.0"),
-    ("ACERO-DC04", "Bobina acero DC04 2.0x1250", "kg", "1.15", "400", "1250", "2.0"),
-    ("GALV-G90", "Bobina pregalvanizada G90 1.5x1250", "kg", "1.35", "400", "1250", "1.5"),
     ("PERFIL-U100", "Perfil U acero S235 100x50x4", "m", "6.50", "100", None, None),
     ("PERFIL-L60", "Angulo L60x60x5", "m", "4.20", "80", None, None),
     ("TUBO-4020", "Tubo rectangular 40x20x2", "m", "3.80", "80", None, None),
@@ -96,20 +111,64 @@ LOTES = [
         "1500", "3.0", "1.05", 10, "ALMACEN-2",
     ),
     (
-        "COIL-DC04-001", "DC04-2610-01", "ACERO-DC04", "2000", "kg",
-        "1250", "2.0", "1.15", 28, "ALMACEN-1",
+        "COIL-FG175-001", "DX51D-441207", "FLEJE-G175-12", "3200", "kg",
+        "175", "1.2", "1.42", 30, "ALMACEN-1",
     ),
     (
-        "COIL-DC04-002", "DC04-2610-02", "ACERO-DC04", "1600", "kg",
-        "1250", "2.0", "1.15", 12, "ALMACEN-2",
+        "COIL-FG175-002", "DX51D-441315", "FLEJE-G175-12", "2400", "kg",
+        "175", "1.2", "1.42", 15, "ALMACEN-2",
     ),
     (
-        "COIL-G90-001", "G90-2610-01", "GALV-G90", "1900", "kg",
-        "1250", "1.5", "1.35", 25, "ALMACEN-2",
+        "COIL-FG185-001", "DX51D-441422", "FLEJE-G185-12", "2800", "kg",
+        "185", "1.2", "1.42", 22, "ALMACEN-1",
     ),
     (
-        "COIL-G90-002", "G90-2610-02", "GALV-G90", "1400", "kg",
-        "1250", "1.5", "1.35", 8, "ALMACEN-2",
+        "COIL-FG190-001", "DX51D-441533", "FLEJE-G190-12", "3500", "kg",
+        "190", "1.2", "1.42", 26, "ALMACEN-2",
+    ),
+    (
+        "COIL-FG190-002", "DX51D-441608", "FLEJE-G190-12", "1800", "kg",
+        "190", "1.2", "1.42", 10, "ALMACEN-2",
+    ),
+    (
+        "COIL-FG190-003", "DX51D-441719", "FLEJE-G190-18", "2600", "kg",
+        "190", "1.8", "1.40", 18, "ALMACEN-1",
+    ),
+    (
+        "COIL-FD265-001", "DC01-338915", "FLEJE-D265-15", "2600", "kg",
+        "265", "1.5", "1.23", 24, "ALMACEN-2",
+    ),
+    (
+        "COIL-FD265-002", "DC01-339044", "FLEJE-D265-18", "3100", "kg",
+        "265", "1.8", "1.22", 28, "ALMACEN-1",
+    ),
+    (
+        "COIL-FD265-003", "DC01-339166", "FLEJE-D265-18", "2200", "kg",
+        "265", "1.8", "1.22", 12, "ALMACEN-2",
+    ),
+    (
+        "COIL-FD310-001", "DC01-339271", "FLEJE-D310-15", "2400", "kg",
+        "310", "1.5", "1.23", 20, "ALMACEN-1",
+    ),
+    (
+        "COIL-FD320-001", "DC01-339388", "FLEJE-D320-20", "2800", "kg",
+        "320", "2.0", "1.19", 16, "ALMACEN-2",
+    ),
+    (
+        "COIL-FD365-001", "DC01-339492", "FLEJE-D365-18", "3400", "kg",
+        "365", "1.8", "1.20", 27, "ALMACEN-1",
+    ),
+    (
+        "COIL-FD365-002", "DC01-339517", "FLEJE-D365-18", "2000", "kg",
+        "365", "1.8", "1.20", 11, "ALMACEN-2",
+    ),
+    (
+        "COIL-FD365-003", "DC01-339633", "FLEJE-D365-20", "3600", "kg",
+        "365", "2.0", "1.19", 23, "ALMACEN-1",
+    ),
+    (
+        "COIL-FD370-001", "DC01-339750", "FLEJE-D370-20", "2500", "kg",
+        "370", "2.0", "1.19", 14, "ALMACEN-2",
     ),
     ("LOTE-U100-001", "U100-2610", "PERFIL-U100", "400", "m", None, None, "6.50", 22, "EXTERIOR-1"),
     ("LOTE-L60-001", "L60-2610", "PERFIL-L60", "300", "m", None, None, "4.20", 22, "EXTERIOR-1"),
@@ -124,23 +183,24 @@ LOTES = [
 # (code, name, material_code, checks) donde check =
 # (name, tipo, tool, nominal, tol_plus, tol_minus, is_critical)
 PIEZAS = [
-    ("MONTANTE-P50", "Montante ranurado 50x30", "ACERO-S355", [
+    ("MONTANTE-P50", "Puntal 135x1,8", "FLEJE-D265-18", [
         ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
-        ("Acabado superficial", "visual", None, None, None, None, False),
+        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
     ]),
-    ("LARGUERO-E27", "Larguero estampado E27", "ACERO-DC04", [
+    ("LARGUERO-E27", "Larguero 135x1,8", "FLEJE-D265-18", [
         ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
-        ("Estampado visual", "visual", None, None, None, None, False),
+        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
     ]),
     ("BANDEJA-P45", "Bandeja plegada 45 mm", "ACERO-DC01", [
         ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
         ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
     ]),
-    ("TRAVESANO-STD", "Travesano 1200", "ACERO-DC04", [
+    ("TRAVESANO-STD", "Travesaño 91x1,2", "FLEJE-G175-12", [
         ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
+        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+        ("Acabado zinc", "visual", None, None, None, None, False),
     ]),
     ("DIAGONAL-STD", "Barra diagonal", "PERFIL-L60", [
         ("Largo Total", "numeric", "Cinta metrica", "1800", "3", "3", True),
@@ -175,16 +235,51 @@ PIEZAS = [
     ]),
     ("VIGA-SIGMA", "Viga sigma entreplanta", "ACERO-S355", [
         ("Largo Total", "numeric", "Cinta metrica", "2700", "3", "3", True),
-        ("Espesor", "numeric", "Micrometro", "2.5", "0.15", "0.15", True),
+        ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
         ("Perfilado", "visual", None, None, None, None, False),
     ]),
-    ("ESCUDO-LAT", "Escudo lateral", "GALV-G90", [
+    ("ESCUDO-LAT", "Escudo lateral", "ACERO-DC01", [
         ("Largo Total", "numeric", "Cinta metrica", "1000", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.5", "0.1", "0.1", True),
+        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
     ]),
     ("ESCALERA-GR", "Escalera de mantenimiento", "PERFIL-U100", [
         ("Largo Total", "numeric", "Cinta metrica", "3000", "5", "5", True),
         ("Antideslizante", "pass_fail", "Banco pruebas", None, None, None, True),
+    ]),
+    ("TRAV-101", "Travesaño 101x1,2", "FLEJE-G185-12", [
+        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+        ("Acabado zinc", "visual", None, None, None, None, False),
+    ]),
+    ("TRAV-108", "Travesaño 108x1,2", "FLEJE-G190-12", [
+        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+        ("Acabado zinc", "visual", None, None, None, None, False),
+    ]),
+    ("TRAV-108P", "Travesaño 108x1,8", "FLEJE-G190-18", [
+        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+        ("Acabado zinc", "visual", None, None, None, None, False),
+    ]),
+    ("LARG-205", "Larguero 205x1,8", "FLEJE-D365-18", [
+        ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
+    ]),
+    ("LARG-212", "Larguero 212x2,0", "FLEJE-D370-20", [
+        ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
+        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
+    ]),
+    ("PUNT-150", "Puntal 150x1,5", "FLEJE-D310-15", [
+        ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
+        ("Espesor", "numeric", "Micrometro", "1.5", "0.1", "0.1", True),
+        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
+    ]),
+    ("PUNT-165", "Puntal 165x2,0", "FLEJE-D320-20", [
+        ("Largo Total", "numeric", "Cinta metrica", "4000", "3", "3", True),
+        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
+        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
     ]),
 ]
 
@@ -224,6 +319,12 @@ PRODUCTOS = [
      [("pieza", "VIGA-SIGMA", "8"), ("pieza", "COLUMNA-CNT", "8"),
       ("pieza", "BANDEJA-P45", "16"), ("material", "MALLA-ES5", "12"),
       ("material", "TORN-M8", "96")]),
+    ("EST-MEDIA", "Estanteria Media 108", "Balda media carga con travesanos 108 galva.",
+     [("pieza", "PUNT-150", "6"), ("pieza", "TRAV-108", "9"),
+      ("pieza", "LARGUERO-E27", "6"), ("material", "TORN-M8", "48")]),
+    ("EST-PESADA", "Rack Pesado 212", "Rack palets con largueros 212x2 y puntales 165.",
+     [("pieza", "PUNT-165", "6"), ("pieza", "LARG-212", "12"),
+      ("pieza", "DIAGONAL-STD", "6"), ("material", "TORN-M8", "72")]),
 ]
 
 
@@ -363,7 +464,12 @@ def _asegurar_materiales(db: Session, tenant_id) -> dict[str, Material]:
                     ubicacion=ubicacion,
                     estado="activo",
                     es_pico=False,
-                    grado_acero=mat_code.split("-")[0] if mat_code.startswith("ACERO") else None,
+                    grado_acero=(
+                        "DX51D+Z275" if mat_code.startswith("FLEJE-G")
+                        else "DC01" if mat_code.startswith("FLEJE-D")
+                        else mat_code.split("-")[0] if mat_code.startswith("ACERO")
+                        else None
+                    ),
                 )
             )
     db.flush()
@@ -504,22 +610,22 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
     ordenes: dict[str, Order] = []
     definiciones = [
         ("OP-EST-2601", "active", "Ferreteria Norte S.L.", 7, [
-            (1, "EST-TITAN", "LARGUERO-E27", "ACERO-DC04", "DOBL-1",
-             "80", "30", "in_progress"),
-            (2, "EST-PORTICO", "MONTANTE-P50", "ACERO-S355", "PUNZ-1",
-             "120", "0", "pending"),
+            (1, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
+             "80", "30", "in_progress", "2.7"),
+            (2, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
+             "120", "0", "pending", "3.0"),
         ]),
         ("OP-EST-2602", "active", "Logistica Vallecas S.A.", 14, [
             (1, "EST-VOLADIZO", "COLUMNA-CNT", "PERFIL-U100", "CORTE-1",
-             "40", "0", "pending"),
+             "40", "0", "pending", "4.0"),
             (2, "EST-ALTILLO", "VIGA-SIGMA", "ACERO-S355", "GALV-1",
-             "60", "12", "in_progress"),
+             "60", "12", "in_progress", "2.7"),
         ]),
         ("OP-EST-2600", "completed", "Almacenes Duero S.A.", -5, [
-            (1, "EST-PORTICO", "MONTANTE-P50", "ACERO-S355", "PUNZ-1",
-             "100", "100", "completed"),
-            (2, "EST-TITAN", "LARGUERO-E27", "ACERO-DC04", "DOBL-1",
-             "60", "60", "completed"),
+            (1, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
+             "100", "100", "completed", "3.0"),
+            (2, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
+             "60", "60", "completed", "2.7"),
         ]),
     ]
 
@@ -538,7 +644,7 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
             db.flush()
             for linea in lineas:
                 (linea_num, prod_code, modelo_code, mat_code, puesto,
-                 total, producido, estado_linea) = linea
+                 total, producido, estado_linea, metros) = linea
                 pieza = piezas[modelo_code]
                 mat = materiales[mat_code]
                 db.add(
@@ -553,7 +659,7 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
                         total_quantity=Decimal(total),
                         produced_quantity=Decimal(producido),
                         real_time=Decimal("0"),
-                        meters_per_piece=Decimal("2.5"),
+                        meters_per_piece=Decimal(metros),
                         target_material_qty=Decimal(total),
                         target_material_unit=mat.unit,
                     )
@@ -598,11 +704,15 @@ def _historico(db, tenant_id, ordenes, piezas, materiales, operario, materiales_
             )
         db.flush()
 
+    # kg/ud = ancho_desarrollado x espesor x densidad x largo
+    # puntal 265x1,8x3,0m = 11,20 kg/ud; larguero 265x1,8x2,7m = 10,08 kg/ud
     consumos = [
-        (linea_1, "ACERO-S355", "COIL-S355-001", "450", "100", "4.500000"),
-        (linea_2, "ACERO-DC04", "COIL-DC04-001", "240", "60", "4.000000"),
+        (linea_1, "FLEJE-D265-18", "COIL-FD265-002", "1120", "100",
+         "11.200000", "3.0"),
+        (linea_2, "FLEJE-D265-18", "COIL-FD265-003", "605", "60",
+         "10.080000", "2.7"),
     ]
-    for linea, mat_code, coil_id, cantidad, producido, kg_pieza in consumos:
+    for linea, mat_code, coil_id, cantidad, producido, kg_pieza, metros in consumos:
         mat = materiales[mat_code]
         stock = db.scalar(
             select(StockItem).where(
@@ -640,7 +750,7 @@ def _historico(db, tenant_id, ordenes, piezas, materiales, operario, materiales_
                 consumed_quantity=cantidad_dec,
                 unit=mat.unit,
                 produced_quantity=Decimal(producido),
-                meters_per_piece=Decimal("2.5"),
+                meters_per_piece=Decimal(metros),
                 kg_por_pieza=Decimal(kg_pieza),
                 calculation_method="bom_static",
                 cost_per_unit=mat.cost_per_unit,
