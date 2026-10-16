@@ -109,4 +109,19 @@ describe('useQualityReminders (spec 04 §3.2.5: no bloqueantes)', () => {
     })
     expect(document.body.textContent).not.toContain('Toca un nuevo autocontrol')
   })
+  it('carga el estado con Authorization Bearer (en prod iba sin cabecera y daba 401)', async () => {
+    sessionStorage.setItem('kavana_token', 'TOKEN-DE-PRUEBA')
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ shift_started_at: new Date().toISOString(), last_check_at: null }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<HookProbe />)
+    await flush()
+    expect(fetchMock).toHaveBeenCalled()
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/quality/reminder-state')
+    expect(init?.headers).toMatchObject({ Authorization: 'Bearer TOKEN-DE-PRUEBA' })
+  })
+
 })

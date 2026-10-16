@@ -34,7 +34,7 @@ const WS_OPEN = 1
  *  puede no reenviar upgrades), si no el mismo origen (rewrite /api/*). */
 function wsBaseUrl(): string {
   const env = import.meta.env.VITE_WS_URL
-  if (env) return String(env).replace(/\/+$/, '')
+  if (env) return String(env).trim().replace(/\/+$/, '').replace(/^http/, 'ws')
   const protocolo = window.location.protocol === 'https:' ? 'wss' : 'ws'
   return `${protocolo}://${window.location.host}`
 }

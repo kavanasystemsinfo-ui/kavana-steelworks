@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getToken } from './api'
 
 /**
  * Recordatorios de autocontrol NO bloqueantes (spec 04 §3.2.5, decisión
@@ -82,7 +83,9 @@ export function useQualityReminders(): QualityReminders {
   // Al cargar, comprueba de inmediato (no espera el primer tick del timer).
   useEffect(() => {
     let alive = true
-    fetch('/api/v1/quality/reminder-state')
+    fetch('/api/v1/quality/reminder-state', {
+      headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+    })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('reminder-state'))))
       .then((data) => {
         if (!alive || !data) return

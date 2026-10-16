@@ -162,4 +162,15 @@ describe('usePlantEvents (ADR-014)', () => {
     expect(MockWebSocket.instances).toHaveLength(2)
     expect(primero.readyState).toBe(MockWebSocket.CLOSED)
   })
+  it('normaliza VITE_WS_URL https a wss para conectar directo a Fly (Vercel no proxya upgrades)', () => {
+    stubWebSocket()
+    vi.stubEnv('VITE_WS_URL', 'https://steelworks-api.fly.dev/')
+    const { result } = renderHook(() => usePlantEvents())
+    act(() => result.current.conectar('T1'))
+    expect(MockWebSocket.instances).toHaveLength(1)
+    expect(MockWebSocket.instances[0].url).toMatch(/^wss:\/\/steelworks-api\.fly\.dev\//)
+    expect(MockWebSocket.instances[0].url).toContain('/api/v1/ws/events?tenant_id=T1')
+    vi.unstubAllEnvs()
+  })
+
 })
