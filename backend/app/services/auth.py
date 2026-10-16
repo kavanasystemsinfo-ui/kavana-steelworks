@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import RevokedToken, User, UserShift
+from app.services.shifts import horas_de_turno, turno_desde
 
 settings = get_settings()
 
@@ -62,6 +63,7 @@ def login(db: Session, tenant_id: uuid.UUID, email: str, password: str) -> str:
     if turno_activo is not None:
         turno_activo.status = "completed"
         turno_activo.logout_time = ahora
+        turno_activo.total_hours = horas_de_turno(turno_activo.login_time, ahora)
     db.add(
         UserShift(
             tenant_id=tenant_id,
@@ -108,6 +110,36 @@ def logout(db: Session, token: str) -> None:
         select(UserShift).where(UserShift.operator_id == user_id, UserShift.status == "active")
     )
     if turno is not None:
-        turno.status = "completed"
         turno.logout_time = datetime.now(UTC)
+        turno.status = "completed"
+        turno.total_hours = horas_de_turno(turno.login_time, turno.logout_time)
     db.commit()
+
+
+def close_shift(db: Session, token: str) -> dict:
+    """Cierra el turno activo con total_hours y turno A/B/C (spec 02 3.11)."""
+    payload = verify_token(token)
+    if payload is None or is_revoked(db, token):
+        raise ValueError("Token inválido")
+    user_id = uuid.UUID(payload["sub"])
+    turno = db.scalar(
+        select(UserShift).where(
+            UserShift.operator_id == user_id,
+            UserShift.status == "active",
+        )
+    )
+    if turno is None:
+        raise LookupError("No hay turno activo para cerrar")
+    ahora = datetime.now(UTC)
+    turno.logout_time = ahora
+    turno.status = "completed"
+    turno.total_hours = horas_de_turno(turno.login_time, ahora)
+    db.commit()
+    db.refresh(turno)
+    return {
+        "success": True,
+        "status": turno.status,
+        "total_hours": float(turno.total_hours),
+        "turno": turno_desde(turno.login_time),
+        "logout_time": turno.logout_time.isoformat(),
+    }

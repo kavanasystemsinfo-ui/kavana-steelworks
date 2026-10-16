@@ -650,7 +650,9 @@ def link_coil(
             MaterialTransaction.motivo.contains("Bobina vinculada"),
         )
     )
-    if ya_vinculada is not None:
+    # Solo es idempotente si la bobina sigue siendo la activa: tras un
+    # unlink (Fase 1) hay que poder re-vincular y volver a cobrar.
+    if ya_vinculada is not None and linea.active_coil_id == bobina.id:
         return {
             "success": True,
             "coil_weight": float(bobina.cantidad_disponible),
@@ -691,3 +693,86 @@ def link_coil(
         "coil_weight": float(coil_weight),
         "order": str(order.id),
     }
+
+
+def unlink_coil(
+    db,
+    tenant_id,
+    user_id,
+    *,
+    stock_item_id,
+    order_id,
+    line_id,
+) -> dict:
+    """Desvincula la bobina de la linea reembolsando solo lo no consumido.
+
+    Reversion proporcional (ADR-019): al vincular la orden pago la bobina
+    entera por adelantado (BULK); si se consumo parcialmente en produccion,
+    solo se devuelve a la linea lo que queda fisicamente (cantidad_disponible)
+    y su coste. El stock fisico no se toca y el kardex es inmutable (fila
+    nueva, nunca update).
+    """
+    from sqlalchemy import select
+
+    from app.models import CoilLink, MaterialTransaction, Order, OrderLine, StockItem
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None or bobina.tenant_id != tenant_id:
+        raise ValueError("Bobina no encontrada")
+
+    order = db.get(Order, order_id)
+    if order is None:
+        raise ValueError(f"Orden {order_id} no existe")
+
+    linea = db.get(OrderLine, line_id)
+    if linea is None or linea.order_id != order.id:
+        raise ValueError("Línea no encontrada para la orden")
+
+    if linea.active_coil_id != bobina.id:
+        raise ValueError("La bobina no está vinculada a esta línea")
+
+    restante = bobina.cantidad_disponible or Decimal("0")
+    reembolso = restante * bobina.coste_por_unidad
+    linea.real_material_qty = (linea.real_material_qty or Decimal("0")) - restante
+    linea.real_material_cost = (linea.real_material_cost or Decimal("0")) - reembolso
+    linea.real_cost = (linea.real_cost or Decimal("0")) - reembolso
+    order.real_total_cost = (order.real_total_cost or Decimal("0")) - reembolso
+    linea.active_coil_id = None
+    linea.active_coil_code = None
+
+    db.add(
+        MaterialTransaction(
+            tenant_id=tenant_id,
+            material_id=bobina.material_id,
+            stock_item_id=bobina.id,
+            orden_id=order_id,
+            linea_orden_id=line_id,
+            tipo="devolucion",
+            cantidad=restante,
+            cantidad_anterior=restante,
+            cantidad_nueva=restante,
+            motivo=f"Bobina desvinculada de la Línea. Reembolso de {restante:.2f}kg",
+            realizado_por=user_id,
+        )
+    )
+
+    burbuja = db.scalar(
+        select(CoilLink).where(
+            CoilLink.tenant_id == tenant_id,
+            CoilLink.stock_item_id == bobina.id,
+            CoilLink.order_id == order_id,
+            CoilLink.order_line_id == line_id,
+            CoilLink.estado.in_(("vinculada", "consumida")),
+        )
+    )
+    if burbuja is not None:
+        burbuja.estado = "desvinculada"
+
+    db.commit()
+    db.refresh(linea)
+    return {
+        "success": True,
+        "refunded_qty": float(restante),
+        "refunded_cost": float(reembolso),
+    }
+

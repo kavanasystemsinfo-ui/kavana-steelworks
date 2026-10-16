@@ -74,3 +74,17 @@ def logout(authorization: Annotated[str | None, Header()] = None, db: DbDep = No
         raise HTTPException(status_code=401, detail="Token requerido")
     auth_service.logout(db, token)
     return None
+
+
+@router.post("/close-shift")
+def close_shift(authorization: Annotated[str | None, Header()] = None, db: DbDep = None):
+    """Cierra el turno activo: total_hours y turno A/B/C (spec 02 3.11)."""
+    token = _extraer_bearer(authorization)
+    if token is None:
+        raise HTTPException(status_code=401, detail="Token requerido")
+    try:
+        return auth_service.close_shift(db, token)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc

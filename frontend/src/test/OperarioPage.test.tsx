@@ -993,3 +993,164 @@ describe('Alertas de almacén por WebSocket (ADR-014)', () => {
     expect(llamadas.filter((u) => u.includes('/api/v1/events/')).length).toBeGreaterThanOrEqual(1)
   })
 })
+
+describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina)', () => {
+  function stubFase1() {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('/scan')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'bobina-1',
+            lote: 'L-DEMO',
+            coil_id: 'COIL-L-DEMO',
+            peso_kg: 800,
+            ancho_mm: 122,
+            espesor_mm: 0.5,
+            material_code: 'ACERO-01',
+            material_name: 'Bobina Acero',
+            estado: 'activo',
+            ubicacion: 'ALMACEN-1',
+            modo: 'auto',
+          }),
+        })
+      }
+      if (u === '/api/v1/orders/available') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: null, fecha_entrega: null, workstation_id: 'LINEA-1' },
+          ],
+        })
+      }
+      if (u.includes('/api/v1/orders/OP1')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'OP1',
+            numero: 'OP-DEMO-001',
+            estado: 'active',
+            cliente: null,
+            fecha_entrega: null,
+            workstation_id: 'LINEA-1',
+            lines: [
+              {
+                id: 'line-1',
+                linea_numero: 1,
+                workstation_id: 'LINEA-1',
+                estado: 'pending',
+                total_quantity: 50,
+                produced_quantity: 0,
+                material_id: 'mat-1',
+                active_coil_id: null,
+                active_coil_code: null,
+                real_material_qty: 0,
+                real_material_cost: 0,
+                real_cost: 0,
+                scrap_material_qty: 0,
+                target_material_qty: 100,
+                target_material_unit: 'kg',
+                meters_per_piece: 2.0,
+              },
+            ],
+          }),
+        })
+      }
+      if (u.includes('/stock-items/link')) {
+        return Promise.resolve({ ok: true, json: async () => ({ success: true, coil_weight: 800, order: 'OP1' }) })
+      }
+      if (u.includes('/stock-items/unlink')) {
+        return Promise.resolve({ ok: true, json: async () => ({ success: true, refunded_qty: 800, refunded_cost: 1600 }) })
+      }
+      if (u.includes('/stock-items/fin-bobina')) {
+        return Promise.resolve({ ok: true, json: async () => ({ msg: 'ok', peso_restante_kg: 10, merma_kg: 5, merma_cost: 10 }) })
+      }
+      if (u.includes('/stock-items/retirar')) {
+        return Promise.resolve({ ok: true, json: async () => ({ msg: 'ok' }) })
+      }
+      if (u.includes('/auth/close-shift')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, status: 'completed', total_hours: 3.5, turno: 'B', logout_time: '2026-10-16T20:00:00+00:00' }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  async function abrirPanelVinculado(fetchMock: ReturnType<typeof vi.fn>) {
+    renderPage()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/v1/orders/OP1'))).toBe(true)
+    })
+    await vincularBobina(userEvent.setup())
+  }
+
+  it('desvincular llama a POST /stock-items/unlink y vuelve al escaneo', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubFase1()
+    await abrirPanelVinculado(fetchMock)
+
+    await user.click(await screen.findByRole('button', { name: /desvincular bobina/i }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/stock-items/unlink'))).toBe(true)
+    })
+    const llamada = fetchMock.mock.calls.find(([u]) => String(u).includes('/stock-items/unlink'))
+    expect(llamada?.[1]?.method).toBe('POST')
+    expect(await screen.findByPlaceholderText(/escanea la etiqueta/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /registrar piezas/i })).not.toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('cerrar jornada pide confirmación, llama a /auth/close-shift y muestra horas y turno', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubFase1()
+    renderPage()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    await user.click(screen.getByRole('button', { name: /cerrar jornada/i }))
+    expect(screen.getByText(/se registrará la hora de salida/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /sí, cerrar/i }))
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/auth/close-shift'))).toBe(true)
+    })
+    const tarjeta = (await screen.findByText('Jornada cerrada')).closest('div')
+    expect(tarjeta).toHaveTextContent('Turno B')
+    expect(tarjeta).toHaveTextContent('3,5')
+    vi.unstubAllGlobals()
+  })
+
+  it('fin de bobina apunta a /stock-items/fin-bobina (prefijo real del router)', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubFase1()
+    await abrirPanelVinculado(fetchMock)
+
+    const radio = await screen.findByPlaceholderText(/radio restante/i)
+    await user.type(radio, '10')
+    await user.click(screen.getByRole('button', { name: /cerrar bobina/i }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/stock-items/fin-bobina'))).toBe(true)
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('retirar pico apunta a /stock-items/retirar (prefijo real del router)', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubFase1()
+    await abrirPanelVinculado(fetchMock)
+
+    await user.click(screen.getByRole('button', { name: /retirar pico a inventario/i }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/stock-items/retirar'))).toBe(true)
+    })
+    vi.unstubAllGlobals()
+  })
+})

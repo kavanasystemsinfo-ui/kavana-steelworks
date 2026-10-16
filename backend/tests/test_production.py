@@ -240,3 +240,34 @@ def test_produccion_actualiza_coste_laboral(db_session, tenant, user):
 
     db_session.refresh(line)
     assert float(line.real_time) == pytest.approx(90.0, abs=0.01)  # 1,5 h × 60
+
+def test_produccion_registra_turno_abc_en_trazabilidad(db_session, tenant, user):
+    """Fase 1: ProductionLog.shift se puebla con A/B/C (antes siempre NULL)."""
+    from sqlalchemy import select
+
+    from app.models import ProductionLog
+    from app.services.production import record_production
+
+    make_material(db_session, tenant, code="ACERO-TURNO", cost=2.0)
+    order = make_order(db_session, tenant, numero="OP-TURNO")
+    line = make_order_line(db_session, order, workstation="LINEA-1", total_quantity=10.0)
+    line.meters_per_piece = Decimal("2.0")
+    db_session.commit()
+
+    record_production(
+        db_session,
+        tenant.id,
+        user.id,
+        order_id=order.id,
+        line_id=line.id,
+        incremental_quantity=2,
+    )
+
+    log = db_session.scalar(
+        select(ProductionLog).where(
+            ProductionLog.tenant_id == tenant.id,
+            ProductionLog.action == "produce",
+        )
+    )
+    assert log is not None
+    assert log.shift in ("A", "B", "C")

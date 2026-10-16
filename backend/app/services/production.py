@@ -272,6 +272,9 @@ def record_production(
 
     # 9) Trazabilidad ISO 9001 (spec 04): evento produce inmutable, best-effort.
     #    Nunca rompe el flujo: si el log falla, ya se registró y se traga.
+    from datetime import UTC, datetime
+
+    from app.services.shifts import turno_desde
     from app.services.traceability import log_event
 
     log_event(
@@ -295,6 +298,7 @@ def record_production(
             "totalRealized": float(linea.produced_quantity),
             "calculationMethod": calculation_method,
         },
+        shift=turno_desde(datetime.now(UTC)),
     )
 
     return {

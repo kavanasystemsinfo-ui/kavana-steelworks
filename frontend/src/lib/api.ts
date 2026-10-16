@@ -447,14 +447,14 @@ export const api = {
   },
 
   finBobina(data: { stock_item_id: string; order_id: string; line_id: string; radio_mm: number }): Promise<{ msg: string; peso_restante_kg: number; merma_kg: number; merma_cost: number }> {
-    return request('/stock/fin-bobina', {
+    return request('/stock-items/fin-bobina', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
   retirarPico(data: { stock_item_id: string }): Promise<{ msg: string }> {
-    return request('/stock/retirar', {
+    return request('/stock-items/retirar', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -464,6 +464,19 @@ export const api = {
     return request('/stock-items/link', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  unlinkCoil(data: { stock_item_id: string; order_id: string; line_id: string }): Promise<{ success: boolean; refunded_qty: number; refunded_cost: number }> {
+    return request('/stock-items/unlink', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  closeShift(): Promise<{ success: boolean; status: string; total_hours: number; turno: string; logout_time: string }> {
+    return request('/auth/close-shift', {
+      method: 'POST',
     });
   },
 

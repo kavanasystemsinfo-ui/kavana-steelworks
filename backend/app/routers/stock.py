@@ -250,6 +250,38 @@ class FinBobinaRequest(BaseModel):
     radio_mm: float = Field(ge=0)
 
 
+
+class UnlinkCoilRequest(BaseModel):
+    stock_item_id: uuid.UUID
+    order_id: uuid.UUID
+    line_id: uuid.UUID
+
+
+@router.post("/unlink")
+def unlink(
+    body: UnlinkCoilRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
+    """Desvincula la bobina de la linea (reembolso de lo no consumido)."""
+    from app.services.inventory import unlink_coil
+
+    try:
+        return unlink_coil(
+            db,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            stock_item_id=body.stock_item_id,
+            order_id=body.order_id,
+            line_id=body.line_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/fin-bobina")
 def fin_bobina(
     body: FinBobinaRequest,

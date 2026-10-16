@@ -152,6 +152,46 @@ export function OperarioPage() {
     }
   }
 
+  const handleUnlink = async () => {
+    showToast("error", '')
+    if (!scan || !ordenDetalle || !ordenDetalle.line_id) return
+    try {
+      await api.unlinkCoil({
+        stock_item_id: scan.id,
+        order_id: ordenDetalle.id,
+        line_id: ordenDetalle.line_id,
+      })
+      setVinculada(false)
+      setScan(null)
+      setCoilId('')
+      showToast("success", 'Bobina desvinculada. Se reembolsó lo no consumido.')
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : 'Error al desvincular')
+    }
+  }
+
+  // Cierre de jornada (Fase 1): confirmación y resultado (horas, turno A/B/C)
+  const [confirmarCierre, setConfirmarCierre] = useState(false)
+  const [jornadaCerrada, setJornadaCerrada] = useState<{ total_hours: number; turno: string } | null>(null)
+  const [cerrandoJornada, setCerrandoJornada] = useState(false)
+
+  const handleCerrarJornada = async () => {
+    setCerrandoJornada(true)
+    try {
+      const res = await api.closeShift()
+      setJornadaCerrada({ total_hours: res.total_hours, turno: res.turno })
+      setConfirmarCierre(false)
+      showToast(
+        "success",
+        `Jornada cerrada: ${res.total_hours.toLocaleString('es-ES')} h \u00b7 Turno ${res.turno}`,
+      )
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : 'Error al cerrar la jornada')
+    } finally {
+      setCerrandoJornada(false)
+    }
+  }
+
   const [radioMm, setRadioMm] = useState('')
   const [piezas, setPiezas] = useState('')
   const [horas, setHoras] = useState('')
@@ -708,11 +748,7 @@ export function OperarioPage() {
           )}
 
           <button
-            onClick={() => {
-              setVinculada(false)
-              setScan(null)
-              setCoilId('')
-            }}
+            onClick={handleUnlink}
             className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
           >
             🔄 Desvincular bobina
@@ -732,6 +768,49 @@ export function OperarioPage() {
 
         </div>
       )}
+
+      {/* Cierre de jornada (Fase 1): total_hours + turno A/B/C (spec 02 3.11) */}
+      <div className="space-y-3">
+        {jornadaCerrada ? (
+          <div className="bg-kavana-surface border border-kavana-ok rounded-sm p-4 text-center space-y-1">
+            <p className="label-industrial text-xs text-kavana-text-dim">Jornada cerrada</p>
+            <p className="font-display font-black text-3xl text-kavana-ok">
+              {`${jornadaCerrada.total_hours.toLocaleString('es-ES')} h \u00b7 Turno ${jornadaCerrada.turno}`}
+            </p>
+          </div>
+        ) : confirmarCierre ? (
+          <div className="bg-kavana-surface border border-kavana-orange/50 rounded-sm p-4 space-y-3">
+            <p className="text-sm text-kavana-text-dim">
+              ¿Cerrar turno? Se registrará la hora de salida y las horas trabajadas.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarCierre(false)}
+                className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCerrarJornada}
+                disabled={cerrandoJornada}
+                className="min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
+              >
+                {cerrandoJornada ? 'Cerrando…' : 'Sí, cerrar'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmarCierre(true)}
+            className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+          >
+            🕐 Cerrar jornada
+          </button>
+        )}
+      </div>
 
       {incModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
