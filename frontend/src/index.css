@@ -50,3 +50,13 @@
   border-left: 3px solid var(--color-kavana-orange);
   padding-left: 0.75rem;
 }
+
+/* Global (contrato KAVANA_DESIGN §2): fondo Deep Black, Montserrat,
+   métricas en monoespacio vía .mono-data donde corresponde. */
+body {
+  margin: 0;
+  background: var(--color-kavana-dark);
+  color: var(--color-kavana-text);
+  font-family: var(--font-display);
+  font-weight: 400;
+}

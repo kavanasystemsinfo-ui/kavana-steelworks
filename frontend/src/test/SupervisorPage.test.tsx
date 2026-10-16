@@ -120,6 +120,26 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('muestra el bloque coste real vs estimado con valores absolutos', async () => {
+    stubApi()
+
+    renderPage()
+
+    expect(
+      await screen.findByText('Coste real vs estimado'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Real')).toBeInTheDocument()
+    expect(screen.getByText('Estimado')).toBeInTheDocument()
+    expect(screen.getByText(`${(900).toLocaleString('es-ES')} €`)).toBeInTheDocument()
+    expect(
+      screen.getByText(`${(1000).toLocaleString('es-ES')} €`),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(`${(-100).toLocaleString('es-ES')} €`),
+    ).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
   it('sin datos muestra marcadores vacíos, no inventa valores', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,

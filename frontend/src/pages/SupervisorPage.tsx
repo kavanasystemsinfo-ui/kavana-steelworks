@@ -253,11 +253,45 @@ export function SupervisorPage() {
       </div>
 
       {/* KPIs del turno */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Kpi label="Producción turno" value={oee ? oee.raw.total_pieces.toLocaleString('es-ES') : '--'} unit="uds" />
         <Kpi label="Merma" value={oee ? oee.raw.scrap_kg.toLocaleString('es-ES') : '--'} unit="kg" />
-        <Kpi label="Coste real vs est." value={fmtEur(kpis?.cost_variance)} unit="€" />
         <Kpi label="Eficiencia coste" value={fmtPct(kpis?.cost_efficiency)} unit="" />
+      </div>
+
+      {/* Coste real vs estimado (KAVANA_DESIGN 4.2: el valor es el más grande y brillante) */}
+      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-6 space-y-3">
+        <p className="label-industrial text-xs text-kavana-text-dim">
+          Coste real vs estimado
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <p className="label-industrial text-[10px] text-kavana-text-dim">Real</p>
+            <p className="font-display font-black text-4xl mt-1 text-kavana-orange">
+              {fmtEur(kpis?.real_cost)}
+            </p>
+          </div>
+          <div>
+            <p className="label-industrial text-[10px] text-kavana-text-dim">
+              Estimado
+            </p>
+            <p className="font-display font-black text-4xl mt-1">
+              {fmtEur(kpis?.estimated_cost)}
+            </p>
+          </div>
+          <div>
+            <p className="label-industrial text-[10px] text-kavana-text-dim">
+              Desviación
+            </p>
+            <p
+              className={`font-display font-black text-4xl mt-1 ${
+                (kpis?.cost_variance ?? 0) > 0 ? 'text-kavana-danger' : 'text-kavana-ok'
+              }`}
+            >
+              {fmtEur(kpis?.cost_variance)}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Detalle de órdenes */}

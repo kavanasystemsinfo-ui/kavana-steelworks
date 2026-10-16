@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { api, getTenantId, type EventData } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
+import { Numpad } from '../components/Numpad'
 
 interface CoilScan {
   id: string
@@ -154,6 +155,8 @@ export function OperarioPage() {
   const [radioMm, setRadioMm] = useState('')
   const [piezas, setPiezas] = useState('')
   const [horas, setHoras] = useState('')
+  // Campo que edita el numpad táctil (foco del último input numérico)
+  const [campoActivo, setCampoActivo] = useState<'piezas' | 'horas'>('piezas')
 
   // Autocontrol de calidad (spec 04): plantilla + orden de la demo
   const [models, setModels] = useState<QualityModel[]>([])
@@ -570,6 +573,7 @@ export function OperarioPage() {
                 min="1"
                 value={piezas}
                 onChange={(e) => setPiezas(e.target.value)}
+                onFocus={() => setCampoActivo('piezas')}
                 placeholder="Piezas"
                 className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
                 required
@@ -580,10 +584,23 @@ export function OperarioPage() {
                 min="0"
                 value={horas}
                 onChange={(e) => setHoras(e.target.value)}
+                onFocus={() => setCampoActivo('horas')}
                 placeholder="Horas"
                 className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
               />
             </div>
+            <p className="label-industrial text-[10px] text-kavana-text-dim">
+              Numpad → {campoActivo === 'piezas' ? 'Piezas' : 'Horas'}
+            </p>
+            <Numpad
+              value={campoActivo === 'piezas' ? piezas : horas}
+              onChange={(v) =>
+                campoActivo === 'piezas' ? setPiezas(v) : setHoras(v)
+              }
+              step={campoActivo === 'horas' ? 0.5 : 1}
+              allowDecimals={campoActivo === 'horas'}
+              min={campoActivo === 'horas' ? 0 : 1}
+            />
             <button
               type="submit"
               className="w-full min-h-[56px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"

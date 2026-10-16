@@ -203,7 +203,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
         ubicacion: 'ALMACEN-1',
         modo: 'auto',
       }
-      const fetchMock = vi.fn((url: string) => {
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
         if (url.includes('/scan')) {
           return Promise.resolve({ ok: true, json: async () => bobina })
         }
@@ -254,23 +254,20 @@ describe('Panel de Operario (directriz no abrumar)', () => {
             json: async () => ({ success: true, coil_weight: 800, order: 'OP1' }),
           })
         }
-        if (url.includes('/production/record')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({
-              incremental_quantity: 5,
-              consumed_amount: 4.75,
-              consumption_unit: 'kg',
-              calculation_method: 'density_formula',
-            }),
-          })
-        }
+      if (url.includes('/production/record')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({})
+          json: async () => ({
+            incremental_quantity: 5,
+            consumed_amount: 4.75,
+            consumption_unit: 'kg',
+            calculation_method: 'density_formula',
+          }),
         })
-      })
-      vi.stubGlobal('fetch', fetchMock)
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
       renderPage()
       const input = screen.getByPlaceholderText(/escanea la etiqueta/i)
       await user.type(input, 'COIL-L-DEMO')
@@ -290,6 +287,112 @@ describe('Panel de Operario (directriz no abrumar)', () => {
       ).toBeInTheDocument()
       vi.unstubAllGlobals()
     })
+
+  it('el numpad táctil rellena piezas y registra producción', async () => {
+    const user = userEvent.setup()
+    const bobina = {
+      id: 'bobina-1',
+      lote: 'L-DEMO',
+      coil_id: 'COIL-L-DEMO',
+      peso_kg: 800,
+      ancho_mm: 122,
+      espesor_mm: 0.5,
+      material_code: 'ACERO-01',
+      material_name: 'Bobina Acero',
+      estado: 'activo',
+      ubicacion: 'ALMACEN-1',
+      modo: 'auto',
+    }
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (url.includes('/scan')) {
+        return Promise.resolve({ ok: true, json: async () => bobina })
+      }
+      if (url.includes('/api/v1/orders/OP1')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'OP1',
+            numero: 'OP-DEMO-001',
+            estado: 'active',
+            cliente: null,
+            fecha_entrega: null,
+            workstation_id: 'LINEA-1',
+            lines: [
+              {
+                id: 'line-1',
+                linea_numero: 1,
+                workstation_id: 'LINEA-1',
+                estado: 'pending',
+                total_quantity: 50,
+                produced_quantity: 0,
+                material_id: 'mat-1',
+                active_coil_id: null,
+                active_coil_code: null,
+                real_material_qty: 0,
+                real_material_cost: 0,
+                real_cost: 0,
+                scrap_material_qty: 0,
+                target_material_qty: 100,
+                target_material_unit: 'kg',
+                meters_per_piece: 2.0,
+              },
+            ],
+          }),
+        })
+      }
+      if (url === '/api/v1/orders/available') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: null, fecha_entrega: null, workstation_id: 'LINEA-1' },
+          ],
+        })
+      }
+      if (url.includes('/stock-items/link')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, coil_weight: 800, order: 'OP1' }),
+        })
+      }
+      if (url.includes('/production/record')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            incremental_quantity: 75,
+            consumed_amount: 71.25,
+            consumption_unit: 'kg',
+            calculation_method: 'density_formula',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    const input = screen.getByPlaceholderText(/escanea la etiqueta/i)
+    await user.type(input, 'COIL-L-DEMO')
+    await user.click(screen.getByRole('button', { name: /escanear bobina/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /vincular a mi orden/i }),
+    )
+
+    const piezas = await screen.findByPlaceholderText(/piezas/i)
+    await user.click(screen.getByRole('button', { name: '7' }))
+    await user.click(screen.getByRole('button', { name: '5' }))
+    expect(piezas).toHaveValue(75)
+
+    await user.click(screen.getByRole('button', { name: /registrar piezas/i }))
+    const recordCall = fetchMock.mock.calls.find(([u]) =>
+      String(u).includes('/production/record'),
+    )
+    expect(recordCall).toBeTruthy()
+    const body = JSON.parse(String(recordCall?.[1]?.body))
+    expect(body.incremental_quantity).toBe(75)
+    expect(
+      await screen.findByText(/75 piezas registradas/i),
+    ).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
 })
 
 const bobinaDemo = {
