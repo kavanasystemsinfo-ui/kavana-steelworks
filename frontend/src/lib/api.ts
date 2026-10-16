@@ -47,6 +47,8 @@ export interface MaterialOut {
   cost_per_unit: number | null
   unit: string | null
   stock_current: number | null
+  dimension_ancho_mm: number | null
+  dimension_espesor_mm: number | null
 }
 
 export interface IncidenciaItem {

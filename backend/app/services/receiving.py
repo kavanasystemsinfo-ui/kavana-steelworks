@@ -67,6 +67,11 @@ def receive_coil(
     if material is None:
         raise ValueError(f"Material {material_id} no existe")
 
+    # Auto-rellenado (Fase 0 UX): sin medidas explícitas se toman las del
+    # material (fleje slit: ancho y espesor fijados por el proveedor).
+    ancho_final = width_mm if width_mm else material.dimension_ancho_mm
+    espesor_final = thickness_mm if thickness_mm else material.dimension_espesor_mm
+
     peso_dec = Decimal(str(peso))
     coste_por_unidad = (
         Decimal(str(coste_real)) if coste_real is not None else material.cost_per_unit
@@ -81,8 +86,8 @@ def receive_coil(
         cantidad_inicial=peso_dec,
         cantidad_disponible=peso_dec,
         unit=material.unit or "kg",
-        width_mm=Decimal(str(width_mm)) if width_mm else None,
-        thickness_mm=Decimal(str(thickness_mm)) if thickness_mm else None,
+        width_mm=Decimal(str(ancho_final)) if ancho_final else None,
+        thickness_mm=Decimal(str(espesor_final)) if espesor_final else None,
         coste_por_unidad=coste_por_unidad,
         costing_method=costing_method,
         fecha_entrada=datetime.now(UTC),

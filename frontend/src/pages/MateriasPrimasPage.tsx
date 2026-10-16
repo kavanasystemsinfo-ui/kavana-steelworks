@@ -3,20 +3,38 @@ import { api, getTenantId, type MaterialOut } from '../lib/api'
 
 /** Panel de Materias Primas (spec 06): recepción de bobinas.
  *  Flujo mínimo (decisión Jorge): registrar cuando llega, entrada directa.
+ *  Fase 0 UX: ancho/espesor se auto-rellenan del material elegido y el
+ *  formulario no pide Nº calor ni Grado de acero (datos del proveedor que
+ *  la API acepta como opcionales cuando existan).
  */
+
+type FormState = {
+  material_id: string
+  lote: string
+  peso: string
+  ancho: string
+  espesor: string
+  ubicacion: string
+}
+
+function dimsDe(m: MaterialOut | undefined): Pick<FormState, 'ancho' | 'espesor'> {
+  return {
+    ancho: m?.dimension_ancho_mm != null ? String(m.dimension_ancho_mm) : '',
+    espesor: m?.dimension_espesor_mm != null ? String(m.dimension_espesor_mm) : '',
+  }
+}
+
 export function MateriasPrimasPage() {
   const [materials, setMaterials] = useState<MaterialOut[]>([])
   const [status, setStatus] = useState<string>('')
   const [error, setError] = useState('')
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     material_id: '',
     lote: '',
     peso: '',
     ancho: '',
     espesor: '',
     ubicacion: '',
-    heat_number: '',
-    grado: '',
   })
 
   useEffect(() => {
@@ -24,16 +42,21 @@ export function MateriasPrimasPage() {
       .listMaterials()
       .then((m) => {
         setMaterials(m)
-        if (m.length > 0) setForm((f) => ({ ...f, material_id: m[0].id }))
+        if (m.length > 0) setForm((f) => ({ ...f, material_id: m[0].id, ...dimsDe(m[0]) }))
       })
       .catch((err) =>
         setError(err instanceof Error ? err.message : 'Error al cargar materiales'),
       )
   }, [])
 
-  const handleChange = (field: keyof typeof form) => (
+  const handleChange = (field: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => setForm({ ...form, [field]: e.target.value })
+
+  const handleMaterialChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value
+    setForm((f) => ({ ...f, material_id: id, ...dimsDe(materials.find((m) => m.id === id)) }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,11 +76,9 @@ export function MateriasPrimasPage() {
         width_mm: form.ancho ? Number(form.ancho) : undefined,
         thickness_mm: form.espesor ? Number(form.espesor) : undefined,
         ubicacion: form.ubicacion || undefined,
-        heat_number: form.heat_number || undefined,
-        grado_acero: form.grado || undefined,
       })
       setStatus(`Bobina ${bobina.coil_id} registrada (${bobina.estado})`)
-      setForm((f) => ({ ...f, lote: '', peso: '', ancho: '', espesor: '' }))
+      setForm((f) => ({ ...f, lote: '', peso: '', ubicacion: '' }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrar')
     }
@@ -91,7 +112,7 @@ export function MateriasPrimasPage() {
           <Field label="Material">
             <select
               value={form.material_id}
-              onChange={handleChange('material_id')}
+              onChange={handleMaterialChange}
               className={inputCls}
               required
             >
@@ -142,20 +163,6 @@ export function MateriasPrimasPage() {
             <input
               value={form.ubicacion}
               onChange={handleChange('ubicacion')}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Nº calor (heat)">
-            <input
-              value={form.heat_number}
-              onChange={handleChange('heat_number')}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Grado de acero">
-            <input
-              value={form.grado}
-              onChange={handleChange('grado')}
               className={inputCls}
             />
           </Field>

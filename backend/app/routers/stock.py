@@ -126,6 +126,8 @@ class MaterialOut(BaseModel):
     cost_per_unit: Decimal | None
     unit: str | None
     stock_current: Decimal | None
+    dimension_ancho_mm: Decimal | None
+    dimension_espesor_mm: Decimal | None
 
     class Config:
         from_attributes = True
