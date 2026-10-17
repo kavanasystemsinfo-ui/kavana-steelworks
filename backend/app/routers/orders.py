@@ -206,6 +206,7 @@ def list_orders(
 @router.get("/available", response_model=list[OrderOut])
 def list_available_orders(
     db: DbDep,
+    workstation: str | None = None,
     current_user: Annotated[
         User,
         Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
@@ -213,13 +214,30 @@ def list_available_orders(
 ):
     """Órdenes disponibles para el panel del operario (port de manufacturing).
 
-    El operario solo ve las órdenes draft/active de su propia estación de
-    trabajo (default_workstation_code), para que el panel no dependa del
-    listado supervisor (403) y no termine enviando order_id nulo.
+    El operario solo ve las órdenes draft/active de su estación de trabajo.
+    Sin parámetro usa default_workstation_code del usuario; con
+    ?workstation=CODE (flujo legacy de selección de puesto) filtra por ese
+    puesto, validando que exista en el tenant.
     """
     from app.models import OrderLine
 
-    ws_code = current_user.default_workstation_code
+    if workstation:
+        ws = (
+            db.query(Workstation)
+            .filter(
+                Workstation.tenant_id == current_user.tenant_id,
+                Workstation.code == workstation,
+            )
+            .first()
+        )
+        if ws is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Puesto de trabajo inexistente: {workstation}",
+            )
+        ws_code = ws.code
+    else:
+        ws_code = current_user.default_workstation_code
     if not ws_code:
         return []
 

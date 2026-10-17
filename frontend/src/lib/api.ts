@@ -123,6 +123,15 @@ export interface OrderItem {
   workstation_id: string | null
 }
 
+export interface WorkstationItem {
+  id: string
+  code: string
+  name: string
+  color?: string
+  group_id?: string | null
+  is_active?: boolean
+}
+
 export interface OrderLineOut {
   id: string
   linea_numero: number
@@ -395,8 +404,13 @@ export const api = {
     return request(`/quality/records?limit=${limit}`)
   },
 
-  availableOrders(): Promise<OrderItem[]> {
-    return request('/orders/available')
+  availableOrders(workstation?: string): Promise<OrderItem[]> {
+    const q = workstation ? `?workstation=${encodeURIComponent(workstation)}` : ''
+    return request(`/orders/available${q}`)
+  },
+
+  listWorkstations(): Promise<WorkstationItem[]> {
+    return request('/admin/workstations')
   },
 
   getOrder(orderId: string): Promise<any> {

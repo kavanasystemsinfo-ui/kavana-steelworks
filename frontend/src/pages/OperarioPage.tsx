@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getTenantId, type EventData } from '../lib/api'
+import { api, getTenantId, type EventData, type OrderItem, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
@@ -204,45 +204,196 @@ export function OperarioPage() {
     Record<string, number | boolean | string>
   >({})
 
+  // Pulido registro de órdenes (port legacy kavanasystems): puesto -> cola
+  // de órdenes del puesto -> panel. La URL ?ws=&order= salta directo al
+  // panel (compatibilidad con enlaces y con el comportamiento previo).
+  const [puestos, setPuestos] = useState<WorkstationItem[]>([])
+  const [puestosCargados, setPuestosCargados] = useState(false)
+  const [cola, setCola] = useState<OrderItem[]>([])
+  const [wsSel, setWsSel] = useState<string | null>(null)
+  const [ordenSelId, setOrdenSelId] = useState<string | null>(null)
+  const [ordenNumero, setOrdenNumero] = useState<string | null>(null)
+  const [ordenWs, setOrdenWs] = useState<string | null>(null)
+  const [vista, setVista] = useState<'panel' | 'seleccion' | 'cola'>('panel')
+  const [pasoManual, setPasoManual] = useState<'puesto' | 'orden' | null>(null)
+  const puestosRef = useRef<WorkstationItem[]>([])
+  const ordenWsRef = useRef<string | null>(null)
+
   useEffect(() => {
     api.getQualityModels()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setModels(data)
       })
       .catch(() => {})
-    api.availableOrders()
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const firstOrder = data[0]
-          // Fetch order detail to get line_id
-          api.getOrder(firstOrder.id).then((orderDetail) => {
-            if (orderDetail && orderDetail.lines && orderDetail.lines.length > 0) {
-              const line = orderDetail.lines[0]
-              setOrdenDetalle({
-                id: orderDetail.id,
-                line_id: line.id,
-                workstation_id: line.workstation_id,
-              })
-            } else {
-              // Fallback if no lines
-              setOrdenDetalle({
-                id: firstOrder.id,
-                line_id: '',
-                workstation_id: firstOrder.workstation_id ?? null,
-              })
-            }
-          }).catch(() => {
-            // If fetching detail fails, fallback
-            setOrdenDetalle({
-              id: firstOrder.id,
-              line_id: '',
-              workstation_id: firstOrder.workstation_id ?? null,
-            })
-          })
+    const params = new URLSearchParams(window.location.search)
+    const ws = params.get('ws')
+    const orden = params.get('order')
+    if (ws) setWsSel(ws)
+    if (orden) setOrdenSelId(orden)
+    api.listWorkstations()
+      .then((data) => setPuestos(Array.isArray(data) ? data : []))
+      .catch(() => setPuestos([]))
+      .finally(() => setPuestosCargados(true))
+  }, [])
+
+  useEffect(() => {
+    puestosRef.current = puestos
+  }, [puestos])
+
+  useEffect(() => {
+    ordenWsRef.current = ordenWs
+  }, [ordenWs])
+
+  useEffect(() => {
+    if (!puestosCargados) return
+    const activos = puestosRef.current.filter((w) => w.is_active !== false)
+    if (pasoManual === 'puesto') {
+      setVista('seleccion')
+      return
+    }
+    if (!wsSel && activos.length > 1) {
+      setVista('seleccion')
+      return
+    }
+    if (!wsSel && activos.length === 1) {
+      setWsSel(activos[0].code)
+      return
+    }
+    const ws = wsSel ?? undefined
+    let cancelled = false
+    api.availableOrders(ws)
+      .then((items) => {
+        if (cancelled) return
+        const lista = Array.isArray(items) ? items : []
+        setCola(lista)
+        const desdeUrl = new URLSearchParams(window.location.search).get('order')
+        if (desdeUrl && lista.some((o) => o.id === desdeUrl)) {
+          const item = lista.find((o) => o.id === desdeUrl)
+          setOrdenSelId(desdeUrl)
+          if (item) {
+            setOrdenNumero(item.numero)
+            setOrdenWs(item.workstation_id ?? null)
+          }
+          setVista('panel')
+          return
+        }
+        if (pasoManual === 'orden') {
+          setVista('cola')
+          return
+        }
+        if (lista.length > 1) {
+          setVista('cola')
+          return
+        }
+        if (lista.length === 1) {
+          setOrdenSelId(lista[0].id)
+          setOrdenNumero(lista[0].numero)
+          setOrdenWs(lista[0].workstation_id ?? null)
         }
       })
       .catch(() => {})
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [puestosCargados, wsSel, pasoManual])
+
+  useEffect(() => {
+    if (!ordenSelId) return
+    let cancelled = false
+    api.getOrder(ordenSelId)
+      .then((orderDetail) => {
+        if (cancelled) return
+        if (
+          orderDetail &&
+          Array.isArray(orderDetail.lines) &&
+          orderDetail.lines.length > 0
+        ) {
+          const line = orderDetail.lines[0]
+          setOrdenDetalle({
+            id: orderDetail.id ?? ordenSelId,
+            line_id: line.id,
+            workstation_id: line.workstation_id ?? ordenWsRef.current,
+          })
+        } else {
+          setOrdenDetalle({
+            id: orderDetail?.id ?? ordenSelId,
+            line_id: '',
+            workstation_id: orderDetail?.workstation_id ?? ordenWsRef.current,
+          })
+        }
+        if (orderDetail && orderDetail.numero) setOrdenNumero(orderDetail.numero)
+        setVista('panel')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setOrdenDetalle({
+          id: ordenSelId,
+          line_id: '',
+          workstation_id: ordenWsRef.current,
+        })
+        setVista('panel')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ordenSelId])
+
+  const elegirPuesto = (code: string) => {
+    setWsSel(code)
+    setPasoManual(null)
+    setOrdenSelId(null)
+    setOrdenNumero(null)
+    setOrdenDetalle(null)
+    setCola([])
+    const u = new URL(window.location.href)
+    u.searchParams.set('ws', code)
+    u.searchParams.delete('order')
+    window.history.replaceState({}, '', u)
+  }
+
+  const elegirOrden = (o: OrderItem) => {
+    setPasoManual(null)
+    setScan(null)
+    setVinculada(false)
+    setCoilId('')
+    setOrdenSelId(o.id)
+    setOrdenNumero(o.numero)
+    setOrdenWs(o.workstation_id ?? null)
+    const u = new URL(window.location.href)
+    u.searchParams.set('order', o.id)
+    window.history.replaceState({}, '', u)
+  }
+
+  const cambiarPuesto = () => {
+    setPasoManual('puesto')
+    setWsSel(null)
+    setOrdenSelId(null)
+    setOrdenNumero(null)
+    setOrdenWs(null)
+    setOrdenDetalle(null)
+    setCola([])
+    setScan(null)
+    setVinculada(false)
+    setVista('seleccion')
+    const u = new URL(window.location.href)
+    u.searchParams.delete('order')
+    u.searchParams.delete('ws')
+    window.history.replaceState({}, '', u)
+  }
+
+  const cambiarOrden = () => {
+    setPasoManual('orden')
+    setOrdenSelId(null)
+    setOrdenNumero(null)
+    setOrdenWs(null)
+    setOrdenDetalle(null)
+    setScan(null)
+    setVinculada(false)
+    setVista('cola')
+    const u = new URL(window.location.href)
+    u.searchParams.delete('order')
+    window.history.replaceState({}, '', u)
+  }
 
   const modelo = models[0] ?? null
   const puedeAutocontrol = Boolean(modelo && ordenDetalle?.workstation_id)
@@ -455,6 +606,88 @@ export function OperarioPage() {
     }
   }
 
+  if (vista === 'seleccion') {
+    const activos = puestos.filter((w) => w.is_active !== false)
+    return (
+      <div className="max-w-3xl mx-auto space-y-4">
+        <div className="step-guide">
+          <p className="label-industrial text-xs text-kavana-text-dim">
+            Paso 1 de 3
+          </p>
+          <p className="text-lg font-bold">Selecciona tu puesto de trabajo</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {activos.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => elegirPuesto(w.code)}
+              className="bg-kavana-surface border-2 border-kavana-border rounded-sm p-5 text-left hover:border-kavana-orange transition-colors"
+            >
+              <span className="label-industrial text-[10px] text-kavana-text-dim">
+                Puesto
+              </span>
+              <p className="text-xl font-black uppercase">{w.name || w.code}</p>
+              <p className="mono-data text-sm text-kavana-orange">{w.code}</p>
+            </button>
+          ))}
+        </div>
+        {activos.length === 0 && (
+          <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-sm p-8 text-center text-kavana-text-dim">
+            Sin puestos de trabajo configurados.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (vista === 'cola') {
+    return (
+      <div className="max-w-3xl mx-auto space-y-4">
+        <div className="step-guide">
+          <p className="label-industrial text-xs text-kavana-text-dim">
+            Paso 2 de 3
+          </p>
+          <p className="text-lg font-bold">
+            Cola de órdenes{wsSel ? ` · ${wsSel}` : ''}
+          </p>
+        </div>
+        <div className="grid gap-3">
+          {cola.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => elegirOrden(o)}
+              className="bg-kavana-surface border-2 border-kavana-border rounded-sm p-5 text-left hover:border-kavana-orange transition-colors"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-2xl font-black uppercase">#{o.numero}</p>
+                <span className="label-industrial text-[10px] rounded border px-2 py-0.5 border-kavana-border text-kavana-text-dim">
+                  {o.estado}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-kavana-text-dim">
+                {o.cliente ?? 'Sin cliente'}
+              </p>
+            </button>
+          ))}
+          {cola.length === 0 && (
+            <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-sm p-8 text-center text-kavana-text-dim">
+              Sin órdenes para este puesto. Esperando planificación.
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={cambiarPuesto}
+          className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange transition-colors"
+        >
+          ← Cambiar puesto
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       {/* Toast container for success/error */}
@@ -490,6 +723,27 @@ export function OperarioPage() {
         <p className="text-lg font-bold">
           {vinculada ? 'Producir piezas' : 'Vincular bobina'}
         </p>
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <p className="mono-data text-[11px] text-kavana-text-dim truncate">
+            {wsSel ?? 'puesto por defecto'} · {ordenNumero ?? ordenDetalle?.id ?? 'sin orden'}
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={cambiarOrden}
+              className="label-industrial text-[10px] uppercase border border-kavana-border rounded-sm px-2 py-1 hover:border-kavana-orange"
+            >
+              Cambiar orden
+            </button>
+            <button
+              type="button"
+              onClick={cambiarPuesto}
+              className="label-industrial text-[10px] uppercase border border-kavana-border rounded-sm px-2 py-1 hover:border-kavana-orange"
+            >
+              Cambiar puesto
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Acción principal: escaneo de bobina (botón grande táctil) */}

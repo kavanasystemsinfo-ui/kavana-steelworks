@@ -443,7 +443,8 @@ def test_list_workstations_permitido_para_supervisor(db_session, tenant):
     assert r.status_code == 200, r.text
 
 
-def test_list_workstations_denegado_para_operario(db_session, tenant):
+def test_list_workstations_operario_puede_leer(db_session, tenant):
+    """Lectura abierta al operario: su pantalla de selección de puesto."""
     operario = make_user(db_session, tenant, email="op-work@test.local", role="operator")
     r = _do(db_session, operario, "get", "/api/v1/admin/workstations")
-    assert r.status_code == 403, r.text
+    assert r.status_code == 200, r.text

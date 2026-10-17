@@ -51,9 +51,12 @@ def get_current_user(
 
 
 AdminDep = Annotated[User, Depends(require_roles(get_current_user, ROL_ADMIN))]
-# Lectura de puestos abierta al supervisor: el form de creación de órdenes
-# (Fase A1) necesita el listado; el alta/baja sigue en AdminDep.
-PlantaReadDep = Annotated[User, Depends(require_roles(get_current_user, "supervisor", ROL_ADMIN))]
+# Lectura de puestos abierta a supervisor y operario: el form de creación de
+# órdenes y la pantalla de selección de puesto del operario; alta/baja AdminDep.
+PlantaReadDep = Annotated[
+    User,
+    Depends(require_roles(get_current_user, "operator", "supervisor", ROL_ADMIN)),
+]
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────

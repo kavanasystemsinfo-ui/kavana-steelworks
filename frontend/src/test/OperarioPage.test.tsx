@@ -1154,3 +1154,141 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     vi.unstubAllGlobals()
   })
 })
+
+describe('Fase 2 pulido: puesto -> cola de ordenes -> panel', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.history.replaceState({}, '', '/')
+  })
+
+  const puestos = [
+    { id: 'w1', code: 'LINEA-1', name: 'Linea Uno', color: '#333', group_id: null, is_active: true },
+    { id: 'w2', code: 'LINEA-9', name: 'Linea Nueve', color: '#333', group_id: null, is_active: true },
+  ]
+  const ordenes = [
+    { id: 'OPA', numero: 'OP-F2-001', estado: 'active', cliente: 'Cliente A', fecha_entrega: null, workstation_id: 'LINEA-1' },
+    { id: 'OPB', numero: 'OP-F2-002', estado: 'draft', cliente: 'Cliente B', fecha_entrega: null, workstation_id: 'LINEA-1' },
+  ]
+
+  function stubFlujo(opts?: { conPuestoUnico?: boolean }) {
+    const llamadas: string[] = []
+    const puestosUsar = opts?.conPuestoUnico ? [puestos[0]] : puestos
+    const ordenesUsar = opts?.conPuestoUnico ? [ordenes[0]] : ordenes
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const u = String(url)
+        llamadas.push(u)
+        if (u.includes('/admin/workstations')) {
+          return Promise.resolve({ ok: true, json: async () => puestosUsar })
+        }
+        if (u.includes('/orders/available')) {
+          return Promise.resolve({ ok: true, json: async () => ordenesUsar })
+        }
+        if (u.includes('/orders/OPA')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: 'OPA',
+              numero: 'OP-F2-001',
+              estado: 'active',
+              lines: [{ id: 'L1', workstation_id: 'LINEA-1' }],
+            }),
+          })
+        }
+        if (u.includes('/orders/OPB')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: 'OPB',
+              numero: 'OP-F2-002',
+              estado: 'draft',
+              lines: [{ id: 'L2', workstation_id: 'LINEA-1' }],
+            }),
+          })
+        }
+        if (u.includes('/quality/models')) {
+          return Promise.resolve({ ok: true, json: async () => [] })
+        }
+        return Promise.resolve({ ok: true, json: async () => null })
+      }),
+    )
+    return llamadas
+  }
+
+  it('con dos puestos muestra la pantalla de seleccion de puesto', async () => {
+    stubFlujo()
+    renderPage()
+    expect(
+      await screen.findByText('Selecciona tu puesto de trabajo'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /LINEA-1/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /LINEA-9/ })).toBeInTheDocument()
+    expect(screen.queryByText('Vincular bobina')).not.toBeInTheDocument()
+  })
+
+  it('elegir puesto lleva a la cola y elegir orden al panel con la URL', async () => {
+    const user = userEvent.setup()
+    stubFlujo()
+    renderPage()
+    await screen.findByText('Selecciona tu puesto de trabajo')
+    await user.click(screen.getByRole('button', { name: /LINEA-1/ }))
+
+    expect(await screen.findByText(/Cola de órdenes · LINEA-1/)).toBeInTheDocument()
+    expect(screen.getByText('#OP-F2-001')).toBeInTheDocument()
+    expect(screen.getByText('#OP-F2-002')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /OP-F2-001/ }))
+    expect(await screen.findByText('Vincular bobina')).toBeInTheDocument()
+    expect(window.location.search).toContain('ws=LINEA-1')
+    expect(window.location.search).toContain('order=OPA')
+    expect(screen.getByText(/LINEA-1 · OP-F2-001/)).toBeInTheDocument()
+  })
+
+  it('availableOrders se llama con el puesto seleccionado', async () => {
+    const user = userEvent.setup()
+    const llamadas = stubFlujo()
+    renderPage()
+    await screen.findByText('Selecciona tu puesto de trabajo')
+    await user.click(screen.getByRole('button', { name: /LINEA-1/ }))
+    await waitFor(() => {
+      expect(
+        llamadas.some((u) => u.includes('/orders/available?workstation=LINEA-1')),
+      ).toBe(true)
+    })
+  })
+
+  it('con un solo puesto se salta la seleccion y con una orden va al panel', async () => {
+    stubFlujo({ conPuestoUnico: true })
+    renderPage()
+    expect(await screen.findByText('Vincular bobina')).toBeInTheDocument()
+    expect(screen.queryByText('Selecciona tu puesto de trabajo')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cola de órdenes/)).not.toBeInTheDocument()
+    expect(window.location.search).not.toContain('ws=')
+  })
+
+  it('el boton cambiar orden devuelve a la cola desde el panel', async () => {
+    const user = userEvent.setup()
+    stubFlujo({ conPuestoUnico: true })
+    renderPage()
+    await screen.findByText('Vincular bobina')
+    await user.click(screen.getByRole('button', { name: /cambiar orden/i }))
+
+    expect(await screen.findByText(/Cola de órdenes · LINEA-1/)).toBeInTheDocument()
+    expect(screen.getByText('#OP-F2-001')).toBeInTheDocument()
+    expect(screen.queryByText('Vincular bobina')).not.toBeInTheDocument()
+  })
+
+  it('el boton cambiar puesto vuelve a la seleccion de puesto', async () => {
+    const user = userEvent.setup()
+    stubFlujo({ conPuestoUnico: true })
+    renderPage()
+    await screen.findByText('Vincular bobina')
+    await user.click(screen.getByRole('button', { name: /cambiar puesto/i }))
+
+    expect(
+      await screen.findByText('Selecciona tu puesto de trabajo'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /LINEA-1/ })).toBeInTheDocument()
+  })
+})

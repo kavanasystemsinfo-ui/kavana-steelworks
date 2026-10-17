@@ -220,7 +220,7 @@ def consume_stock_fifo(
             restante = Decimal("0")
 
     if restante > 0:
-        raise ValueError(f"Stock insuficiente: faltan {restante} unidades")
+        raise ValueError(f"Stock insuficiente: faltan {restante} kg de material")
 
     # Registrar consumos en material_consumos (auditoría / roll-up)
     from app.models import MaterialTransaction
