@@ -4,6 +4,39 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de costes: €/kg del periodo con tendencia, reparto y CSV (fases 1-4)
+
+- **Problema:** el panel enseñaba coste por orden y acumulados, pero no
+  respondía a la pregunta que se hace un jefe de planta al cerrar el mes:
+  ¿cuánto me cuesta el kilo, en qué se va el dinero y cómo voy frente a la
+  semana pasada y al objetivo? El legacy lo tenía repartido entre informes
+  manuales y no había ventana natural ni comparativa.
+- **Solución:**
+  - `services/panel_costes.py`: agregación de la vista Costes sobre la
+    ventana natural de planta (`TZ_PLANTA`, semana/mes/trimestre), con €/kg
+    comparable (solo líneas en kg), coste total, desviación sobre estimado,
+    chatarra, reparto material/mano de obra/chatarra (material neto para no
+    contar la chatarra dos veces), coste de paradas a €/h del puesto,
+    tendencia de 8 semanas y las 10 órdenes con más desviación con causa
+    calculada. Objetivo €/kg desde `tenant.finances`; sin valor, `null`.
+  - `services/panel_costes_csv.py`: serializador CSV para Excel español (BOM,
+    `;`, coma decimal). El router no calcula: llama al servicio y serializa.
+  - `GET /api/v1/supervisor/panel/costes?periodo=&formato=` con roles
+    supervisor/admin; `periodo` y `formato` inválidos devuelven 400 explícito
+    (no se hereda el fallback silencioso a JSON de `/informe-turno`).
+  - Frontend: `components/VistaCostes.tsx` + `api.getPanelCostes` y
+    `api.descargarPanelCostesCsv`, sección "Costes del periodo" en el panel de
+    supervisor y acceso desde la acción rápida. El cliente formatea, no
+    recalcula €/kg ni porcentajes.
+  - Gate de ruff acotado a `app/` y `tests/` (`extend-exclude` de alembic,
+    `e2e_*.py` y `test_neg.py`) y paso de CI renombrado: la deuda preexistente
+    de migraciones deja de confundirse con una regresión de la fase.
+- **Verificación:** 16 tests del servicio + 19 del endpoint (35 en total,
+  `pytest tests/test_panel_costes*.py` en verde en esta máquina), suite
+  completa 409 passed + 1 skipped; 122 tests de frontend (11 nuevos) y build
+  de TypeScript, oxlint y ruff limpios. La forma del contrato se tomó de una
+  respuesta real del endpoint, no de un dict a mano.
+
 ## 2026-10-26 — Adopción selectiva del legacy: coste, planta de un vistazo y demo honesta (ADR-021)
 
 - **Problema:** la mano de obra estaba fijada a 0 y el coste estimado no se

@@ -37,6 +37,36 @@ bajo mínimos. Cada contador sale del mismo dato que su pantalla de detalle.
 Tabla con material, mano de obra, total, estimado, desviación y merma de cada
 orden. Su suma cuadra con las tarjetas.
 
+## Costes del periodo
+
+Entre las tarjetas y el coste por orden. Eliges **Semana**, **Mes** o
+**Trimestre**; la ventana es la de planta: de lunes a lunes, del día 1 al 1 y
+trimestre natural (agosto y septiembre son el tercer trimestre; octubre abre
+el cuarto). Una orden cuenta en el periodo en que se tocó por última vez.
+
+- **€/kg del periodo**, con el €/kg del periodo anterior y el objetivo de la
+  empresa si lo has configurado en Admin (Empresa). Sin objetivo, lo dice: no
+  enseña un cero que parezca un objetivo.
+- **Coste total**, kilos valorados y órdenes completadas. Solo las líneas
+  medidas en kilos entran en el €/kg; las líneas en metros se cuentan aparte
+  para no mezclar unidades. El coste total sí las incluye.
+- **Chatarra**: euros y porcentaje sobre el material cargado. No se cuenta dos
+  veces: en el reparto, el material va ya sin la chatarra.
+- **Desviación sobre lo estimado**: euros y porcentaje de las órdenes
+  completadas que tienen estimado. Sin órdenes con estimado no hay
+  comparación que enseñar.
+- **Reparto del coste**: material, mano de obra y chatarra. Suma el coste
+  total.
+- **Coste de paradas**: incidencias del periodo valoradas a €/h del puesto (o
+  al coste global de la empresa), desglosadas por tipo.
+- **Tendencia**: €/kg de las últimas ocho semanas.
+- **Órdenes con más desviación**: como mucho diez, ordenadas por desviación.
+  La causa la calcula el sistema: chatarra alta, paradas, mejor
+  aprovechamiento, dentro de lo normal o sin causa clara.
+
+"Descargar CSV de costes" baja el mismo contenido en CSV para Excel español
+(separador punto y coma, coma decimal).
+
 ## Puestos en planta y modo Andon
 
 Una tarjeta por puesto: orden, bobina vinculada, piezas, última actividad y
