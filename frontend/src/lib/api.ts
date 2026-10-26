@@ -184,6 +184,65 @@ export interface PlanCheck {
   is_critical: boolean
 }
 
+/** Periodo natural de la vista Costes (ventana de planta, TZ_PLANTA). */
+export type PeriodoPanel = 'semana' | 'mes' | 'trimestre'
+
+/** €/kg del periodo con su comparativa y el objetivo de empresa, si existe. */
+export interface PanelCostesCosteKg {
+  valor: number
+  periodo_anterior: number
+  objetivo: number | null
+}
+
+export interface PanelCostesReparto {
+  clave: string
+  etiqueta: string
+  euros: number
+  pct: number
+}
+
+export interface PanelCostesParadas {
+  total: number
+  por_tipo: { tipo: string; etiqueta: string; euros: number }[]
+  horas: number
+}
+
+export interface PanelCostesTendencia {
+  semana: string
+  valor: number
+}
+
+export interface PanelCostesOrden {
+  order_id: string
+  numero: string
+  producto: string | null
+  kg: number
+  estimado: number | null
+  real: number
+  desv_euros: number | null
+  desv_pct: number | null
+  causa: string
+}
+
+/** Vista Costes del panel de mando (GET /supervisor/panel/costes).
+ *  El cliente NO recalcula: muestra tal cual lo que devuelve el backend. */
+export interface PanelCostes {
+  periodo: PeriodoPanel
+  desde: string
+  hasta: string
+  coste_kg: PanelCostesCosteKg
+  coste_total: number
+  kg_total: number
+  lineas_metros_excluidas: number
+  ordenes_completadas: number
+  desviacion: { pct: number | null; euros: number | null; ordenes_con_estimado: number }
+  chatarra: { euros: number; pct_material: number }
+  reparto: PanelCostesReparto[]
+  coste_paradas: PanelCostesParadas
+  tendencia: PanelCostesTendencia[]
+  ordenes: PanelCostesOrden[]
+}
+
 export interface QualityModel {
   id: string
   code: string
@@ -444,6 +503,29 @@ export const api = {
 
   getCostesOrdenes(): Promise<CosteOrden[]> {
     return request('/supervisor/costes-ordenes')
+  },
+
+  /** Vista Costes del periodo (servicio panel_costes; el cliente no calcula). */
+  getPanelCostes(periodo: PeriodoPanel = 'mes'): Promise<PanelCostes> {
+    return request(`/supervisor/panel/costes?periodo=${periodo}`)
+  },
+
+  /** Descarga el panel de costes en CSV para Excel (con auth) como fichero. */
+  async descargarPanelCostesCsv(periodo: PeriodoPanel = 'mes'): Promise<void> {
+    const token = sessionStorage.getItem('kavana_token')
+    const res = await fetch(`${BASE}/supervisor/panel/costes?periodo=${periodo}&formato=csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Error ${res.status}`)
+    const nombre =
+      res.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] ??
+      `panel-costes-${periodo}.csv`
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombre
+    a.click()
+    URL.revokeObjectURL(url)
   },
 
   getPuestos(): Promise<PuestoEstado[]> {

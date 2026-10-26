@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { api } from '../lib/api'
 import { PuestosMonitor } from '../components/PuestosMonitor'
 import { InformeTurno } from '../components/InformeTurno'
+import { VistaCostes } from '../components/VistaCostes'
 import type {
   AlertasData,
   CosteOrden,
@@ -257,6 +258,9 @@ export function SupervisorPage() {
             <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('incidencias')}>
               Incidencias
             </button>
+            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('costes')}>
+              Costes del periodo
+            </button>
             <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('puestos')}>
               Puestos
             </button>
@@ -367,6 +371,15 @@ export function SupervisorPage() {
             {fmtEur(kpis?.cost_variance)}
           </span>
         </Tarjeta>
+      </div>
+
+      {/* Vista Costes del periodo natural de planta (fase 3 del panel de mando) */}
+      <div id="costes" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="label-industrial text-xs text-kavana-text-dim">Costes del periodo</p>
+          <span className="text-[10px] text-kavana-text-dim">ventana de planta</span>
+        </div>
+        <VistaCostes />
       </div>
 
       {/* Coste por orden: la misma fuente que las tarjetas, siempre cuadran */}

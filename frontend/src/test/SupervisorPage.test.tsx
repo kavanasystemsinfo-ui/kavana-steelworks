@@ -144,6 +144,27 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
     if (url.includes('/supervisor/kpis')) {
       return Promise.resolve({ ok: true, json: async () => kpisBody })
     }
+    if (url.includes('/supervisor/panel/costes')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          periodo: 'mes',
+          desde: '2026-10-01T05:00:00+00:00',
+          hasta: '2026-11-01T05:00:00+00:00',
+          coste_kg: { valor: 3.2, periodo_anterior: 3.5, objetivo: null },
+          coste_total: 640,
+          kg_total: 200,
+          lineas_metros_excluidas: 0,
+          ordenes_completadas: 2,
+          desviacion: { pct: null, euros: null, ordenes_con_estimado: 0 },
+          chatarra: { euros: 0, pct_material: 0 },
+          reparto: [{ clave: 'material', etiqueta: 'Material', euros: 640, pct: 100 }],
+          coste_paradas: { total: 0, por_tipo: [], horas: 0 },
+          tendencia: [{ semana: '2026-10-26', valor: 3.2 }],
+          ordenes: [],
+        }),
+      })
+    }
     if (url.includes('/supervisor/costes-ordenes')) {
       return Promise.resolve({ ok: true, json: async () => costesBody })
     }
@@ -191,6 +212,18 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     // 950 € aparece en la tarjeta de coste y en el total de la orden
     expect(screen.getAllByText('950 €').length).toBe(2)
     expect(screen.getAllByText('-100 €').length).toBe(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('incluye la vista de costes del periodo con el €/kg del backend', async () => {
+    stubApi()
+
+    renderPage()
+
+    const titulo = await screen.findByText('€/kg del periodo')
+    expect(screen.getByText('Costes del periodo')).toBeInTheDocument()
+    expect(titulo.closest('div')).toHaveTextContent('3,20')
+    expect(screen.getByRole('button', { name: 'Descargar CSV de costes' })).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
