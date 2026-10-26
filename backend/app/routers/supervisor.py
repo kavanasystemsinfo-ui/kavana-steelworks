@@ -133,3 +133,44 @@ def get_informe_turno(
             headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
         )
     return informe
+
+
+@router.get("/panel/costes")
+def get_panel_costes(
+    db: DbDep,
+    periodo: str = "mes",
+    formato: str = "json",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Vista Costes del panel de mando: resumen, reparto, paradas, tendencia y órdenes.
+
+    ``periodo`` ∈ ``semana`` | ``mes`` | ``trimestre`` (ventana natural en horario
+    de planta). ``formato=csv`` devuelve el mismo dato en CSV para Excel (BOM,
+    separador ``;`` y coma decimal). El router no calcula: delega en
+    ``panel_costes()`` y solo serializa.
+    """
+    from app.services.panel_costes import panel_costes
+    from app.services.panel_costes_csv import panel_costes_csv
+
+    # Decisión de Jorge (27/10): 400 explícito, no el fallback silencioso a JSON
+    # que hace /informe-turno. Un formato que no se entiende es un error del que
+    # llama, no algo que se deba adivinar.
+    if formato not in ("json", "csv"):
+        raise HTTPException(status_code=400, detail="formato debe ser json o csv")
+
+    try:
+        datos = panel_costes(db, current_user.tenant_id, periodo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if formato == "csv":
+        nombre = f"panel-costes-{datos['periodo']}-{datos['desde'][:10]}.csv"
+        return Response(
+            content="﻿" + panel_costes_csv(datos),  # BOM: Excel detecta UTF-8
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    return datos
