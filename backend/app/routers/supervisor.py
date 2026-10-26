@@ -1,8 +1,9 @@
 """Router de Supervisor: OEE y KPIs del turno (spec 03)."""
 
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -90,3 +91,45 @@ def get_puestos(
     from app.services.puestos import estado_puestos
 
     return estado_puestos(db, current_user.tenant_id)
+
+
+@router.get("/alertas")
+def get_alertas(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Stock bajo mínimos e incidencias abiertas (misma regla que su detalle)."""
+    from app.services.alertas import alertas
+
+    return alertas(db, current_user.tenant_id)
+
+
+@router.get("/informe-turno")
+def get_informe_turno(
+    fecha: date,
+    turno: str,
+    db: DbDep,
+    formato: str = "json",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Informe del turno A/B/C de una fecha (JSON o CSV para Excel)."""
+    from app.services.informe_turno import informe_csv, informe_turno
+
+    try:
+        informe = informe_turno(db, current_user.tenant_id, fecha, turno.upper())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if formato == "csv":
+        nombre = f"informe-turno-{informe['fecha']}-{informe['turno']}.csv"
+        return Response(
+            content="﻿" + informe_csv(informe),  # BOM: Excel detecta UTF-8
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    return informe

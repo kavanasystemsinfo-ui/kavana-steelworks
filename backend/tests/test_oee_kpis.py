@@ -96,12 +96,13 @@ def test_kpis_financieros(db_session):
     line.target_material_qty = Decimal("100")  # 100 kg × 10 €/kg = 1000 € estimado
     line.real_material_cost = Decimal("900")
     line.real_cost = Decimal("900")
+    order.estado = "completed"
     db_session.commit()
 
     kpis = calcular_kpis(db_session, tenant.id)
 
     assert kpis["orders_total"] == 1
-    assert kpis["orders_active"] == 1
+    assert kpis["orders_completed"] == 1
     assert kpis["cost_variance"] == -100.0  # 900 - 1000
     assert kpis["cost_efficiency"] == 111.1  # 1000/900*100
     assert kpis["scrap_rate"] == 5.0  # 5/100*100

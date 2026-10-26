@@ -82,8 +82,8 @@ def calcular_kpis(db: Session, tenant_id) -> dict:
 
     El coste sale de las líneas de orden (services/costes.py), la misma
     fuente que la tabla de coste por orden: las dos cifras siempre cuadran.
-    La desviación compara material real vs estimado SOLO en las órdenes que
-    tienen estimado (precio €/kg y objetivo de material); sin base, None.
+    La desviación compara material real vs estimado SOLO en las órdenes
+    completadas que tienen estimado (precio €/kg y objetivo); sin base, None.
     """
     from app.services.costes import costes_por_orden
 
@@ -95,7 +95,8 @@ def calcular_kpis(db: Session, tenant_id) -> dict:
     total_material = sum(o["real_material"] for o in ordenes)
     total_mano_obra = sum(o["mano_obra"] for o in ordenes)
     scrap_coste = sum(o["scrap_coste"] for o in ordenes)
-    con_estimado = [o for o in ordenes if o["estimado_material"] is not None]
+    # Comparable = completada y con estimado (ver costes_por_orden)
+    con_estimado = [o for o in ordenes if o["desviacion_material"] is not None]
     total_estimado = sum(o["estimado_material"] for o in con_estimado)
     real_comparable = sum(o["real_material_comparable"] for o in con_estimado)
 

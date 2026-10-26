@@ -63,6 +63,31 @@ const costesBody = [
   },
 ]
 
+const alertasBody = {
+  stock_bajo_minimos: [
+    { code: 'FLEJE-D265-18', name: 'Fleje', stock: 100, minimo: 400, unidad: 'kg' },
+  ],
+  incidencias_abiertas: 2,
+}
+
+const informeBody = {
+  fecha: '2026-10-26',
+  turno: 'A',
+  inicio: '2026-10-26T06:00:00-05:00',
+  fin: '2026-10-26T14:00:00-05:00',
+  puestos: [
+    {
+      puesto: 'DOBL-1', ordenes: 1, piezas: 42, consumo_kg: 470.4, consumo_m: 0,
+      merma_kg: 3.2, merma_coste: 4, autocontroles: 3, autocontroles_nok: 1,
+      incidencias: 1, parada_min: 15,
+    },
+  ],
+  totales: {
+    piezas: 42, consumo_kg: 470.4, consumo_m: 0, merma_kg: 3.2, merma_coste: 4,
+    autocontroles: 3, autocontroles_nok: 1, incidencias: 1, parada_min: 15,
+  },
+}
+
 const ordersBody = [
   { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: 'Cliente demo', fecha_entrega: '2026-08-22T00:00:00Z' },
   { id: 'OP2', numero: 'OP-DEMO-002', estado: 'completed', cliente: 'Cliente demo', fecha_entrega: '2026-08-18T00:00:00Z' },
@@ -122,6 +147,12 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
     if (url.includes('/supervisor/costes-ordenes')) {
       return Promise.resolve({ ok: true, json: async () => costesBody })
     }
+    if (url.includes('/supervisor/alertas')) {
+      return Promise.resolve({ ok: true, json: async () => alertasBody })
+    }
+    if (url.includes('/supervisor/informe-turno')) {
+      return Promise.resolve({ ok: true, json: async () => informeBody })
+    }
     if (url.includes('/api/v1/orders')) {
       return Promise.resolve({ ok: true, json: async () => orders })
     }
@@ -170,9 +201,31 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     renderPage()
 
     expect(
-      await screen.findByText('Sin estimado: falta €/kg del material u objetivo de kg'),
+      await screen.findByText('Sin órdenes completadas con estimado (€/kg y objetivo de kg)'),
     ).toBeInTheDocument()
     Object.assign(kpisBody, { estimated_cost: 1000, cost_variance: -100 })
+    vi.unstubAllGlobals()
+  })
+
+  it('muestra alertas coherentes: incidencias abiertas y stock bajo mínimos', async () => {
+    stubApi()
+
+    renderPage()
+
+    expect(await screen.findByText('2 incidencias abiertas')).toBeInTheDocument()
+    expect(screen.getByText(/1 materiales bajo mínimos:.*FLEJE-D265-18/)).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('muestra el informe de turno por puesto con totales', async () => {
+    stubApi()
+
+    renderPage()
+
+    expect(await screen.findByText('DOBL-1')).toBeInTheDocument()
+    expect(screen.getByText('(1 NOK)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Descargar CSV' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Imprimir / PDF' })).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 

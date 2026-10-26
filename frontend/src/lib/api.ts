@@ -102,6 +102,36 @@ export interface KpisData {
   scrap_rate: number
 }
 
+/** Alertas del centro de mando (GET /supervisor/alertas). */
+export interface AlertasData {
+  stock_bajo_minimos: { code: string; name: string; stock: number; minimo: number; unidad: string }[]
+  incidencias_abiertas: number
+}
+
+export interface InformeTurnoPuesto {
+  puesto: string
+  ordenes: number
+  piezas: number
+  consumo_kg: number
+  consumo_m: number
+  merma_kg: number
+  merma_coste: number
+  autocontroles: number
+  autocontroles_nok: number
+  incidencias: number
+  parada_min: number
+}
+
+/** Informe de un turno A/B/C (GET /supervisor/informe-turno). */
+export interface InformeTurno {
+  fecha: string
+  turno: string
+  inicio: string
+  fin: string
+  puestos: InformeTurnoPuesto[]
+  totales: Omit<InformeTurnoPuesto, 'puesto' | 'ordenes'>
+}
+
 /** Estado de un puesto en planta (GET /supervisor/puestos). */
 export interface PuestoEstado {
   code: string
@@ -420,6 +450,30 @@ export const api = {
     return request('/supervisor/puestos')
   },
 
+  getAlertas(): Promise<AlertasData> {
+    return request('/supervisor/alertas')
+  },
+
+  getInformeTurno(fecha: string, turno: string): Promise<InformeTurno> {
+    return request(`/supervisor/informe-turno?fecha=${fecha}&turno=${turno}`)
+  },
+
+  /** Descarga el informe en CSV (con auth) y lo entrega como fichero. */
+  async descargarInformeCsv(fecha: string, turno: string): Promise<void> {
+    const token = sessionStorage.getItem('kavana_token')
+    const res = await fetch(
+      `${BASE}/supervisor/informe-turno?fecha=${fecha}&turno=${turno}&formato=csv`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    )
+    if (!res.ok) throw new Error(`Error ${res.status}`)
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `informe-turno-${fecha}-${turno}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
   listOrders(): Promise<OrderItem[]> {
     return request('/orders')
   },
@@ -667,6 +721,8 @@ export interface JwtPayload {
   sub: string
   tenant_id: string
   role: string
+  /** Tenant de demostración: la interfaz lo marca como DATOS DE DEMO. */
+  demo?: boolean
   exp: number
 }
 

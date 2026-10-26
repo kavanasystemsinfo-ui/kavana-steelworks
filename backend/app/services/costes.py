@@ -109,8 +109,14 @@ def costes_por_orden(db: Session, tenant_id: uuid.UUID) -> list[dict]:
             piezas += linea.produced_quantity or Decimal("0")
             objetivo += linea.total_quantity or Decimal("0")
 
-        # Desviación solo sobre las líneas que tienen estimado (comparar lo comparable)
-        desviacion = None if estimado is None else real_material_con_estimado - estimado
+        # Desviación solo en órdenes completadas y sobre las líneas con estimado.
+        # En curso no es comparable: la bobina se carga entera al vincularla
+        # (cobro bulk, spec 01 3.6) y se reembolsa al cerrarla.
+        desviacion = (
+            real_material_con_estimado - estimado
+            if estimado is not None and orden.estado == "completed"
+            else None
+        )
         resultado.append(
             {
                 "order_id": str(orden.id),

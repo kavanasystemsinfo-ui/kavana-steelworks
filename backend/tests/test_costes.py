@@ -127,6 +127,7 @@ def test_roll_up_a_la_cabecera_de_la_orden(db_session, tenant, user):
 def test_estimado_y_desviacion_por_orden(db_session, tenant):
     material = make_material(db_session, tenant, code="ACERO-EST", cost=2.0)
     order = make_order(db_session, tenant, numero="OP-EST")
+    order.estado = "completed"
     line = make_order_line(db_session, order, total_quantity=10.0, material=material)
     line.target_material_qty = Decimal("100")  # 100 kg × 2 €/kg = 200 € estimado
     line.real_material_qty = Decimal("110")
@@ -146,6 +147,24 @@ def test_estimado_y_desviacion_por_orden(db_session, tenant):
     assert fila["scrap_coste"] == 10.0  # 5 kg × 2 €/kg real
 
 
+def test_orden_en_curso_tiene_estimado_pero_no_desviacion(db_session, tenant):
+    """En curso la bobina está cargada entera (bulk): comparar engañaría."""
+    material = make_material(db_session, tenant, code="ACERO-CURSO", cost=2.0)
+    order = make_order(db_session, tenant, numero="OP-CURSO")  # active
+    line = make_order_line(db_session, order, material=material)
+    line.target_material_qty = Decimal("100")
+    line.real_material_cost = Decimal("1600")  # bobina de 800 kg vinculada
+    db_session.commit()
+
+    [fila] = costes_por_orden(db_session, tenant.id)
+    kpis = calcular_kpis(db_session, tenant.id)
+
+    assert fila["estimado_material"] == 200.0
+    assert fila["desviacion_material"] is None
+    assert kpis["cost_variance"] is None
+    assert kpis["orders_with_estimate"] == 0
+
+
 def test_sin_precio_no_hay_estimado(db_session, tenant):
     material = make_material(db_session, tenant, code="ACERO-SIN", cost=0)
     order = make_order(db_session, tenant, numero="OP-SIN")
@@ -163,6 +182,7 @@ def test_kpis_cuadran_con_la_tabla_por_orden(db_session, tenant):
     material = make_material(db_session, tenant, code="ACERO-KPI", cost=1.0)
     for i, (target, real) in enumerate([(100, 120), (50, 40)]):
         order = make_order(db_session, tenant, numero=f"OP-K{i}")
+        order.estado = "completed"
         line = make_order_line(db_session, order, material=material)
         line.target_material_qty = Decimal(target)
         line.real_material_qty = Decimal(real)

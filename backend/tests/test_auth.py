@@ -48,6 +48,20 @@ def test_login_devuelve_token_de_8_horas(db_session, tenant):
     assert 7.5 <= horas <= 8.5  # ~8 horas = un turno
 
 
+def test_token_marca_tenant_demo(db_session, tenant):
+    """La interfaz muestra DATOS DE DEMO solo en el tenant de demostración."""
+    from app.services.auth import login, verify_token
+
+    _make_user(db_session, tenant)
+    token = login(db_session, tenant.id, "operario@test.local", "clave123")
+    assert verify_token(token)["demo"] is False
+
+    tenant.slug = "demo"
+    db_session.commit()
+    token = login(db_session, tenant.id, "operario@test.local", "clave123")
+    assert verify_token(token)["demo"] is True
+
+
 def test_login_con_password_incorrecto_falla(db_session, tenant):
     from app.services.auth import login
 

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../lib/api'
 import { PuestosMonitor } from '../components/PuestosMonitor'
+import { InformeTurno } from '../components/InformeTurno'
 import type {
+  AlertasData,
   CosteOrden,
   KpisData,
   MaterialOut,
@@ -80,6 +82,7 @@ export function SupervisorPage() {
   const [oee, setOee] = useState<OeeData | null>(null)
   const [kpis, setKpis] = useState<KpisData | null>(null)
   const [costes, setCostes] = useState<CosteOrden[] | null>(null)
+  const [alertas, setAlertas] = useState<AlertasData | null>(null)
   const [error, setError] = useState('')
   const [andon, setAndon] = useState(false)
   const [menuRapido, setMenuRapido] = useState(false)
@@ -153,6 +156,9 @@ export function SupervisorPage() {
       api.getCostesOrdenes()
         .then((data) => setCostes(Array.isArray(data) ? data : []))
         .catch(() => setCostes(null))
+      api.getAlertas()
+        .then((data) => setAlertas(data && Array.isArray(data.stock_bajo_minimos) ? data : null))
+        .catch(() => setAlertas(null))
     }
     cargar()
     const timer = setInterval(cargar, 10000)
@@ -254,6 +260,9 @@ export function SupervisorPage() {
             <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('puestos')}>
               Puestos
             </button>
+            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('informe')}>
+              Informe de turno
+            </button>
             <button
               type="button"
               className="text-left px-3 py-2 hover:bg-kavana-surface"
@@ -295,6 +304,32 @@ export function SupervisorPage() {
         </p>
       )}
 
+      {/* Alertas: mismo dato y misma regla que su pantalla de detalle */}
+      {alertas && (alertas.stock_bajo_minimos.length > 0 || alertas.incidencias_abiertas > 0) && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          {alertas.incidencias_abiertas > 0 && (
+            <button
+              type="button"
+              className="border border-kavana-danger text-kavana-danger rounded-sm px-3 py-1"
+              onClick={() => irA('incidencias')}
+            >
+              {alertas.incidencias_abiertas} incidencias abiertas
+            </button>
+          )}
+          {alertas.stock_bajo_minimos.length > 0 && (
+            <span
+              className="border border-kavana-warn text-kavana-warn rounded-sm px-3 py-1"
+              title={alertas.stock_bajo_minimos
+                .map((m) => `${m.code}: ${m.stock.toLocaleString('es-ES')} / ${m.minimo.toLocaleString('es-ES')} ${m.unidad}`)
+                .join(' · ')}
+            >
+              {alertas.stock_bajo_minimos.length} materiales bajo mínimos:{' '}
+              {alertas.stock_bajo_minimos.map((m) => m.code).join(', ')}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Centro de mando: 4 tarjetas, una pregunta cada una (adopción del legacy) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Tarjeta titulo="OEE global" pie={
@@ -325,8 +360,8 @@ export function SupervisorPage() {
 
         <Tarjeta titulo="Material real vs estimado" pie={
           kpis && kpis.estimated_cost !== null
-            ? `Real ${fmtEur(kpis.real_material_comparable)} · Estimado ${fmtEur(kpis.estimated_cost)} · ${kpis.orders_with_estimate} órdenes`
-            : 'Sin estimado: falta €/kg del material u objetivo de kg'
+            ? `Real ${fmtEur(kpis.real_material_comparable)} · Estimado ${fmtEur(kpis.estimated_cost)} · ${kpis.orders_with_estimate} órdenes completadas`
+            : 'Sin órdenes completadas con estimado (€/kg y objetivo de kg)'
         }>
           <span className={colorDesviacion(kpis?.cost_variance)}>
             {fmtEur(kpis?.cost_variance)}
@@ -403,6 +438,12 @@ export function SupervisorPage() {
           </button>
         </div>
         {!andon && <PuestosMonitor />}
+      </div>
+
+      {/* Informe de turno exportable (adopción de Reports del legacy) */}
+      <div id="informe" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+        <p className="label-industrial text-xs text-kavana-text-dim">Informe de turno</p>
+        <InformeTurno />
       </div>
 
       {/* Gestión de órdenes (Fase A1): crear, lanzar, completar, descartar */}
