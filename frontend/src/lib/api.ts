@@ -102,6 +102,29 @@ export interface KpisData {
   scrap_rate: number
 }
 
+/** Estado de un puesto en planta (GET /supervisor/puestos). */
+export interface PuestoEstado {
+  code: string
+  name: string
+  color: string | null
+  estado: 'incidencia' | 'en_curso' | 'parado' | 'pendiente' | 'libre'
+  orden: {
+    id: string
+    numero: string
+    cliente: string | null
+    linea_id: string
+    piezas: number
+    objetivo: number
+    bobina: string | null
+  } | null
+  ultima_actividad: {
+    accion: string
+    timestamp: string
+    operario: string | null
+  } | null
+  incidencias_abiertas: { id: string; tipo: string; descripcion: string }[]
+}
+
 /** Coste real vs estimado de una orden (GET /supervisor/costes-ordenes). */
 export interface CosteOrden {
   order_id: string
@@ -391,6 +414,10 @@ export const api = {
 
   getCostesOrdenes(): Promise<CosteOrden[]> {
     return request('/supervisor/costes-ordenes')
+  },
+
+  getPuestos(): Promise<PuestoEstado[]> {
+    return request('/supervisor/puestos')
   },
 
   listOrders(): Promise<OrderItem[]> {

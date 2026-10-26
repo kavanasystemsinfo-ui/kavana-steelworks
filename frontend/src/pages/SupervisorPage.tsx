@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../lib/api'
+import { PuestosMonitor } from '../components/PuestosMonitor'
 import type {
   CosteOrden,
   KpisData,
@@ -80,6 +81,8 @@ export function SupervisorPage() {
   const [kpis, setKpis] = useState<KpisData | null>(null)
   const [costes, setCostes] = useState<CosteOrden[] | null>(null)
   const [error, setError] = useState('')
+  const [andon, setAndon] = useState(false)
+  const [menuRapido, setMenuRapido] = useState(false)
 
   const [orders, setOrders] = useState<OrderItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState('')
@@ -156,6 +159,20 @@ export function SupervisorPage() {
     return () => clearInterval(timer)
   }, [])
 
+  useEffect(() => {
+    if (!andon) return
+    const salir = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAndon(false)
+    }
+    window.addEventListener('keydown', salir)
+    return () => window.removeEventListener('keydown', salir)
+  }, [andon])
+
+  const irA = (id: string) => {
+    setMenuRapido(false)
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const cargarOrders = () => {
     api.listOrders()
       .then((data) => {
@@ -203,6 +220,62 @@ export function SupervisorPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      {/* Andon: el mismo monitor de puestos a pantalla completa para una TV */}
+      {andon && (
+        <div
+          role="dialog"
+          aria-label="Andon de planta"
+          className="fixed inset-0 z-50 bg-kavana-dark overflow-auto p-6 space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <p className="font-display font-black text-3xl">Andon · planta</p>
+            <button
+              type="button"
+              className="border border-kavana-border rounded-sm px-4 py-2"
+              onClick={() => setAndon(false)}
+            >
+              Salir (Esc)
+            </button>
+          </div>
+          <PuestosMonitor andon />
+        </div>
+      )}
+
+      {/* Acción rápida: llegar a lo importante sin recorrer el panel */}
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+        {menuRapido && (
+          <div className="bg-kavana-panel border border-kavana-border rounded-sm p-2 flex flex-col gap-1 text-sm">
+            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('ordenes')}>
+              Nueva orden
+            </button>
+            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('incidencias')}>
+              Incidencias
+            </button>
+            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('puestos')}>
+              Puestos
+            </button>
+            <button
+              type="button"
+              className="text-left px-3 py-2 hover:bg-kavana-surface"
+              onClick={() => {
+                setMenuRapido(false)
+                setAndon(true)
+              }}
+            >
+              Modo Andon
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          aria-label="Acción rápida"
+          className="w-14 h-14 rounded-full bg-kavana-orange text-kavana-dark text-2xl font-black shadow-lg"
+          onClick={() => setMenuRapido((v) => !v)}
+        >
+          ⚡
+        </button>
+      </div>
+
       <div className="step-guide">
         <p className="label-industrial text-xs text-kavana-text-dim">
           Planta en un vistazo
@@ -317,8 +390,25 @@ export function SupervisorPage() {
         )}
       </div>
 
+      {/* Monitor de puestos (adopción del legacy: un vistazo, un click) */}
+      <div id="puestos" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="label-industrial text-xs text-kavana-text-dim">Puestos en planta</p>
+          <button
+            type="button"
+            className="text-xs px-3 py-1 border border-kavana-border rounded-sm"
+            onClick={() => setAndon(true)}
+          >
+            Modo Andon
+          </button>
+        </div>
+        {!andon && <PuestosMonitor />}
+      </div>
+
       {/* Gestión de órdenes (Fase A1): crear, lanzar, completar, descartar */}
-      <OrdersManager onCambio={cargarOrders} />
+      <div id="ordenes">
+        <OrdersManager onCambio={cargarOrders} />
+      </div>
 
       {/* Trazabilidad ISO 9001 (spec 04) */}
       <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
@@ -395,7 +485,7 @@ export function SupervisorPage() {
       <QualityBoard />
 
       {/* Incidencias de planta (spec 04 §3.3) */}
-      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+      <div id="incidencias" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="label-industrial text-xs text-kavana-text-dim">
             Incidencias de planta

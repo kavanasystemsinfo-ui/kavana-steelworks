@@ -76,3 +76,17 @@ def get_costes_ordenes(
     from app.services.costes import costes_por_orden
 
     return costes_por_orden(db, current_user.tenant_id)
+
+
+@router.get("/puestos")
+def get_puestos(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Monitor de puestos: orden, bobina, progreso, última actividad, incidencias."""
+    from app.services.puestos import estado_puestos
+
+    return estado_puestos(db, current_user.tenant_id)
