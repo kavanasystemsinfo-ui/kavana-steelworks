@@ -31,13 +31,37 @@ const kpisBody = {
   orders_active: 1,
   orders_completed: 0,
   estimated_cost: 1000,
-  real_cost: 900,
+  real_cost: 950,
+  real_material_cost: 900,
+  labor_cost: 50,
+  real_material_comparable: 900,
+  orders_with_estimate: 1,
+  scrap_cost: 45,
   cost_variance: -100,
   cost_efficiency: 111.1,
   material_variance: 0,
   material_efficiency: 0,
   scrap_rate: 5,
 }
+
+const costesBody = [
+  {
+    order_id: 'OP1',
+    numero: 'OP-DEMO-001',
+    cliente: 'Cliente demo',
+    estado: 'active',
+    piezas: 10,
+    objetivo: 20,
+    real_material: 900,
+    mano_obra: 50,
+    real_total: 950,
+    estimado_material: 1000,
+    desviacion_material: -100,
+    real_material_comparable: 900,
+    scrap_kg: 5,
+    scrap_coste: 45,
+  },
+]
 
 const ordersBody = [
   { id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: 'Cliente demo', fecha_entrega: '2026-08-22T00:00:00Z' },
@@ -95,6 +119,9 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
     if (url.includes('/supervisor/kpis')) {
       return Promise.resolve({ ok: true, json: async () => kpisBody })
     }
+    if (url.includes('/supervisor/costes-ordenes')) {
+      return Promise.resolve({ ok: true, json: async () => costesBody })
+    }
     if (url.includes('/api/v1/orders')) {
       return Promise.resolve({ ok: true, json: async () => orders })
     }
@@ -107,36 +134,45 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
 }
 
 describe('Panel de Supervisor (planta en un vistazo)', () => {
-  it('muestra OEE y KPIs cargados desde la API', async () => {
+  it('muestra las 4 tarjetas del centro de mando', async () => {
     stubApi()
 
     renderPage()
 
     expect(await screen.findByText('23,75')).toBeInTheDocument()
-    expect(screen.getAllByText('50').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('95')).toBeInTheDocument()
-    expect(screen.getByText('5')).toBeInTheDocument() // merma kg
-    expect(screen.getByText('111,1 %')).toBeInTheDocument()
+    expect(screen.getByText('OEE global')).toBeInTheDocument()
+    expect(screen.getByText('A 50 · P 50 · Q 95')).toBeInTheDocument()
+    expect(screen.getByText('Consumo de material')).toBeInTheDocument()
+    expect(await screen.findByText(/Merma 5 kg \(5 %\) · 45 €/)).toBeInTheDocument()
+    expect(screen.getByText('Coste de producción')).toBeInTheDocument()
+    expect(screen.getByText('Material 900 € · Mano de obra 50 €')).toBeInTheDocument()
+    expect(screen.getByText('Material real vs estimado')).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
-  it('muestra el bloque coste real vs estimado con valores absolutos', async () => {
+  it('muestra el coste por orden con la misma cifra que las tarjetas', async () => {
     stubApi()
 
     renderPage()
 
+    expect(await screen.findByText('Coste por orden')).toBeInTheDocument()
+    expect(await screen.findByText('10/20')).toBeInTheDocument()
+    // 950 € aparece en la tarjeta de coste y en el total de la orden
+    expect(screen.getAllByText('950 €').length).toBe(2)
+    expect(screen.getAllByText('-100 €').length).toBe(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('sin estimado lo dice en vez de inventar una desviación', async () => {
+    stubApi()
+    Object.assign(kpisBody, { estimated_cost: null, cost_variance: null })
+
+    renderPage()
+
     expect(
-      await screen.findByText('Coste real vs estimado'),
+      await screen.findByText('Sin estimado: falta €/kg del material u objetivo de kg'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Real')).toBeInTheDocument()
-    expect(screen.getByText('Estimado')).toBeInTheDocument()
-    expect(screen.getByText(`${(900).toLocaleString('es-ES')} €`)).toBeInTheDocument()
-    expect(
-      screen.getByText(`${(1000).toLocaleString('es-ES')} €`),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(`${(-100).toLocaleString('es-ES')} €`),
-    ).toBeInTheDocument()
+    Object.assign(kpisBody, { estimated_cost: 1000, cost_variance: -100 })
     vi.unstubAllGlobals()
   })
 
@@ -147,7 +183,7 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
       json: async () => ({}),
     }))
     renderPage()
-    expect(screen.getByText('Turno actual')).toBeInTheDocument()
+    expect(screen.getByText('Centro de mando')).toBeInTheDocument()
     expect(screen.getAllByText('--').length).toBeGreaterThan(0)
     vi.unstubAllGlobals()
   })

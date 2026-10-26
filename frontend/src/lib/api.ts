@@ -86,13 +86,38 @@ export interface KpisData {
   orders_total: number
   orders_active: number
   orders_completed: number
-  estimated_cost: number
+  /** Material estimado (€/kg × objetivo); null si ninguna orden tiene base. */
+  estimated_cost: number | null
   real_cost: number
-  cost_variance: number
+  real_material_cost: number
+  labor_cost: number
+  real_material_comparable: number
+  orders_with_estimate: number
+  scrap_cost: number
+  /** Material real - estimado, solo en órdenes con estimado; null sin base. */
+  cost_variance: number | null
   cost_efficiency: number
   material_variance: number
   material_efficiency: number
   scrap_rate: number
+}
+
+/** Coste real vs estimado de una orden (GET /supervisor/costes-ordenes). */
+export interface CosteOrden {
+  order_id: string
+  numero: string
+  cliente: string | null
+  estado: string
+  piezas: number
+  objetivo: number
+  real_material: number
+  mano_obra: number
+  real_total: number
+  estimado_material: number | null
+  desviacion_material: number | null
+  real_material_comparable: number
+  scrap_kg: number
+  scrap_coste: number
 }
 
 export interface PlanCheck {
@@ -362,6 +387,10 @@ export const api = {
 
   getKpis(): Promise<KpisData> {
     return request('/supervisor/kpis')
+  },
+
+  getCostesOrdenes(): Promise<CosteOrden[]> {
+    return request('/supervisor/costes-ordenes')
   },
 
   listOrders(): Promise<OrderItem[]> {

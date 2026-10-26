@@ -87,10 +87,16 @@ def test_oee_cuenta_produccion_de_orden_completada(db_session):
 
 
 def test_kpis_financieros(db_session):
-    """Coste real vs estimado y eficiencia (invertido: >100 = mejor)."""
-    tenant, order, line = _tenant_con_orden(
-        db_session, est=1000.0, real_cost=900.0, real_mat=100.0, scrap=5.0
-    )
+    """Material real vs estimado y eficiencia (invertido: >100 = mejor)."""
+    from tests.helpers import make_material
+
+    tenant, order, line = _tenant_con_orden(db_session, real_mat=100.0, scrap=5.0)
+    material = make_material(db_session, tenant, code="ACERO-KPI", cost=10.0)
+    line.material_id = material.id
+    line.target_material_qty = Decimal("100")  # 100 kg × 10 €/kg = 1000 € estimado
+    line.real_material_cost = Decimal("900")
+    line.real_cost = Decimal("900")
+    db_session.commit()
 
     kpis = calcular_kpis(db_session, tenant.id)
 
@@ -99,7 +105,18 @@ def test_kpis_financieros(db_session):
     assert kpis["cost_variance"] == -100.0  # 900 - 1000
     assert kpis["cost_efficiency"] == 111.1  # 1000/900*100
     assert kpis["scrap_rate"] == 5.0  # 5/100*100
-    assert kpis["material_efficiency"] == 0.0  # sin target, 0 (spec 3.3)
+    assert kpis["material_efficiency"] == 100.0  # 100 objetivo / 100 real
+
+
+def test_kpis_sin_estimado_no_inventa_desviacion(db_session):
+    """Sin precio u objetivo de material: estimado y desviación son None."""
+    tenant, order, line = _tenant_con_orden(db_session)
+
+    kpis = calcular_kpis(db_session, tenant.id)
+
+    assert kpis["estimated_cost"] is None
+    assert kpis["cost_variance"] is None
+    assert kpis["cost_efficiency"] == 0.0
 
 
 def test_kpis_sin_costes_no_divide_por_cero(db_session):

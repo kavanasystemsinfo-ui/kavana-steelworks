@@ -62,3 +62,17 @@ def get_kpis(
         return calcular_kpis(db, current_user.tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/costes-ordenes")
+def get_costes_ordenes(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Coste real (material + mano de obra) vs estimado de cada orden."""
+    from app.services.costes import costes_por_orden
+
+    return costes_por_orden(db, current_user.tenant_id)

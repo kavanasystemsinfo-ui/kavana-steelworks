@@ -225,8 +225,15 @@ def record_production(
             # Sin consumo calculable (sin dimensiones ni BOM): no descuenta
             calculation_method = "none"
 
-    # 6) Coste laboral (sin configuración de máquina/operario/overhead → 0)
-    incremental_labor_cost = Decimal("0")
+    # 6) Coste laboral: horas declaradas × €/h del puesto (0 si el puesto no
+    #    tiene coste configurado: nunca se inventa)
+    from app.services.costes import coste_hora_puesto
+
+    incremental_labor_cost = (
+        (hours * coste_hora_puesto(db, tenant_id, linea.workstation_id)).quantize(Decimal("0.01"))
+        if hours > 0
+        else Decimal("0")
+    )
 
     # 7) Actualizar la línea
     nueva_producida = (linea.produced_quantity or Decimal("0")) + qty
@@ -257,10 +264,11 @@ def record_production(
             )
             linea.target_material_unit = consumption_unit
 
-    # 8) Roll-up del coste total de la orden
-    order.real_total_cost = sum(
-        (linea_i.real_cost or Decimal("0")) for linea_i in lineas_orden if linea_i.id != linea.id
-    ) + (linea.real_cost or Decimal("0"))
+    # 8) Roll-up de costes de la orden (real material, real total y estimado)
+    from app.services.costes import actualizar_costes_orden
+
+    db.flush()
+    actualizar_costes_orden(db, order)
     order.estado = (
         "completed"
         if all(linea_i.estado == "completed" for linea_i in lineas_orden)
