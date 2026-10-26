@@ -18,6 +18,11 @@ Para quien trabaja en el puesto con la tablet. Una pantalla: la de Operario.
 Si la bobina no es del material que pide la orden, el sistema avisa y no la
 vincula.
 
+Una bobina solo puede estar en un sitio. Si ya está vinculada a otra orden
+(en otra máquina o en la tuya), el sistema te dice en qué orden y puesto
+está. Para usarla aquí, primero hay que desvincularla allí: se devuelve a
+esa orden lo que no se ha consumido y la tuya paga solo lo que queda.
+
 ## Registrar producción
 
 En "Registrar producción" indica las piezas buenas y las horas trabajadas.

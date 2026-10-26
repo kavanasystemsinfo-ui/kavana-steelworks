@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 8  # un turno estándar de fábrica (decisión legacy)
 
+    # Simulador de la demo (ADR-021): minutos entre ticks; 0 = apagado.
+    # Solo se enciende en Fly (fly.toml); en local y en tests está apagado.
+    simulador_minutos: int = 0
+
     @model_validator(mode="after")
     def _exigir_secret_fuerte_en_produccion(self) -> "Settings":
         """Fail-fast: en producción no se firman JWTs con un secreto débil o ausente."""

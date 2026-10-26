@@ -703,16 +703,18 @@ def _componente_producto(prod, tipo, ref, cantidad, pos, piezas, materiales):
 def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> dict[str, Order]:
     """2 ordenes activas + 1 completada (referencia para el historico)."""
     ordenes: dict[str, Order] = []
+    # Las líneas son pasos en cascada (WIP): un paso nunca pide más piezas ni
+    # lleva más hechas que el anterior; si no, la orden no se puede terminar.
     definiciones = [
         ("OP-EST-2601", "active", "Ferreteria Norte S.L.", 7, [
             (1, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
              "80", "30", "in_progress", "2.7"),
             (2, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
-             "120", "0", "pending", "3.0"),
+             "80", "0", "pending", "3.0"),
         ]),
         ("OP-EST-2602", "active", "Logistica Vallecas S.A.", 14, [
             (1, "EST-VOLADIZO", "COLUMNA-CNT", "PERFIL-U100", "CORTE-1",
-             "40", "0", "pending", "4.0"),
+             "60", "12", "in_progress", "4.0"),
             (2, "EST-ALTILLO", "VIGA-SIGMA", "ACERO-S355", "GALV-1",
              "60", "12", "in_progress", "2.7"),
         ]),

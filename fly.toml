@@ -13,6 +13,9 @@ primary_region = "cdg"
   # El Dockerfile copia README/SECURITY/docs a /app (WORKDIR); REPO_ROOT apunta
   # ahí para que el corpus RAG encuentre README.md, docs/adr y docs/specs.
   STEELWORKS_DOCS_ROOT = "/app"
+  # Simulador de la demo dentro del backend (ADR-021): un tick cada 5 min en
+  # horario laboral de planta, mientras la máquina está despierta.
+  STEELWORKS_SIMULADOR_MINUTOS = "5"
 
 [http_service]
   internal_port = 8000
