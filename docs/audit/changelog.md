@@ -4,6 +4,23 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-26 — Adopción selectiva del legacy: coste, planta de un vistazo y demo honesta (ADR-021)
+
+- **Problema:** la mano de obra estaba fijada a 0 y el coste estimado no se
+  calculaba, así que el KPI de coste no medía nada real. Faltaban las piezas
+  del legacy que más valor daban (monitor de puestos, Andon, informe de
+  turno). La demo sembraba piezas como kg y costes escritos a mano.
+- **Solución:** `services/costes.py` (coste por orden desde las líneas; mano
+  de obra = horas x €/h del puesto o, en su defecto, el global de la empresa);
+  4 tarjetas en el centro de mando y tabla de coste por orden;
+  `services/puestos.py` con monitor y modo Andon; `services/informe_turno.py`
+  (JSON/CSV); `services/alertas.py`; `services/simulador.py`; etiqueta DATOS
+  DE DEMO; guías por rol en `docs/guias/` dentro del corpus RAG; semilla
+  corregida y `reparar_costes_demo` para lo ya desplegado.
+- **Bug corregido:** `log_event` perdía eventos con UUID en el metadata.
+- **Verificación:** pytest y vitest en verde, ruff y oxlint limpios, build
+  de TypeScript sin errores.
+
 ## 2026-08-20 — Fase 5 cierre: recordatorios de autocontrol (spec 04 §3.2.5)
 
 - **Problema:** de la Fase 5 quedaba pendiente el único ítem que requería

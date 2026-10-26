@@ -18,22 +18,30 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Material, Order, OrderLine, Workstation
+from app.models import Material, Order, OrderLine, Tenant, Workstation
 
 ESTADOS_CON_COSTE = ("active", "completed")
 
 
 def coste_hora_puesto(db: Session, tenant_id, workstation_code: str | None) -> Decimal:
-    """€/h configurado del puesto; 0 si no existe o no tiene coste."""
-    if not workstation_code:
-        return Decimal("0")
-    coste = db.scalar(
-        select(Workstation.hourly_cost).where(
-            Workstation.tenant_id == tenant_id,
-            Workstation.code == workstation_code,
+    """€/h del puesto; si no tiene, el coste global de mano de obra de la
+    empresa (Admin → Empresa, finances.overhead_hourly_cost); si tampoco, 0."""
+    coste = None
+    if workstation_code:
+        coste = db.scalar(
+            select(Workstation.hourly_cost).where(
+                Workstation.tenant_id == tenant_id,
+                Workstation.code == workstation_code,
+            )
         )
-    )
-    return coste or Decimal("0")
+    if coste:
+        return coste
+    tenant = db.get(Tenant, tenant_id)
+    global_hora = (tenant.finances or {}).get("overhead_hourly_cost") if tenant else None
+    try:
+        return max(Decimal(str(global_hora or 0)), Decimal("0"))
+    except ArithmeticError:
+        return Decimal("0")
 
 
 def _coste_kg_linea(linea: OrderLine, material: Material | None) -> Decimal:

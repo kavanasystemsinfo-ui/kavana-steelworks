@@ -216,3 +216,18 @@ def test_endpoint_costes_ordenes_solo_supervisor(db_session, tenant, user):
     r = supervisor.get("/api/v1/supervisor/costes-ordenes")
     assert r.status_code == 200, r.text
     assert r.json() == []
+
+
+def test_coste_global_de_empresa_si_el_puesto_no_tiene(db_session, tenant):
+    from app.services.costes import coste_hora_puesto
+
+    _puesto(db_session, tenant, code="CON-COSTE", coste_hora="30.00")
+    _puesto(db_session, tenant, code="SIN-COSTE", coste_hora="0")
+    assert coste_hora_puesto(db_session, tenant.id, "SIN-COSTE") == 0
+
+    tenant.finances = {"overhead_hourly_cost": 22.5}
+    db_session.commit()
+
+    assert coste_hora_puesto(db_session, tenant.id, "SIN-COSTE") == Decimal("22.5")
+    assert coste_hora_puesto(db_session, tenant.id, "CON-COSTE") == Decimal("30.00")
+    assert coste_hora_puesto(db_session, tenant.id, "NO-EXISTE") == Decimal("22.5")

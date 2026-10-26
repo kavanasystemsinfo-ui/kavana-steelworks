@@ -29,6 +29,17 @@ def test_corpus_indexa_readme_y_adrs():
     assert all(c["texto"] for c in corpus)
 
 
+def test_corpus_incluye_guias_por_rol():
+    fuentes = {c["fuente"] for c in assistant.cargar_corpus()}
+    for rol in ("operario", "materias-primas", "supervisor", "admin"):
+        assert f"docs/guias/guia-{rol}.md" in fuentes
+
+
+def test_busqueda_recupera_guia_del_modo_andon():
+    docs = assistant.buscar(assistant.get_indice(), "cómo pongo el modo Andon en la TV")
+    assert any(d["fuente"] == "docs/guias/guia-supervisor.md" for d in docs)
+
+
 def test_estadisticas_corpus_devuelve_conteo():
     stats = assistant.estadisticas_corpus()
     assert stats["chunks"] > 20
