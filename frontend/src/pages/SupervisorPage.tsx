@@ -231,7 +231,7 @@ export function SupervisorPage() {
         <div
           role="dialog"
           aria-label="Andon de planta"
-          className="fixed inset-0 z-50 bg-kavana-dark overflow-auto p-6 space-y-4"
+          className="fixed inset-0 m-0 z-50 bg-kavana-dark overflow-auto p-6 space-y-4"
         >
           <div className="flex items-center justify-between">
             <p className="font-display font-black text-3xl">Andon · planta</p>
