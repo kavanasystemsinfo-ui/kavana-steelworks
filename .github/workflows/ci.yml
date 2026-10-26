@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups
 
-      - name: Lint (ruff)
+      - name: "Lint (ruff) — gate: app/ y tests/"
         run: uv run ruff check app/ tests/
 
       - name: Test (pytest)
