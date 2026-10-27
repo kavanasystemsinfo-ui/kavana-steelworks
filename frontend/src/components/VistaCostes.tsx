@@ -25,17 +25,26 @@ const COLOR_REPARTO: Record<string, string> = {
   chatarra: 'bg-p-mal',
 }
 
+/** Punto de miles también con 4 cifras (2.336 €): es-ES no lo pone por defecto
+ *  y en planta se lee peor "2336". */
+const AGRUPAR = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
+
 const fmtNum = (n: number | null | undefined, dec = 0) =>
-  n === null || n === undefined ? '--' : n.toLocaleString('es-ES', { maximumFractionDigits: dec })
+  n === null || n === undefined
+    ? '--'
+    : n.toLocaleString('es-ES', { ...AGRUPAR, maximumFractionDigits: dec })
 /** Decimales fijos: el importe se muestra con los dos decimales que manda el
  *  backend (640,00 €), sin redondear a la vista lo que el servicio calculó. */
 const fmtDec = (n: number | null | undefined, dec = 2) =>
   n === null || n === undefined
     ? '--'
     : n.toLocaleString('es-ES', {
+        ...AGRUPAR,
         minimumFractionDigits: dec,
         maximumFractionDigits: dec,
       })
+/** "1 orden", "2 órdenes". */
+const ordenes = (n: number) => `${n} ${n === 1 ? 'orden' : 'órdenes'}`
 const fmtEur = (n: number | null | undefined) => (n == null ? '--' : `${fmtDec(n, 2)} €`)
 const fmtPct = (n: number | null | undefined) => (n == null ? '--' : `${fmtDec(n, 2)} %`)
 const conSigno = (n: number, sufijo: string) => `${n > 0 ? '+' : ''}${fmtDec(n, 2)}${sufijo}`
@@ -196,7 +205,9 @@ export function VistaCostes() {
                     {fmtDec(datos.coste_kg.transformacion, 2)} €/kg
                   </p>
                   <p className="m-0">
-                    Periodo anterior {fmtDec(datos.coste_kg.periodo_anterior, 2)} €/kg
+                    {anterior > 0
+                      ? `Periodo anterior ${fmtDec(anterior, 2)} €/kg`
+                      : 'Sin datos del periodo anterior'}
                   </p>
                   <p className="m-0">
                     {datos.coste_kg.objetivo === null
@@ -212,8 +223,8 @@ export function VistaCostes() {
               contexto={
                 <>
                   <p className="m-0">
-                    {fmtNum(datos.kg_total, 1)} kg valorados · {datos.ordenes_completadas} órdenes
-                    completadas
+                    {fmtNum(datos.kg_total, 1)} kg valorados · {ordenes(datos.ordenes_completadas)}{' '}
+                    {datos.ordenes_completadas === 1 ? 'completada' : 'completadas'}
                   </p>
                   {datos.lineas_metros_excluidas > 0 && (
                     <p className="m-0">
@@ -246,7 +257,7 @@ export function VistaCostes() {
                 }}
                 contexto={`${
                   datos.desviacion.pct === null ? '--' : conSigno(datos.desviacion.pct, ' %')
-                } · ${datos.desviacion.ordenes_con_estimado} órdenes con estimado`}
+                } · ${ordenes(datos.desviacion.ordenes_con_estimado)} con estimado`}
               />
             )}
             <KpiCard
