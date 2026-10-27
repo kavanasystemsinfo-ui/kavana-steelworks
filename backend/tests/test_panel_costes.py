@@ -122,6 +122,36 @@ def test_coste_kg_excluye_lineas_en_metros(db_session, tenant):
     assert datos["ordenes_completadas"] == 1
 
 
+def test_desglose_material_y_transformacion_cuadra_con_el_coste_kg(db_session, tenant):
+    """El €/kg se parte en material y transformación; las dos cifras suman el total."""
+    _orden(db_session, tenant, "OP-DESGLOSE", kg=100, coste_material=200, coste_linea=300)
+
+    coste = panel_costes(db_session, tenant.id, "mes", ahora=AHORA)["coste_kg"]
+
+    assert coste["material"] == 2.0  # 200 € de material / 100 kg
+    assert coste["transformacion"] == 1.0  # (300 − 200) de mano de obra / 100 kg
+    assert coste["material"] + coste["transformacion"] == pytest.approx(coste["valor"])
+
+
+def test_desglose_deja_la_merma_dentro_del_material(db_session, tenant):
+    """La chatarra ya está pagada en el material cargado: no se separa del bloque."""
+    _orden(
+        db_session,
+        tenant,
+        "OP-DESGLOSE-MERMA",
+        kg=100,
+        coste_material=200,
+        coste_linea=300,
+        scrap=10,
+    )
+
+    coste = panel_costes(db_session, tenant.id, "mes", ahora=AHORA)["coste_kg"]
+
+    assert coste["material"] == 2.0  # 200 € (los 20 € de merma van dentro del material)
+    assert coste["transformacion"] == 1.0
+    assert coste["material"] + coste["transformacion"] == pytest.approx(coste["valor"])
+
+
 def test_reparto_cuadra_con_coste_total_y_suma_100(db_session, tenant):
     """50 kg de chatarra: el material va neto para no contar la merma dos veces."""
     _orden(db_session, tenant, "OP-REPARTO", coste_material=200, coste_linea=300, scrap=50)
@@ -308,7 +338,13 @@ def test_orden_sin_estimado_no_entra_en_desviacion_ni_en_la_lista(db_session, te
 def test_periodo_vacio_devuelve_ceros(db_session, tenant):
     datos = panel_costes(db_session, tenant.id, "semana", ahora=AHORA)
 
-    assert datos["coste_kg"] == {"valor": 0.0, "periodo_anterior": 0.0, "objetivo": None}
+    assert datos["coste_kg"] == {
+        "valor": 0.0,
+        "periodo_anterior": 0.0,
+        "objetivo": None,
+        "material": 0.0,
+        "transformacion": 0.0,
+    }
     assert datos["coste_total"] == 0.0
     assert datos["kg_total"] == 0.0
     assert [bloque["pct"] for bloque in datos["reparto"]] == [0.0, 0.0, 0.0]

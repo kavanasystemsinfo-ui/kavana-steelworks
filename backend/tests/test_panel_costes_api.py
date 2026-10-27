@@ -77,7 +77,13 @@ def test_supervisor_ve_el_panel(db_session, tenant, panel):
     assert datos["ordenes_completadas"] == 1
     assert datos["kg_total"] == 100.0
     assert datos["coste_total"] == 300.0  # 200 material + 100 mano de obra
-    assert datos["coste_kg"] == {"valor": 3.0, "periodo_anterior": 0.0, "objetivo": None}
+    assert datos["coste_kg"] == {
+        "valor": 3.0,
+        "periodo_anterior": 0.0,
+        "objetivo": None,
+        "material": 2.0,
+        "transformacion": 1.0,
+    }
 
 
 def test_admin_hereda_el_panel(db_session, tenant, panel):
@@ -225,6 +231,8 @@ def test_csv_para_excel(db_session, tenant, panel):
     lineas = cuerpo.lstrip("\ufeff").splitlines()
     assert "Resumen;Valor" in lineas
     assert "€/kg;3,00" in lineas  # coma decimal, dos decimales
+    assert "Material €/kg;2,00" in lineas, "el desglose viaja al CSV para Excel"
+    assert "Transformación €/kg;1,00" in lineas
     assert "Coste total (€);300,00" in lineas
     assert "Material;200,00;66,67" in lineas
     assert "Reparto del coste;Euros;%" in lineas
@@ -241,6 +249,8 @@ def test_csv_sin_datos_no_inventa_cifras(db_session, tenant, panel):
     lineas = cuerpo.splitlines()
 
     assert "€/kg;0,00" in lineas
+    assert "Material €/kg;0,00" in lineas
+    assert "Transformación €/kg;0,00" in lineas
     assert "Objetivo €/kg;" in lineas, "sin objetivo configurado, la celda va vacía"
     assert "Coste total (€);0,00" in lineas
     assert not any(linea.startswith("OP-") for linea in lineas)

@@ -192,6 +192,8 @@ export interface PanelCostesCosteKg {
   valor: number
   periodo_anterior: number
   objetivo: number | null
+  material: number
+  transformacion: number
 }
 
 export interface PanelCostesReparto {

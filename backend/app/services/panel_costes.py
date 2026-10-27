@@ -30,6 +30,14 @@ Decisiones de esta capa (no re-decidir sin migración):
 - **Objetivo de €/kg desde configuración.** No existe ``objetivos.coste_kg``:
   se lee ``tenant.finances["objetivo_coste_kg"]`` (o su alias
   ``coste_kg_objetivo``) y se devuelve ``None`` si no hay valor válido.
+- **Desglose del €/kg en material y transformación.** ``coste_kg.material`` es
+  el material consumido (con la merma ya pagada dentro) entre los kg buenos;
+  ``coste_kg.transformacion`` es el resto (mano de obra, que es lo único que
+  suma al coste junto al material), calculado
+  por diferencia para que ambas cifras sumen ``coste_kg.valor`` exacto. Solo
+  cuenta el material de las líneas en kg, igual que el total. Es la lectura que
+  separa «compré caro» de «la planta va lenta»: el material es el 80-90 % del
+  coste y no lo controla la planta; la transformación sí.
 - **Coste de paradas = incidencias creadas en la ventana**, valoradas a
   ``tiempo_parada_min / 60 × coste_hora_puesto`` del puesto de la incidencia
   (con el coste global de empresa como respaldo, igual que el resto del
@@ -306,6 +314,9 @@ def _resumen_ventana(
         "material": material,
         "mano_obra": mano_obra,
         "chatarra": chatarra,
+        # Solo las líneas medidas en kg: es la base del €/kg y de su desglose.
+        "material_kg": material_kg,
+        "mano_obra_kg": mano_obra_kg,
         "coste": material + mano_obra,
         "coste_kg": _coste_kg(material_kg, mano_obra_kg, chatarra_kg, kg),
         "desviacion": {
@@ -488,14 +499,22 @@ def panel_costes(
         db, tenant_id, [orden["order_id"] for orden in candidatas]
     )
 
+    # Desglose del €/kg en sus dos mitades: material (lo que se paga al proveedor,
+    # con la merma ya dentro) y transformación (mano de obra). El residuo del
+    # redondeo va a transformación para que las dos cifras sumen `valor` exacto.
+    coste_kg_total = _r2(actual["coste_kg"])
+    coste_kg_material = _r2(actual["material_kg"] / actual["kg"]) if actual["kg"] > 0 else 0.0
+
     return {
         "periodo": periodo,
         "desde": desde.isoformat(),
         "hasta": hasta.isoformat(),
         "coste_kg": {
-            "valor": _r2(actual["coste_kg"]),
+            "valor": coste_kg_total,
             "periodo_anterior": _r2(anterior["coste_kg"]),
             "objetivo": _objetivo_coste_kg(db, tenant_id),
+            "material": coste_kg_material,
+            "transformacion": _r2(coste_kg_total - coste_kg_material),
         },
         "coste_total": _r2(actual["coste"]),
         "kg_total": _r2(actual["kg"]),

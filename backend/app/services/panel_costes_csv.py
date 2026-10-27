@@ -54,6 +54,8 @@ def panel_costes_csv(datos: dict) -> str:
     escritor.writerow(["Resumen", "Valor"])
     for etiqueta, valor in (
         ("€/kg", coste_kg["valor"]),
+        ("Material €/kg", coste_kg["material"]),
+        ("Transformación €/kg", coste_kg["transformacion"]),
         ("€/kg periodo anterior", coste_kg["periodo_anterior"]),
         ("Objetivo €/kg", coste_kg["objetivo"]),
         ("Coste total (€)", datos["coste_total"]),

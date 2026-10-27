@@ -8,7 +8,7 @@ const panelBody = {
   periodo: 'mes',
   desde: '2026-10-01T05:00:00+00:00',
   hasta: '2026-11-01T05:00:00+00:00',
-  coste_kg: { valor: 3.2, periodo_anterior: 3.5, objetivo: 2.9 },
+  coste_kg: { valor: 3.2, periodo_anterior: 3.5, objetivo: 2.9, material: 2.4, transformacion: 0.8 },
   coste_total: 640.0,
   kg_total: 192.5,
   lineas_metros_excluidas: 2,
@@ -113,6 +113,16 @@ describe('Vista Costes (panel de mando)', () => {
     render(<VistaCostes />)
 
     expect(await screen.findByText('Sin objetivo de €/kg configurado')).toBeInTheDocument()
+  })
+
+  it('desglosa el €/kg en material y transformación sin recalcular', async () => {
+    stubFetch()
+
+    render(<VistaCostes />)
+
+    await screen.findByText('€/kg del periodo')
+    expect(tarjeta('€/kg del periodo')).toHaveTextContent('Material 2,40 €/kg')
+    expect(tarjeta('€/kg del periodo')).toHaveTextContent('Transformación 0,80 €/kg')
   })
 
   it('muestra el reparto y la chatarra con los porcentajes del backend', async () => {
