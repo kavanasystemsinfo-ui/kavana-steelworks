@@ -7,6 +7,7 @@ Contrato nuevo (P0):
   otro tenant → 4403 (ya existía, se mantiene como regresión).
 """
 
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -42,7 +43,9 @@ def test_events_tenant_ajeno_cierra_403(db_session, tenant, client):
 
     token = login(db_session, tenant.id, "a@test.local", "kavana")
 
-    r = client.get(f"/api/v1/events/{t2.id}", headers={"Authorization": f"Bearer {token}"})
+    r = client.get(
+        f"/api/v1/events/{t2.id}", headers={"Authorization": f"Bearer {token}"}
+    )
     assert r.status_code == 403
 
 
@@ -50,7 +53,9 @@ def test_events_tenant_propio_sigue_funcionando(db_session, tenant, client):
     make_user(db_session, tenant, email="b@test.local", role="operator")
     token = login(db_session, tenant.id, "b@test.local", "kavana")
 
-    r = client.get(f"/api/v1/events/{tenant.id}", headers={"Authorization": f"Bearer {token}"})
+    r = client.get(
+        f"/api/v1/events/{tenant.id}", headers={"Authorization": f"Bearer {token}"}
+    )
     assert r.status_code == 200
     assert r.json()["tenant_id"] == str(tenant.id)
 

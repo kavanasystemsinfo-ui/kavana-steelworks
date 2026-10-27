@@ -36,6 +36,7 @@ def get_current_user(
     return autenticar(db, authorization)
 
 
+
 class ReceiveCoilRequest(BaseModel):
     tenant_id: uuid.UUID
     material_id: uuid.UUID
@@ -247,6 +248,7 @@ class FinBobinaRequest(BaseModel):
     order_id: uuid.UUID
     line_id: uuid.UUID
     radio_mm: float = Field(ge=0)
+
 
 
 class UnlinkCoilRequest(BaseModel):

@@ -264,7 +264,9 @@ def _asegurar_workstations_demo(db: Session, tenant_id) -> None:
     ]
     for code, name, color, metodo, coste in puestos:
         existe = db.scalar(
-            select(Workstation).where(Workstation.tenant_id == tenant_id, Workstation.code == code)
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.code == code
+            )
         )
         if existe is None:
             db.add(
@@ -312,7 +314,11 @@ def _asegurar_roles_demo(db: Session, tenant_id) -> None:
         (
             "materials",
             "Materias Primas",
-            [p for p in PERMISOS_CATALOGO if p.startswith(("stock.receive", "stock.list"))],
+            [
+                p
+                for p in PERMISOS_CATALOGO
+                if p.startswith(("stock.receive", "stock.list"))
+            ],
         ),
         (
             "supervisor",
@@ -320,7 +326,9 @@ def _asegurar_roles_demo(db: Session, tenant_id) -> None:
             [
                 p
                 for p in PERMISOS_CATALOGO
-                if p.startswith(("oee.", "trace.", "orders.", "incidencia.manage", "quality.read"))
+                if p.startswith(
+                    ("oee.", "trace.", "orders.", "incidencia.manage", "quality.read")
+                )
             ],
         ),
         ("admin", "Admin", PERMISOS_ADMIN),

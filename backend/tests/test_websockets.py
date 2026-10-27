@@ -34,6 +34,7 @@ def _ws_auth_tokens(request, db_session):
     _TOKENS.clear()
 
 
+
 def _override_get_db(db_session):
     def _gen():
         yield db_session
@@ -85,6 +86,7 @@ def _token_para(tenant_id):
         tok = _ws_token(_DBG_SESSION, _FakeTenant(tenant_id), email=f"ws-{tenant_id}@test.local")
         _TOKENS[str(tenant_id)] = tok
     return tok or ""
+
 
 
 class _FakeTenant:

@@ -41,7 +41,9 @@ def calcular_oee(db: Session, tenant_id) -> dict:
     # parada de las incidencias del tenant restan al tiempo operativo efectivo.
     total_downtime = sum(
         float(i.tiempo_parada_min or 0)
-        for i in db.scalars(select(Incidencia).where(Incidencia.tenant_id == tenant_id))
+        for i in db.scalars(
+            select(Incidencia).where(Incidencia.tenant_id == tenant_id)
+        )
     )
 
     # Disponibilidad: (tiempo operativo real - downtime) / turno estándar

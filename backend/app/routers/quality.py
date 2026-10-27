@@ -213,7 +213,9 @@ def _record_out(r) -> dict:
         "notes": r.notes,
         "created_at": r.created_at,
         "operator": (
-            {"id": r.operator.id, "name": r.operator.name} if r.operator is not None else None
+            {"id": r.operator.id, "name": r.operator.name}
+            if r.operator is not None
+            else None
         ),
         "measurements": [
             {

@@ -53,10 +53,8 @@ class ProductComponent(UUIDMixin, TimestampMixin, Base):
     )
 
     product_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("products.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        Uuid(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False, index=True,
     )
     manufacturing_model_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("manufacturing_models.id"), index=True

@@ -142,14 +142,10 @@ def actualizar_incidencia(
     coste: Decimal | None = None,
 ) -> Incidencia:
     """Cambia estado y/o resolución; conserva los campos previos no enviados."""
-    incidencia = (
-        db.query(Incidencia)
-        .filter(
-            Incidencia.id == incidencia_id,
-            Incidencia.tenant_id == tenant_id,
-        )
-        .first()
-    )
+    incidencia = db.query(Incidencia).filter(
+        Incidencia.id == incidencia_id,
+        Incidencia.tenant_id == tenant_id,
+    ).first()
     if incidencia is None:
         raise ValueError("Incidencia no encontrada")
 
@@ -167,7 +163,8 @@ def actualizar_incidencia(
         )
 
     hay_resolucion = any(
-        v is not None for v in (resolucion_tipo, resolucion_descripcion, tiempo_parada, coste)
+        v is not None
+        for v in (resolucion_tipo, resolucion_descripcion, tiempo_parada, coste)
     )
     if hay_resolucion:
         if resolucion_tipo is not None:

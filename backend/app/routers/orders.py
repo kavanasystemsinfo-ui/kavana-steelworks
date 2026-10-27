@@ -144,7 +144,8 @@ def _cargar(db: Session, order_id: uuid.UUID, tenant_id: uuid.UUID) -> Order:
 def _validar_lineas(db: Session, tenant_id: uuid.UUID, lines: list[LineIn]) -> None:
     """Todo lo que referencia una línea debe existir en el tenant."""
     codigos = {
-        c for (c,) in db.query(Workstation.code).filter(Workstation.tenant_id == tenant_id).all()
+        c
+        for (c,) in db.query(Workstation.code).filter(Workstation.tenant_id == tenant_id).all()
     }
     for ln in lines:
         if ln.workstation_id not in codigos:
@@ -153,30 +154,22 @@ def _validar_lineas(db: Session, tenant_id: uuid.UUID, lines: list[LineIn]) -> N
                 detail=f"Puesto de trabajo inexistente: {ln.workstation_id}",
             )
         if ln.modelo_id is not None:
-            ok = (
-                db.query(ManufacturingModel.id)
-                .filter(
-                    ManufacturingModel.id == ln.modelo_id,
-                    ManufacturingModel.tenant_id == tenant_id,
-                )
-                .first()
-            )
+            ok = db.query(ManufacturingModel.id).filter(
+                ManufacturingModel.id == ln.modelo_id,
+                ManufacturingModel.tenant_id == tenant_id,
+            ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="modelo_id no pertenece al tenant")
         if ln.product_id is not None:
-            ok = (
-                db.query(Product.id)
-                .filter(Product.id == ln.product_id, Product.tenant_id == tenant_id)
-                .first()
-            )
+            ok = db.query(Product.id).filter(
+                Product.id == ln.product_id, Product.tenant_id == tenant_id
+            ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="product_id no pertenece al tenant")
         if ln.material_id is not None:
-            ok = (
-                db.query(Material.id)
-                .filter(Material.id == ln.material_id, Material.tenant_id == tenant_id)
-                .first()
-            )
+            ok = db.query(Material.id).filter(
+                Material.id == ln.material_id, Material.tenant_id == tenant_id
+            ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="material_id no pertenece al tenant")
 

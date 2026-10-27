@@ -40,7 +40,9 @@ class Incidencia(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "incidencias"
     __table_args__ = (
         CheckConstraint(f"tipo IN ({_TIPOS_SQL})", name="ck_incidencia_tipo"),
-        CheckConstraint(f"estado IN ({_ESTADOS_SQL})", name="ck_incidencia_estado"),
+        CheckConstraint(
+            f"estado IN ({_ESTADOS_SQL})", name="ck_incidencia_estado"
+        ),
         CheckConstraint("tiempo_parada_min >= 0", name="ck_incidencia_tiempo"),
         CheckConstraint("coste >= 0", name="ck_incidencia_coste"),
         Index("ix_incidencia_tenant_estado_ts", "tenant_id", "estado", "created_at"),
@@ -50,7 +52,9 @@ class Incidencia(UUIDMixin, TimestampMixin, Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
     )
-    order_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("orders.id"))
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("orders.id")
+    )
     linea_id: Mapped[str | None] = mapped_column(String(100))
     puesto: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     operario_id: Mapped[uuid.UUID] = mapped_column(
@@ -77,7 +81,9 @@ class Incidencia(UUIDMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id")
     )
 
-    operario: Mapped[User] = relationship("User", foreign_keys=[operario_id], lazy="joined")
+    operario: Mapped[User] = relationship(
+        "User", foreign_keys=[operario_id], lazy="joined"
+    )
     responsable: Mapped[User | None] = relationship(
         "User", foreign_keys=[responsable_id], lazy="joined"
     )

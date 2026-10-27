@@ -146,7 +146,9 @@ async def ws_events(
         return
 
     subprotocol = (
-        "kavana.v1" if "kavana.v1" in websocket.headers.get("sec-websocket-protocol", "") else None
+        "kavana.v1"
+        if "kavana.v1" in websocket.headers.get("sec-websocket-protocol", "")
+        else None
     )
     await websocket.accept(subprotocol=subprotocol)
 

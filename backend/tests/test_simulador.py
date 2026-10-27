@@ -95,7 +95,9 @@ def test_la_demo_no_se_agota_en_muchos_ticks(db_session):
     )
     assert all(n == 1 for n in activas_por_bobina.values())
 
-    recibidas = db_session.scalars(select(StockItem).where(StockItem.coil_id.like("SIM-%"))).all()
+    recibidas = db_session.scalars(
+        select(StockItem).where(StockItem.coil_id.like("SIM-%"))
+    ).all()
     assert recibidas and all(b.tenant_id == tenant.id for b in recibidas)
 
     for fila in costes_por_orden(db_session, tenant.id):

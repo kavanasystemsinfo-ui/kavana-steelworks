@@ -87,11 +87,9 @@ def test_subida_movil_sesion_inexistente_404(db_session, tenant, user):
 
 def test_subida_movil_sesion_caducada_410(db_session, tenant, user):
     sesion = _crear_sesion(db_session, tenant, user)
-    fila = (
-        db_session.query(IncidenciaUploadSession)
-        .filter_by(session_id=uuid.UUID(sesion["session_id"]))
-        .one()
-    )
+    fila = db_session.query(IncidenciaUploadSession).filter_by(
+        session_id=uuid.UUID(sesion["session_id"])
+    ).one()
     fila.expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db_session.commit()
 
@@ -135,11 +133,9 @@ def test_crear_incidencia_con_foto_copia_y_marca_used(db_session, tenant, user):
     assert inc.foto_mime == "image/png"
     assert inc.foto_size == len(PNG_DEMO)
 
-    fila = (
-        db_session.query(IncidenciaUploadSession)
-        .filter_by(session_id=uuid.UUID(sesion["session_id"]))
-        .one()
-    )
+    fila = db_session.query(IncidenciaUploadSession).filter_by(
+        session_id=uuid.UUID(sesion["session_id"])
+    ).one()
     assert fila.status == "used"
     assert fila.incidencia_id == inc.id
     assert fila.photo is None  # la foto temporal se libera

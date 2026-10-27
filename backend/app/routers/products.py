@@ -117,22 +117,16 @@ def _validar_componentes(db: Session, tenant_id: uuid.UUID, comps: list[Componen
                 detail="Cada componente debe referenciar exactamente un modelo o un material",
             )
         if c.manufacturing_model_id is not None:
-            ok = (
-                db.query(ManufacturingModel.id)
-                .filter(
-                    ManufacturingModel.id == c.manufacturing_model_id,
-                    ManufacturingModel.tenant_id == tenant_id,
-                )
-                .first()
-            )
+            ok = db.query(ManufacturingModel.id).filter(
+                ManufacturingModel.id == c.manufacturing_model_id,
+                ManufacturingModel.tenant_id == tenant_id,
+            ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="manufacturing_model_id no existe")
         if c.material_id is not None:
-            ok = (
-                db.query(Material.id)
-                .filter(Material.id == c.material_id, Material.tenant_id == tenant_id)
-                .first()
-            )
+            ok = db.query(Material.id).filter(
+                Material.id == c.material_id, Material.tenant_id == tenant_id
+            ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="material_id no existe")
 
@@ -271,7 +265,9 @@ def delete_product(
 
     # Validación explícita: en SQLite las FKs no están activas por defecto y el
     # IntegrityError de PG no saltaría; las líneas referenciadas prohíben borrar.
-    usada_por = db.query(OrderLine.id).filter(OrderLine.product_id == p.id).first()
+    usada_por = (
+        db.query(OrderLine.id).filter(OrderLine.product_id == p.id).first()
+    )
     if usada_por is not None:
         raise HTTPException(
             status_code=409,

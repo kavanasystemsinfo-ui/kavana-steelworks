@@ -176,7 +176,9 @@ def _ordenes_completadas(
     )
 
 
-def _lineas_por_orden(db: Session, order_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[OrderLine]]:
+def _lineas_por_orden(
+    db: Session, order_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[OrderLine]]:
     if not order_ids:
         return {}
     agrupadas: dict[uuid.UUID, list[OrderLine]] = {}
@@ -215,12 +217,16 @@ def familia_material(material: Material | None) -> str:
         palabra in texto for palabra in ("GALV", "DX51", "Z275")
     ):
         return "galvanizado"
-    if codigo.startswith("FLEJE-D") or any(palabra in texto for palabra in ("DECAP", "DC01")):
+    if codigo.startswith("FLEJE-D") or any(
+        palabra in texto for palabra in ("DECAP", "DC01")
+    ):
         return "decapado"
     return SIN_CLASIFICAR
 
 
-def _acumular(lineas: list[OrderLine], materiales: dict, orden_id: uuid.UUID | None = None) -> dict:
+def _acumular(
+    lineas: list[OrderLine], materiales: dict, orden_id: uuid.UUID | None = None
+) -> dict:
     """Suma euros de las líneas, separando el subconjunto medido en kg.
 
     Las familias se acumulan solo con las líneas en kg (las mismas que forman el
@@ -285,7 +291,9 @@ def _acumular(lineas: list[OrderLine], materiales: dict, orden_id: uuid.UUID | N
         "lineas_metros": metros,
         "chatarra_por_puesto": chatarra_por_puesto,
         "coste": total["material"] + total["mano_obra"],
-        "coste_kg": _coste_kg(en_kg["material"], en_kg["mano_obra"], en_kg["chatarra"], kg),
+        "coste_kg": _coste_kg(
+            en_kg["material"], en_kg["mano_obra"], en_kg["chatarra"], kg
+        ),
         # Numerador del €/kg: evita reconstruirlo (valor × kg) al agregar semanas.
         "coste_kg_numerador": max(en_kg["material"] - en_kg["chatarra"], 0.0)
         + en_kg["mano_obra"]
@@ -458,7 +466,9 @@ def _objetivo_coste_kg(db: Session, tenant_id: uuid.UUID) -> float | None:
     return None
 
 
-def _coste_paradas(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) -> dict:
+def _coste_paradas(
+    db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime
+) -> dict:
     """Paradas del periodo valoradas al €/h del puesto de cada incidencia."""
     incidencias = db.scalars(
         select(Incidencia).where(
@@ -481,7 +491,9 @@ def _coste_paradas(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: da
             coste_hora[puesto] = coste_hora_puesto(db, tenant_id, puesto or None)
         euros = parada / Decimal("60") * coste_hora[puesto]
         total += euros
-        euros_por_tipo[incidencia.tipo] = euros_por_tipo.get(incidencia.tipo, 0.0) + float(euros)
+        euros_por_tipo[incidencia.tipo] = euros_por_tipo.get(incidencia.tipo, 0.0) + float(
+            euros
+        )
 
     por_tipo = [
         {
@@ -505,23 +517,24 @@ def _tendencia(db: Session, tenant_id: uuid.UUID, hoy: date, ctx: dict) -> list[
     hasta = _a_utc(_inicio_semana(hoy) + timedelta(days=7))
 
     semanas: dict[date, dict[str, float]] = {
-        primera + timedelta(weeks=i): {"coste": 0.0, "kg": 0.0} for i in range(SEMANAS_TENDENCIA)
+        primera + timedelta(weeks=i): {"coste": 0.0, "kg": 0.0}
+        for i in range(SEMANAS_TENDENCIA)
     }
 
     for orden in _ordenes_completadas(db, tenant_id, desde, hasta):
         lineas = _lineas_por_orden(db, [orden.id]).get(orden.id, [])
         acumulado = _acumular(lineas, ctx["materiales"])
-        semana = _inicio_semana(_aware_utc(orden.updated_at).astimezone(TZ_PLANTA).date())
+        semana = _inicio_semana(
+            _aware_utc(orden.updated_at).astimezone(TZ_PLANTA).date()
+        )
         if semana not in semanas:
             continue
         semanas[semana]["kg"] += acumulado["kg"]
         semanas[semana]["coste"] += acumulado["coste_kg_numerador"]
 
     return [
-        {
-            "semana": semana.isoformat(),
-            "valor": _r2(datos["coste"] / datos["kg"]) if datos["kg"] > 0 else 0.0,
-        }
+        {"semana": semana.isoformat(), "valor": _r2(datos["coste"] / datos["kg"])
+         if datos["kg"] > 0 else 0.0}
         for semana, datos in sorted(semanas.items())
     ]
 
@@ -584,7 +597,9 @@ def panel_costes(
     ctx = _contexto(db, tenant_id)
 
     actual = _resumen_ventana(db, tenant_id, desde, hasta, ctx)
-    anterior = _resumen_ventana(db, tenant_id, _a_utc(anterior_inicio), desde, ctx)
+    anterior = _resumen_ventana(
+        db, tenant_id, _a_utc(anterior_inicio), desde, ctx
+    )
 
     valores_reparto = [actual["material"], actual["mano_obra"], actual["chatarra"]]
     # El material del reparto va neto de chatarra para no contar dos veces la merma.
@@ -648,7 +663,9 @@ def panel_costes(
                 "real": _r2(orden["real"]),
                 "desv_euros": _r2(orden["desviacion"]),
                 "desv_pct": _r2(orden["desv_pct"]),
-                "causa": _causa(orden, incidencias.get(orden["order_id"], []), orden["desv_pct"]),
+                "causa": _causa(
+                    orden, incidencias.get(orden["order_id"], []), orden["desv_pct"]
+                ),
             }
             for orden in candidatas[:TOPE_ORDENES]
         ],

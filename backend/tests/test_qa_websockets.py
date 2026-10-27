@@ -41,6 +41,7 @@ def _ws_auth_tokens(request, db_session):
     _TOKENS.clear()
 
 
+
 def _override_get_db(db_session):
     def _gen():
         yield db_session
@@ -92,6 +93,7 @@ def _token_para(tenant_id):
         tok = _ws_token(_DBG_SESSION, _FakeTenant(tenant_id), email=f"ws-{tenant_id}@test.local")
         _TOKENS[str(tenant_id)] = tok
     return tok or ""
+
 
 
 class _FakeTenant:
@@ -294,7 +296,9 @@ def test_qa_callback_roto_no_impide_el_push_al_cliente_ws(db_session, tenant, ws
         broker.unsubscribe(tenant.id, _roto)
 
 
-def test_qa_desconexion_brusca_a_media_conexion_limpia_sin_excepcion(db_session, tenant, ws_client):
+def test_qa_desconexion_brusca_a_media_conexion_limpia_sin_excepcion(
+    db_session, tenant, ws_client
+):
     """El cliente se va a media conexión (sin leer los eventos pendientes):
     la suscripción se limpia y el publish posterior no revienta."""
     with _conectar(ws_client, tenant.id) as ws:
@@ -333,7 +337,9 @@ def test_qa_evento_publicado_en_ventana_consume_subscribe_no_llega(
     publicado: dict = {}
 
     def subscribe_con_publish_previo(tenant_id, callback):
-        publicado["evento"] = broker.publish(tenant_id=tenant_id, tipo="downtime", data={"min": 1})
+        publicado["evento"] = broker.publish(
+            tenant_id=tenant_id, tipo="downtime", data={"min": 1}
+        )
         real_subscribe(tenant_id, callback)
 
     monkeypatch.setattr(broker, "subscribe", subscribe_con_publish_previo)
@@ -470,7 +476,9 @@ def _recibe_con_timeout(ws, timeout=2.0):
     return resultado.get("msg") or resultado.get("exc")
 
 
-def test_qa_frame_binario_recibe_error_y_conexion_sigue_viva(db_session, tenant, ws_client):
+def test_qa_frame_binario_recibe_error_y_conexion_sigue_viva(
+    db_session, tenant, ws_client
+):
     """Fix F1 (2026-08-15, orquestador): un frame binario debe responder
     error 'unsupported' y mantener la conexión viva, no matar el handler.
     El contrato (ADR-014) exige error + seguir para mensajes no soportados."""

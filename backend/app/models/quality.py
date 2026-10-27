@@ -41,7 +41,9 @@ class ManufacturingModel(UUIDMixin, TimestampMixin, Base):
     """Plantilla de pieza: código, material y plan de controles de calidad."""
 
     __tablename__ = "manufacturing_models"
-    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_manufacturing_model_code"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_manufacturing_model_code"),
+    )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
@@ -65,7 +67,9 @@ class QualityPlanCheck(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "quality_plan_checks"
     __table_args__ = (
         CheckConstraint(f"tipo IN ({_TIPOS_SQL})", name="ck_qualityplancheck_tipo"),
-        UniqueConstraint("manufacturing_model_id", "name", name="uq_qualityplancheck_name"),
+        UniqueConstraint(
+            "manufacturing_model_id", "name", name="uq_qualityplancheck_name"
+        ),
     )
 
     manufacturing_model_id: Mapped[uuid.UUID] = mapped_column(
@@ -91,7 +95,9 @@ class QualityRecord(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "quality_records"
     __table_args__ = (
-        CheckConstraint(f"overall_status IN ({_ESTADOS_SQL})", name="ck_qualityrecord_status"),
+        CheckConstraint(
+            f"overall_status IN ({_ESTADOS_SQL})", name="ck_qualityrecord_status"
+        ),
         Index("ix_qualityrecord_tenant_order", "tenant_id", "order_id"),
         Index("ix_qualityrecord_tenant_ts", "tenant_id", "created_at"),
         Index("ix_qualityrecord_tenant_status", "tenant_id", "overall_status"),
@@ -129,7 +135,9 @@ class QualityMeasurement(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "quality_measurements"
     __table_args__ = (
-        UniqueConstraint("quality_record_id", "check_name", name="uq_qualitymeasurement_check"),
+        UniqueConstraint(
+            "quality_record_id", "check_name", name="uq_qualitymeasurement_check"
+        ),
     )
 
     quality_record_id: Mapped[uuid.UUID] = mapped_column(

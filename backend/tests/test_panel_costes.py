@@ -225,7 +225,9 @@ def test_las_cinco_reglas_de_causa(db_session, tenant, user):
     assert causas["OP-MEJOR"] == "Mejor aprovechamiento"  # −10 %
     assert causas["OP-NORMAL"] == "Dentro de lo normal"  # +1 %
     assert causas["OP-RARO"] == "Sin causa clara"  # +15 %
-    assert {o["numero"]: o["producto"] for o in datos["ordenes"]}["OP-RARO"] == ("Estantería K-100")
+    assert {o["numero"]: o["producto"] for o in datos["ordenes"]}["OP-RARO"] == (
+        "Estantería K-100"
+    )
 
 
 def test_prioridad_chatarra_sobre_paradas_y_desviacion(db_session, tenant, user):
@@ -262,19 +264,11 @@ def test_parada_corta_no_es_causa(db_session, tenant, user):
 # --------------------------------------------------------------------------- #
 def test_coste_kg_del_periodo_anterior(db_session, tenant):
     _orden(
-        db_session,
-        tenant,
-        "OP-OCT",
-        coste_material=200,
-        coste_linea=300,
+        db_session, tenant, "OP-OCT", coste_material=200, coste_linea=300,
         actualizado=datetime(2026, 10, 10, 12, 0, tzinfo=UTC),
     )
     _orden(
-        db_session,
-        tenant,
-        "OP-SEP",
-        kg=50,
-        coste_material=100,
+        db_session, tenant, "OP-SEP", kg=50, coste_material=100,
         actualizado=datetime(2026, 9, 10, 12, 0, tzinfo=UTC),
     )
 
@@ -288,11 +282,7 @@ def test_trimestre_agrupa_los_tres_meses(db_session, tenant):
     """Q4 (oct-dic): la referencia es el 15-dic, último mes del trimestre."""
     for numero, mes in (("OP-T1", 10), ("OP-T2", 11), ("OP-T3", 12)):
         _orden(
-            db_session,
-            tenant,
-            numero,
-            coste_material=100,
-            kg=50,
+            db_session, tenant, numero, coste_material=100, kg=50,
             actualizado=datetime(2026, mes, 10, 12, 0, tzinfo=UTC),
         )
 
@@ -321,10 +311,7 @@ def test_objetivo_desde_la_configuracion_de_empresa(db_session, tenant):
 def test_tendencia_de_ocho_semanas(db_session, tenant):
     _orden(db_session, tenant, "OP-SEM-ACTUAL", coste_material=200, coste_linea=300)
     _orden(
-        db_session,
-        tenant,
-        "OP-HACE-3-SEMANAS",
-        coste_material=200,
+        db_session, tenant, "OP-HACE-3-SEMANAS", coste_material=200,
         actualizado=datetime(2026, 9, 29, 12, 0, tzinfo=UTC),
     )
 

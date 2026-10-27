@@ -114,9 +114,7 @@ def _reponer_bobina(db: Session, tenant_id, material_id, user_id) -> StockItem |
         return None
     marca = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     return receive_coil(
-        db,
-        tenant_id,
-        user_id,
+        db, tenant_id, user_id,
         material_id=material_id,
         lote=f"SIM-{marca}",
         coil_id=f"SIM-{ultima.material.code}-{marca}",
@@ -158,7 +156,9 @@ def _bobina_fifo(db: Session, tenant_id, material_id) -> StockItem | None:
     )
 
 
-def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: int = 5) -> dict:
+def simular_tick(
+    db: Session, rng: random.Random | None = None, minutos_tick: int = 5
+) -> dict:
     """Un paso de simulación sobre el tenant demo. Devuelve qué hizo."""
     from app.services.inventory import create_retal, link_coil, unlink_coil
     from app.services.production import record_production
@@ -185,12 +185,8 @@ def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: in
         codigo = linea.active_coil_code
         try:
             unlink_coil(
-                db,
-                tenant.id,
-                operario.id,
-                stock_item_id=linea.active_coil_id,
-                order_id=orden.id,
-                line_id=linea.id,
+                db, tenant.id, operario.id,
+                stock_item_id=linea.active_coil_id, order_id=orden.id, line_id=linea.id,
             )
             acciones.append(
                 f"desvincula {codigo} de {orden.numero} L{linea.linea_numero} ({motivo})"
@@ -250,12 +246,8 @@ def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: in
                 acciones.append(f"recibe {bobina.coil_id}")
             try:
                 link_coil(
-                    db,
-                    tenant.id,
-                    operario.id,
-                    stock_item_id=bobina.id,
-                    order_id=orden.id,
-                    line_id=linea.id,
+                    db, tenant.id, operario.id,
+                    stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
                 )
                 acciones.append(f"vincula {bobina.coil_id} a {etiqueta}")
             except ValueError as exc:
@@ -269,11 +261,8 @@ def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: in
             continue
         tope = restantes
         previa = next(
-            (
-                ln
-                for ln, o in lineas
-                if o.id == orden.id and ln.linea_numero == linea.linea_numero - 1
-            ),
+            (ln for ln, o in lineas
+             if o.id == orden.id and ln.linea_numero == linea.linea_numero - 1),
             None,
         )
         if previa is not None:  # WIP: no producir más de lo que entregó el paso anterior
@@ -299,13 +288,9 @@ def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: in
             horas = (piezas * MINUTOS_POR_PIEZA / 60).quantize(Decimal("0.01"))
         try:
             record_production(
-                db,
-                tenant.id,
-                operario.id,
-                order_id=orden.id,
-                line_id=linea.id,
-                incremental_quantity=piezas,
-                hours_worked=horas,
+                db, tenant.id, operario.id,
+                order_id=orden.id, line_id=linea.id,
+                incremental_quantity=piezas, hours_worked=horas,
                 observaciones="simulador demo",
             )
             acciones.append(f"produce {piezas} uds en {etiqueta}")
@@ -321,13 +306,9 @@ def simular_tick(db: Session, rng: random.Random | None = None, minutos_tick: in
                 codigo = linea.active_coil_code
                 try:
                     create_retal(
-                        db,
-                        tenant.id,
-                        operario.id,
-                        stock_item_id=linea.active_coil_id,
-                        radio_mm=0,
-                        order_id=orden.id,
-                        line_id=linea.id,
+                        db, tenant.id, operario.id,
+                        stock_item_id=linea.active_coil_id, radio_mm=0,
+                        order_id=orden.id, line_id=linea.id,
                     )
                     acciones.append(f"fin de bobina {codigo} en {etiqueta}")
                 except ValueError:
