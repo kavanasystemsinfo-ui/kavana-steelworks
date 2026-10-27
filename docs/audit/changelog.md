@@ -4,6 +4,19 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de mando: pestaña Gestión con el estilo del panel
+
+- **Problema:** la pestaña Gestión (informe de turno, órdenes, trazabilidad,
+  calidad, incidencias) seguía con el tema oscuro antiguo dentro del panel claro.
+- **Solución:** clase `.tema-panel` en el marco del panel que reasigna los tokens
+  `kavana-*` a la paleta clara `p-*` y quita mayúsculas, espaciado y letra
+  monoespaciada de etiquetas y cifras; fuera del panel nada cambia. Cada
+  herramienta pasa a tarjeta blanca con título legible.
+- **Archivos:** `frontend/src/index.css`, `frontend/src/panel/PanelLayout.tsx`,
+  `frontend/src/pages/SupervisorPage.tsx`.
+- **Verificación:** vitest (131) y revisión en local: ningún fondo oscuro dentro
+  del panel salvo la pestaña activa.
+
 ## 2026-10-27 — Panel de mando: vista Turno y Modo TV (fase 1)
 
 - **Problema:** tras la fase 0 la pestaña Turno seguía mostrando el panel

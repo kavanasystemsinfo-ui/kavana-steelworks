@@ -197,14 +197,17 @@ export function SupervisorPage() {
           </Seccion>
         )}
         {vista === 'gestion' && (
-    <div className="bg-kavana-dark text-kavana-text font-display rounded-[14px] p-4 space-y-4">
-      <p className="text-xs text-kavana-text-dim">
-        Herramientas de gestión: informe de turno, órdenes, trazabilidad, calidad e incidencias
-      </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="m-0 text-[26px] font-bold tracking-tight">Gestión</h1>
+        <p className="m-0 mt-1 text-sm text-p-texto2">
+          Informe de turno, órdenes, trazabilidad, calidad e incidencias.
+        </p>
+      </div>
 
       {/* Informe de turno exportable (adopción de Reports del legacy) */}
-      <div id="informe" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
-        <p className="label-industrial text-xs text-kavana-text-dim">Informe de turno</p>
+      <div id="informe" className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
+        <h2 className="m-0 text-lg font-bold text-p-texto">Informe de turno</h2>
         <InformeTurno />
       </div>
 
@@ -214,11 +217,11 @@ export function SupervisorPage() {
       </div>
 
       {/* Trazabilidad ISO 9001 (spec 04) */}
-      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+      <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="label-industrial text-xs text-kavana-text-dim">
+          <h2 className="m-0 text-lg font-bold text-p-texto">
             Trazabilidad ISO 9001
-          </p>
+          </h2>
           <span className="text-[10px] text-kavana-text-dim">eventos inmutables</span>
         </div>
 
@@ -288,11 +291,11 @@ export function SupervisorPage() {
       <QualityBoard />
 
       {/* Incidencias de planta (spec 04 §3.3) */}
-      <div id="incidencias" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+      <div id="incidencias" className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="label-industrial text-xs text-kavana-text-dim">
+          <h2 className="m-0 text-lg font-bold text-p-texto">
             Incidencias de planta
-          </p>
+          </h2>
           <span className="text-[10px] text-kavana-text-dim">
             {incidencias.length} reportadas
           </span>
@@ -414,7 +417,7 @@ export function SupervisorPage() {
                     <button
                       type="button"
                       onClick={() => handleResolver(inc.id)}
-                      className="col-span-2 min-h-[44px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+                      className="col-span-2 min-h-[44px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-white transition-colors"
                     >
                       Confirmar resolución
                     </button>
@@ -658,13 +661,13 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
   }
 
   return (
-    <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+    <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="label-industrial text-xs text-kavana-text-dim">Gestión de órdenes</p>
+        <h2 className="m-0 text-lg font-bold text-p-texto">Gestión de órdenes</h2>
         <button
           type="button"
           onClick={abrirForm}
-          className="min-h-[40px] px-4 border border-kavana-orange text-kavana-orange text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+          className="min-h-[40px] px-4 border border-kavana-orange text-kavana-orange text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-white transition-colors"
         >
           {showForm ? 'Cerrar' : '+ Nueva orden'}
         </button>
@@ -843,7 +846,7 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
           <button
             type="submit"
             disabled={creando}
-            className="w-full min-h-[44px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-40"
+            className="w-full min-h-[44px] bg-kavana-orange text-white font-bold uppercase tracking-widest rounded-sm hover:opacity-90 disabled:opacity-40"
           >
             {creando ? 'Creando…' : 'Crear orden'}
           </button>
@@ -964,7 +967,7 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                     </label>
                     <button
                       type="submit"
-                      className="col-span-3 min-h-[40px] border border-kavana-orange text-kavana-orange text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+                      className="col-span-3 min-h-[40px] border border-kavana-orange text-kavana-orange text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-white transition-colors"
                     >
                       Guardar cabecera
                     </button>
@@ -1022,9 +1025,9 @@ function QualityBoard() {
   }, [])
 
   return (
-    <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
+    <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="label-industrial text-xs text-kavana-text-dim">Autocontroles de calidad</p>
+        <h2 className="m-0 text-lg font-bold text-p-texto">Autocontroles de calidad</h2>
         <span className="text-[10px] text-kavana-text-dim">{records.length} últimos</span>
       </div>
 
