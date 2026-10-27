@@ -1,17 +1,15 @@
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
-import { PuestosMonitor } from '../components/PuestosMonitor'
 import { InformeTurno } from '../components/InformeTurno'
+import { ModoTv } from '../components/ModoTv'
 import { VistaCostes } from '../components/VistaCostes'
+import { VistaTurno, type DestinoTurno } from '../components/VistaTurno'
 import { PanelLayout } from '../panel/PanelLayout'
+import { useTurno } from '../panel/turno'
 import { Seccion } from '../panel/ui'
 import { vistaDeUrl, type Vista } from '../panel/vistas'
 import type {
-  AlertasData,
-  CosteOrden,
-  KpisData,
   MaterialOut,
   OrderDetailOut,
   OrderItem,
@@ -21,20 +19,6 @@ import type {
   QualityRecordOut,
   WorkstationOut,
 } from '../lib/api'
-
-interface OeeData {
-  availability: number
-  performance: number
-  quality: number
-  oee: number
-  raw: {
-    total_pieces: number
-    total_objetivo: number
-    total_tiempo_min: number
-    scrap_kg: number
-    material_kg: number
-  }
-}
 
 interface IncidenciaItem {
   id: string
@@ -84,13 +68,10 @@ const ACCIONES_TRACE: Record<string, string> = {
  *  de eventos inmutables, carga bajo demanda (no polling).
  */
 export function SupervisorPage() {
-  const [oee, setOee] = useState<OeeData | null>(null)
-  const [kpis, setKpis] = useState<KpisData | null>(null)
-  const [costes, setCostes] = useState<CosteOrden[] | null>(null)
-  const [alertas, setAlertas] = useState<AlertasData | null>(null)
-  const [error, setError] = useState('')
-  const [andon, setAndon] = useState(false)
-  const [menuRapido, setMenuRapido] = useState(false)
+  const [modoTv, setModoTv] = useState(false)
+  const salirTv = useCallback(() => setModoTv(false), [])
+  const turno = useTurno()
+  const navigate = useNavigate()
 
   const [orders, setOrders] = useState<OrderItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState('')
@@ -150,43 +131,25 @@ export function SupervisorPage() {
     }
   }
 
-  useEffect(() => {
-    const cargar = () => {
-      api.getOee()
-        .then(setOee)
-        .catch((e) => setError(e instanceof Error ? e.message : 'Error OEE'))
-      api.getKpis()
-        .then(setKpis)
-        .catch((e) => setError(e instanceof Error ? e.message : 'Error KPIs'))
-      api.getCostesOrdenes()
-        .then((data) => setCostes(Array.isArray(data) ? data : []))
-        .catch(() => setCostes(null))
-      api.getAlertas()
-        .then((data) => setAlertas(data && Array.isArray(data.stock_bajo_minimos) ? data : null))
-        .catch(() => setAlertas(null))
-    }
-    cargar()
-    const timer = setInterval(cargar, 10000)
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    if (!andon) return
-    const salir = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setAndon(false)
-    }
-    window.addEventListener('keydown', salir)
-    return () => window.removeEventListener('keydown', salir)
-  }, [andon])
-
   // Pestaña activa en la URL (?vista=...): se puede enlazar y sobrevive a recargar
   const [params, setParams] = useSearchParams()
   const vista = vistaDeUrl(params.get('vista'))
   const irAVista = (v: Vista) => setParams({ vista: v })
 
-  const irA = (id: string) => {
-    setMenuRapido(false)
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Los avisos de la vista Turno llevan a donde se resuelven
+  const irDesdeTurno = (destino: DestinoTurno) => {
+    if (destino === 'stock') {
+      navigate('/materias-primas')
+      return
+    }
+    if (destino === 'puestos') {
+      document.getElementById('puestos-turno')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    setParams({ vista: 'gestion' })
+    setTimeout(() => {
+      document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
   }
 
   const cargarOrders = () => {
@@ -219,46 +182,11 @@ export function SupervisorPage() {
       .catch(() => setTraceError('No se pudo cargar la trazabilidad'))
   }, [selectedOrder])
 
-  const fmtNum = (n: number | null | undefined, dec = 0) =>
-    n === undefined || n === null
-      ? '--'
-      : n.toLocaleString('es-ES', { maximumFractionDigits: dec })
-  const fmtEur = (n: number | null | undefined) =>
-    n === undefined || n === null ? '--' : `${fmtNum(n, 2)} €`
-  const fmtPct = (n: number | null | undefined) =>
-    n === undefined || n === null ? '--' : `${fmtNum(n, 1)} %`
-  const colorDesviacion = (n: number | null | undefined) =>
-    n === undefined || n === null
-      ? 'text-kavana-text-dim'
-      : n > 0
-        ? 'text-kavana-danger'
-        : 'text-kavana-ok'
-
-  const andonOverlay = andon && (
-        <div
-          role="dialog"
-          aria-label="Andon de planta"
-          className="fixed inset-0 m-0 z-50 bg-kavana-dark overflow-auto p-6 space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <p className="font-display font-black text-3xl">Andon · planta</p>
-            <button
-              type="button"
-              className="border border-kavana-border rounded-sm px-4 py-2"
-              onClick={() => setAndon(false)}
-            >
-              Salir (Esc)
-            </button>
-          </div>
-          <PuestosMonitor andon />
-        </div>
-  )
-
   return (
     <>
-      {/* Andon: el mismo monitor de puestos a pantalla completa para una TV */}
-      {andonOverlay}
-      <PanelLayout vista={vista} onVista={irAVista} onModoTv={() => setAndon(true)}>
+      {modoTv && <ModoTv datos={turno.datos} onSalir={salirTv} />}
+      <PanelLayout vista={vista} onVista={irAVista} onModoTv={() => setModoTv(true)}>
+        {vista === 'turno' && <VistaTurno datos={turno.datos} error={turno.error} onIr={irDesdeTurno} />}
         {vista === 'costes' && <VistaCostes />}
         {vista === 'planta' && (
           <Seccion
@@ -268,203 +196,11 @@ export function SupervisorPage() {
             <p className="m-0 text-sm text-p-texto2">Disponible en la siguiente fase.</p>
           </Seccion>
         )}
-        {vista === 'turno' && (
+        {vista === 'gestion' && (
     <div className="bg-kavana-dark text-kavana-text font-display rounded-[14px] p-4 space-y-4">
       <p className="text-xs text-kavana-text-dim">
-        Vista actual del turno · se rediseña en la siguiente fase
+        Herramientas de gestión: informe de turno, órdenes, trazabilidad, calidad e incidencias
       </p>
-      {/* Acción rápida: llegar a lo importante sin recorrer el panel */}
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
-        {menuRapido && (
-          <div className="bg-kavana-panel border border-kavana-border rounded-sm p-2 flex flex-col gap-1 text-sm">
-            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('ordenes')}>
-              Nueva orden
-            </button>
-            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('incidencias')}>
-              Incidencias
-            </button>
-            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('puestos')}>
-              Puestos
-            </button>
-            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('informe')}>
-              Informe de turno
-            </button>
-            <button
-              type="button"
-              className="text-left px-3 py-2 hover:bg-kavana-surface"
-              onClick={() => {
-                setMenuRapido(false)
-                setAndon(true)
-              }}
-            >
-              Modo Andon
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
-          aria-label="Acción rápida"
-          className="w-14 h-14 rounded-full bg-kavana-orange text-kavana-dark text-2xl font-black shadow-lg"
-          onClick={() => setMenuRapido((v) => !v)}
-        >
-          ⚡
-        </button>
-      </div>
-
-      <div className="step-guide">
-        <p className="label-industrial text-xs text-kavana-text-dim">
-          Planta en un vistazo
-        </p>
-        <p className="text-lg font-bold">Centro de mando</p>
-        <p className="text-xs text-kavana-text-dim">
-          Acumulado de las órdenes activas y completadas
-          {kpis
-            ? ` · ${kpis.orders_active} activas · ${kpis.orders_completed} completadas`
-            : ''}
-        </p>
-      </div>
-
-      {error && (
-        <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-          {error}
-        </p>
-      )}
-
-      {/* Alertas: mismo dato y misma regla que su pantalla de detalle */}
-      {alertas && (alertas.stock_bajo_minimos.length > 0 || alertas.incidencias_abiertas > 0) && (
-        <div className="flex flex-wrap gap-2 text-sm">
-          {alertas.incidencias_abiertas > 0 && (
-            <button
-              type="button"
-              className="border border-kavana-danger text-kavana-danger rounded-sm px-3 py-1"
-              onClick={() => irA('incidencias')}
-            >
-              {alertas.incidencias_abiertas} incidencias abiertas
-            </button>
-          )}
-          {alertas.stock_bajo_minimos.length > 0 && (
-            <span
-              className="border border-kavana-warn text-kavana-warn rounded-sm px-3 py-1"
-              title={alertas.stock_bajo_minimos
-                .map((m) => `${m.code}: ${m.stock.toLocaleString('es-ES')} / ${m.minimo.toLocaleString('es-ES')} ${m.unidad}`)
-                .join(' · ')}
-            >
-              {alertas.stock_bajo_minimos.length} materiales bajo mínimos:{' '}
-              {alertas.stock_bajo_minimos.map((m) => m.code).join(', ')}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Centro de mando: 4 tarjetas, una pregunta cada una (adopción del legacy) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Tarjeta titulo="OEE global" pie={
-          oee
-            ? `A ${fmtNum(oee.availability, 1)} · P ${fmtNum(oee.performance, 1)} · Q ${fmtNum(oee.quality, 1)}`
-            : 'Disponibilidad × Rendimiento × Calidad'
-        }>
-          <span className="text-kavana-orange">{oee ? fmtNum(oee.oee, 2) : '--'}</span>
-          <span className="text-xl text-kavana-text-dim"> %</span>
-        </Tarjeta>
-
-        <Tarjeta titulo="Consumo de material" pie={
-          oee
-            ? `Merma ${fmtNum(oee.raw.scrap_kg, 1)} kg (${fmtPct(kpis?.scrap_rate)}) · ${fmtEur(kpis?.scrap_cost)}`
-            : 'Merma en kg y en euros'
-        }>
-          {oee ? fmtNum(oee.raw.material_kg, 1) : '--'}
-          <span className="text-xl text-kavana-text-dim"> kg</span>
-        </Tarjeta>
-
-        <Tarjeta titulo="Coste de producción" pie={
-          kpis
-            ? `Material ${fmtEur(kpis.real_material_cost)} · Mano de obra ${fmtEur(kpis.labor_cost)}`
-            : 'Material + mano de obra'
-        }>
-          {fmtEur(kpis?.real_cost)}
-        </Tarjeta>
-
-        <Tarjeta titulo="Material real vs estimado" pie={
-          kpis && kpis.estimated_cost !== null
-            ? `Real ${fmtEur(kpis.real_material_comparable)} · Estimado ${fmtEur(kpis.estimated_cost)} · ${kpis.orders_with_estimate} órdenes completadas`
-            : 'Sin órdenes completadas con estimado (€/kg y objetivo de kg)'
-        }>
-          <span className={colorDesviacion(kpis?.cost_variance)}>
-            {fmtEur(kpis?.cost_variance)}
-          </span>
-        </Tarjeta>
-      </div>
-
-      {/* Coste por orden: la misma fuente que las tarjetas, siempre cuadran */}
-      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
-        <p className="label-industrial text-xs text-kavana-text-dim">Coste por orden</p>
-        {costes === null && (
-          <p className="text-kavana-text-dim text-sm">No se pudo cargar el coste por orden.</p>
-        )}
-        {costes !== null && costes.length === 0 && (
-          <p className="text-kavana-text-dim text-sm">Sin órdenes activas ni completadas.</p>
-        )}
-        {costes !== null && costes.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-kavana-text-dim text-xs">
-                  <th className="py-1 pr-2">Orden</th>
-                  <th className="py-1 pr-2">Estado</th>
-                  <th className="py-1 pr-2 text-right">Piezas</th>
-                  <th className="py-1 pr-2 text-right">Material</th>
-                  <th className="py-1 pr-2 text-right">Mano de obra</th>
-                  <th className="py-1 pr-2 text-right">Total</th>
-                  <th className="py-1 pr-2 text-right">Estimado</th>
-                  <th className="py-1 pr-2 text-right">Desviación</th>
-                  <th className="py-1 text-right">Merma</th>
-                </tr>
-              </thead>
-              <tbody>
-                {costes.map((c) => (
-                  <tr key={c.order_id} className="border-t border-kavana-border">
-                    <td className="py-1 pr-2">
-                      <p className="font-semibold">{c.numero}</p>
-                      {c.cliente && (
-                        <p className="text-xs text-kavana-text-dim">{c.cliente}</p>
-                      )}
-                    </td>
-                    <td className="py-1 pr-2">{c.estado === 'active' ? 'activa' : 'completada'}</td>
-                    <td className="py-1 pr-2 text-right mono-data">
-                      {fmtNum(c.piezas)}/{fmtNum(c.objetivo)}
-                    </td>
-                    <td className="py-1 pr-2 text-right mono-data">{fmtEur(c.real_material)}</td>
-                    <td className="py-1 pr-2 text-right mono-data">{fmtEur(c.mano_obra)}</td>
-                    <td className="py-1 pr-2 text-right mono-data font-bold">{fmtEur(c.real_total)}</td>
-                    <td className="py-1 pr-2 text-right mono-data">{fmtEur(c.estimado_material)}</td>
-                    <td className={`py-1 pr-2 text-right mono-data ${colorDesviacion(c.desviacion_material)}`}>
-                      {fmtEur(c.desviacion_material)}
-                    </td>
-                    <td className="py-1 text-right mono-data">
-                      {fmtNum(c.scrap_kg, 1)} kg · {fmtEur(c.scrap_coste)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Monitor de puestos (adopción del legacy: un vistazo, un click) */}
-      <div id="puestos" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="label-industrial text-xs text-kavana-text-dim">Puestos en planta</p>
-          <button
-            type="button"
-            className="text-xs px-3 py-1 border border-kavana-border rounded-sm"
-            onClick={() => setAndon(true)}
-          >
-            Modo Andon
-          </button>
-        </div>
-        {!andon && <PuestosMonitor />}
-      </div>
 
       {/* Informe de turno exportable (adopción de Reports del legacy) */}
       <div id="informe" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
@@ -696,25 +432,6 @@ export function SupervisorPage() {
   )
 }
 
-function Tarjeta({
-  titulo,
-  pie,
-  children,
-}: {
-  titulo: string
-  pie: string
-  children: ReactNode
-}) {
-  return (
-    <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 flex flex-col justify-between gap-2">
-      <p className="label-industrial text-xs text-kavana-text-dim">{titulo}</p>
-      <p className="font-display font-black text-3xl">{children}</p>
-      <p className="text-xs text-kavana-text-dim">{pie}</p>
-    </div>
-  )
-}
-
-/** Detalle del metadata del evento: solo las claves útiles para el supervisor. */
 function DetalleEvento({ evento }: { evento: TraceEvent }) {
   const m = evento.metadata ?? {}
   const partes: string[] = []

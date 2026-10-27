@@ -4,6 +4,39 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de mando: vista Turno y Modo TV (fase 1)
+
+- **Problema:** tras la fase 0 la pestaña Turno seguía mostrando el panel
+  antiguo (OEE acumulado de todas las órdenes, coste por orden, monitor de
+  puestos): no respondía a la pregunta del jefe de turno, "¿llego al plan y qué
+  tengo que resolver ahora?".
+- **Solución:** `GET /supervisor/turno` (`services/panel_turno.py`) calcula,
+  solo con datos registrados, el turno en curso (A/B/C en horario de planta):
+  piezas de los eventos `produce` del turno, plan con el ritmo nominal de los
+  puestos que tienen orden, previsión de cierre al ritmo de la última hora,
+  paradas por incidencias del turno, chatarra en kg, eficiencia del turno
+  (en marcha × velocidad × calidad), estado de cada puesto en orden de flujo,
+  órdenes activas con riesgo de entrega (horas de trabajo que faltan frente a
+  horas hasta la entrega) y la lista "pendiente de actuar" por urgencia. Sin
+  ritmo nominal no hay plan y el panel lo dice. La vista Turno del frontend
+  sigue la maqueta (frase de estado, 4 indicadores con referencia, gráfico
+  real/plan/previsión, pendientes, puestos, órdenes) y el Modo TV es una
+  pantalla oscura a cifras grandes con los mismos datos. Las herramientas del
+  panel antiguo (informe de turno, órdenes, trazabilidad, calidad,
+  incidencias) pasan a la pestaña Gestión; las tarjetas y el monitor antiguos
+  se retiran (`PuestosMonitor`). El simulador de la demo produce ahora según
+  el ritmo nominal de cada puesto (60-100 % por tick) para que plan y real sean
+  comparables.
+- **Archivos:** `backend/app/services/panel_turno.py`,
+  `backend/app/routers/supervisor.py`, `backend/app/services/simulador.py`,
+  `frontend/src/components/VistaTurno.tsx`, `frontend/src/components/ModoTv.tsx`,
+  `frontend/src/panel/{turno.ts,formato.ts,GraficoTurno.tsx,vistas.ts}`,
+  `frontend/src/pages/SupervisorPage.tsx`.
+- **Verificación:** `tests/test_panel_turno.py` (ventana de turno, plan,
+  previsión, paradas, pendientes, chatarra, permisos y aislamiento por tenant);
+  tests de la página del supervisor reescritos para Turno, Modo TV y Gestión.
+  Revisado en local con datos del simulador.
+
 ## 2026-10-27 — Panel de mando: base común e interfaz nueva (fase 0)
 
 - **Problema:** el panel del supervisor ganaba funciones (costes, monitor,

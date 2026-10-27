@@ -446,6 +446,68 @@ export interface Objetivos {
   chatarra_max_pct: number
 }
 
+/** Vista Turno del panel de mando (GET /supervisor/turno). */
+export type EstadoPuestoTurno =
+  | 'en_marcha'
+  | 'sin_registrar'
+  | 'parado'
+  | 'preparado'
+  | 'sin_orden'
+export type EstadoOrdenTurno = 'retraso' | 'en_riesgo' | 'a_tiempo' | 'sin_ritmo' | 'sin_plazo'
+
+export interface PanelTurno {
+  turno: { codigo: 'A' | 'B' | 'C'; inicio: string; fin: string; transcurrido_min: number; duracion_min: number }
+  piezas: number
+  /** null = ningún puesto con orden tiene ritmo nominal: no hay plan. */
+  plan_turno: number | null
+  plan_ahora: number | null
+  prevision_cierre: number | null
+  serie: { minuto: number; piezas: number }[]
+  eficiencia: {
+    oee: number
+    disponibilidad: number
+    rendimiento: number
+    calidad: number
+    mas_resta: 'disponibilidad' | 'rendimiento' | 'calidad'
+  } | null
+  paradas: {
+    minutos: number
+    numero: number
+    mayor: { puesto: string; motivo: string; descripcion: string; minutos: number; abierta: boolean } | null
+  }
+  chatarra: { kg: number; pct: number | null }
+  objetivos: Objetivos
+  puestos: {
+    code: string
+    name: string
+    grupo: string | null
+    estado: EstadoPuestoTurno
+    motivo: string | null
+    minutos: number | null
+    ritmo_nominal: number | null
+    orden: { numero: string; producto: string | null; piezas: number; objetivo: number } | null
+  }[]
+  ordenes: {
+    numero: string
+    producto: string | null
+    puesto: string | null
+    piezas: number
+    objetivo: number
+    entrega: string | null
+    horas_faltan: number | null
+    horas_quedan: number | null
+    estado: EstadoOrdenTurno
+  }[]
+  pendientes: {
+    urgencia: 'urgente' | 'hoy' | 'revisar'
+    titulo: string
+    detalle: string
+    minutos: number | null
+    accion: 'incidencia' | 'stock' | 'orden' | 'puesto'
+    ref: string
+  }[]
+}
+
 export interface WorkstationGroupOut {
   id: string
   name: string
@@ -563,6 +625,10 @@ export const api = {
   /** Solo administración; los objetivos no enviados conservan su valor. */
   putObjetivos(cambios: Partial<Objetivos>): Promise<Objetivos> {
     return request('/supervisor/objetivos', { method: 'PUT', body: JSON.stringify(cambios) })
+  },
+
+  getTurno(): Promise<PanelTurno> {
+    return request('/supervisor/turno')
   },
 
   getAlertas(): Promise<AlertasData> {

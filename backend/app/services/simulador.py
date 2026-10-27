@@ -13,7 +13,8 @@ Solo actúa sobre el tenant demo (buscar_tenant_demo). Un tick:
    libre, recibe una nueva igual a la última (receive_coil, con su kardex).
 1. Si un puesto no tiene línea en curso, arranca la siguiente pendiente.
 2. A cada línea en curso sin bobina le vincula la bobina FIFO de su material.
-3. Registra unas pocas piezas con el tiempo proporcional.
+3. Registra piezas: si el puesto tiene ritmo nominal, entre el 60 % y el 100 %
+   de su ritmo en el intervalo del tick; si no, unas pocas (1-4).
 Lo que el sistema rechace (guardia de kilos, WIP) se salta y se informa: el
 simulador nunca fuerza datos.
 
@@ -33,7 +34,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Order, OrderLine, StockItem, User
+from app.models import Order, OrderLine, StockItem, User, Workstation
 
 MINUTOS_POR_PIEZA = Decimal("3")
 ORDENES_ACTIVAS_MIN = 2
@@ -155,7 +156,9 @@ def _bobina_fifo(db: Session, tenant_id, material_id) -> StockItem | None:
     )
 
 
-def simular_tick(db: Session, rng: random.Random | None = None) -> dict:
+def simular_tick(
+    db: Session, rng: random.Random | None = None, minutos_tick: int = 5
+) -> dict:
     """Un paso de simulación sobre el tenant demo. Devuelve qué hizo."""
     from app.services.inventory import create_retal, link_coil, unlink_coil
     from app.services.production import record_production
@@ -170,6 +173,11 @@ def simular_tick(db: Session, rng: random.Random | None = None) -> dict:
         return {"tenant": str(tenant.id), "acciones": [], "saltos": ["sin operario demo"]}
 
     acciones: list[str] = _reponer_ordenes(db, tenant.id, rng)
+    ritmos = {
+        w.code: w.piezas_hora_nominal
+        for w in db.scalars(select(Workstation).where(Workstation.tenant_id == tenant.id))
+        if w.piezas_hora_nominal
+    }
     saltos: list[str] = []
 
     def soltar_bobina(linea: OrderLine, orden: Order, motivo: str) -> None:
@@ -267,8 +275,17 @@ def simular_tick(db: Session, rng: random.Random | None = None) -> dict:
             else:
                 saltos.append(f"{etiqueta}: esperando piezas del paso anterior")
             continue
-        piezas = min(Decimal(rng.randint(1, 4)), tope)
-        horas = (piezas * MINUTOS_POR_PIEZA / 60).quantize(Decimal("0.01"))
+        ritmo = ritmos.get(linea.workstation_id)
+        if ritmo:
+            # Con ritmo nominal: entre el 60 % y el 100 % de lo que el puesto
+            # haría en el intervalo del tick (una planta real no va al 100 %)
+            esperado = ritmo * Decimal(minutos_tick) / 60
+            factor = Decimal(str(round(rng.uniform(0.6, 1.0), 2)))
+            piezas = min(max((esperado * factor).quantize(Decimal("1")), Decimal("1")), tope)
+            horas = (Decimal(minutos_tick) / 60).quantize(Decimal("0.01"))
+        else:
+            piezas = min(Decimal(rng.randint(1, 4)), tope)
+            horas = (piezas * MINUTOS_POR_PIEZA / 60).quantize(Decimal("0.01"))
         try:
             record_production(
                 db, tenant.id, operario.id,
@@ -308,12 +325,12 @@ def simular_tick(db: Session, rng: random.Random | None = None) -> dict:
     return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
 
 
-def _tick_en_sesion() -> dict:
+def _tick_en_sesion(minutos: int) -> dict:
     from app.core.database import SessionLocal
 
     db = SessionLocal()
     try:
-        return simular_tick(db)
+        return simular_tick(db, minutos_tick=minutos)
     finally:
         db.close()
 
@@ -325,7 +342,7 @@ async def bucle_simulador(minutos: int) -> None:
         if not en_horario_laboral():
             continue
         try:
-            resultado = await asyncio.to_thread(_tick_en_sesion)
+            resultado = await asyncio.to_thread(_tick_en_sesion, minutos)
             logger.info(
                 "[simulador] %d acciones, %d saltos",
                 len(resultado["acciones"]),

@@ -4,70 +4,69 @@ import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { SupervisorPage } from '../pages/SupervisorPage'
 
-function renderPage() {
+/** Las herramientas (informe, órdenes, trazabilidad, incidencias) viven en Gestión. */
+function renderPage(url = '/supervisor?vista=gestion') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <SupervisorPage />
     </MemoryRouter>,
   )
 }
 
-const oeeBody = {
-  availability: 50,
-  performance: 50,
-  quality: 95,
-  oee: 23.75,
-  raw: {
-    total_pieces: 10,
-    total_objetivo: 20,
-    total_tiempo_min: 240,
-    scrap_kg: 5,
-    material_kg: 100,
+const renderTurno = () => renderPage('/supervisor')
+
+const turnoBody = {
+  turno: {
+    codigo: 'B',
+    inicio: '2026-10-27T19:00:00+00:00',
+    fin: '2026-10-28T03:00:00+00:00',
+    transcurrido_min: 240,
+    duracion_min: 480,
   },
-}
-
-const kpisBody = {
-  orders_total: 1,
-  orders_active: 1,
-  orders_completed: 0,
-  estimated_cost: 1000,
-  real_cost: 950,
-  real_material_cost: 900,
-  labor_cost: 50,
-  real_material_comparable: 900,
-  orders_with_estimate: 1,
-  scrap_cost: 45,
-  cost_variance: -100,
-  cost_efficiency: 111.1,
-  material_variance: 0,
-  material_efficiency: 0,
-  scrap_rate: 5,
-}
-
-const costesBody = [
-  {
-    order_id: 'OP1',
-    numero: 'OP-DEMO-001',
-    cliente: 'Cliente demo',
-    estado: 'active',
-    piezas: 10,
-    objetivo: 20,
-    real_material: 900,
-    mano_obra: 50,
-    real_total: 950,
-    estimado_material: 1000,
-    desviacion_material: -100,
-    real_material_comparable: 900,
-    scrap_kg: 5,
-    scrap_coste: 45,
-  },
-]
-
-const alertasBody = {
-  stock_bajo_minimos: [
-    { code: 'FLEJE-D265-18', name: 'Fleje', stock: 100, minimo: 400, unidad: 'kg' },
+  piezas: 1180,
+  plan_turno: 2000,
+  plan_ahora: 1000,
+  prevision_cierre: 1940,
+  serie: [
+    { minuto: 0, piezas: 0 },
+    { minuto: 240, piezas: 1180 },
   ],
-  incidencias_abiertas: 2,
+  eficiencia: { oee: 71, disponibilidad: 90, rendimiento: 82, calidad: 97.9, mas_resta: 'rendimiento' },
+  paradas: {
+    minutos: 46,
+    numero: 3,
+    mayor: { puesto: 'PUNZ-1', motivo: 'falta de material', descripcion: 'Bobina agotada', minutos: 23, abierta: true },
+  },
+  chatarra: { kg: 186, pct: 2.1 },
+  objetivos: { oee: 75, disponibilidad: 90, rendimiento: 88, calidad: 95, chatarra_max_pct: 3 },
+  puestos: [
+    {
+      code: 'PUNZ-1', name: 'Punzonado', grupo: 'Punzonado', estado: 'parado',
+      motivo: 'Falta de material', minutos: 23, ritmo_nominal: 40,
+      orden: { numero: '2602', producto: 'Lateral 900', piezas: 48, objetivo: 120 },
+    },
+    {
+      code: 'CORTE-1', name: 'Corte', grupo: 'Corte', estado: 'en_marcha',
+      motivo: null, minutos: 2, ritmo_nominal: 60,
+      orden: { numero: '2603', producto: 'Larguero 2000', piezas: 310, objetivo: 400 },
+    },
+  ],
+  ordenes: [
+    {
+      numero: '2602', producto: 'Lateral 900', puesto: 'PUNZ-1', piezas: 48, objetivo: 120,
+      entrega: '2026-10-28T03:00:00+00:00', horas_faltan: 3.6, horas_quedan: 3.3, estado: 'retraso',
+    },
+  ],
+  pendientes: [
+    {
+      urgencia: 'urgente', titulo: 'PUNZ-1 parado · falta de material', detalle: 'Bobina agotada',
+      minutos: 23, accion: 'incidencia', ref: 'i1',
+    },
+    {
+      urgencia: 'hoy', titulo: 'Orden 2602 va con retraso', detalle: 'Necesita 3,6 h.',
+      minutos: null, accion: 'orden', ref: '2602',
+    },
+  ],
 }
 
 const informeBody = {
@@ -138,11 +137,8 @@ const traceOP2 = [
 function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {}) {
   const { orders = ordersBody, trace = {} } = opts
   vi.stubGlobal('fetch', vi.fn((url: string) => {
-    if (url.includes('/supervisor/oee')) {
-      return Promise.resolve({ ok: true, json: async () => oeeBody })
-    }
-    if (url.includes('/supervisor/kpis')) {
-      return Promise.resolve({ ok: true, json: async () => kpisBody })
+    if (url.includes('/supervisor/turno')) {
+      return Promise.resolve({ ok: true, json: async () => turnoBody })
     }
     if (url.includes('/supervisor/panel/costes')) {
       return Promise.resolve({
@@ -182,12 +178,6 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
         }),
       })
     }
-    if (url.includes('/supervisor/costes-ordenes')) {
-      return Promise.resolve({ ok: true, json: async () => costesBody })
-    }
-    if (url.includes('/supervisor/alertas')) {
-      return Promise.resolve({ ok: true, json: async () => alertasBody })
-    }
     if (url.includes('/supervisor/informe-turno')) {
       return Promise.resolve({ ok: true, json: async () => informeBody })
     }
@@ -203,32 +193,57 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {
 }
 
 describe('Panel de Supervisor (planta en un vistazo)', () => {
-  it('muestra las 4 tarjetas del centro de mando', async () => {
+  it('Turno abre por defecto con la frase de estado y sus cuatro indicadores', async () => {
     stubApi()
 
-    renderPage()
+    renderTurno()
 
-    expect(await screen.findByText('23,75')).toBeInTheDocument()
-    expect(screen.getByText('OEE global')).toBeInTheDocument()
-    expect(screen.getByText('A 50 · P 50 · Q 95')).toBeInTheDocument()
-    expect(screen.getByText('Consumo de material')).toBeInTheDocument()
-    expect(await screen.findByText(/Merma 5 kg \(5 %\) · 45 €/)).toBeInTheDocument()
-    expect(screen.getByText('Coste de producción')).toBeInTheDocument()
-    expect(screen.getByText('Material 900 € · Mano de obra 50 €')).toBeInTheDocument()
-    expect(screen.getByText('Material real vs estimado')).toBeInTheDocument()
+    const estado = await screen.findByRole('region', { name: 'Estado' })
+    expect(estado).toHaveTextContent('En ritmo, pero con 1 puesto parado')
+    expect(estado).toHaveTextContent('cerrarás el turno en 1.940 de 2.000 piezas (97 %)')
+    expect(estado).toHaveTextContent('PUNZ-1 lleva 23 min parado por falta de material')
+    expect(screen.getByText('Piezas buenas').closest('article')).toHaveTextContent('1.180de 2.000')
+    expect(screen.getByText('Eficiencia del turno').closest('article')).toHaveTextContent('Por debajo')
+    expect(screen.getByText('Tiempo parado').closest('article')).toHaveTextContent('3 paradas')
+    expect(screen.getByText('Chatarra').closest('article')).toHaveTextContent('Correcto')
     vi.unstubAllGlobals()
   })
 
-  it('muestra el coste por orden con la misma cifra que las tarjetas', async () => {
+  it('Turno muestra pendientes, puestos y órdenes', async () => {
     stubApi()
 
-    renderPage()
+    renderTurno()
 
-    expect(await screen.findByText('Coste por orden')).toBeInTheDocument()
-    expect(await screen.findByText('10/20')).toBeInTheDocument()
-    // 950 € aparece en la tarjeta de coste y en el total de la orden
-    expect(screen.getAllByText('950 €').length).toBe(2)
-    expect(screen.getAllByText('-100 €').length).toBe(2)
+    const pendientes = await screen.findByRole('region', { name: 'Pendiente de actuar' })
+    expect(pendientes).toHaveTextContent('Urgente')
+    expect(pendientes).toHaveTextContent('PUNZ-1 parado · falta de material')
+    expect(screen.getByRole('article', { name: 'PUNZ-1: Parado' })).toHaveTextContent('2602 · Lateral 900')
+    expect(screen.getByRole('article', { name: 'CORTE-1: En marcha' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Órdenes en curso' })).toHaveTextContent('Retraso')
+    vi.unstubAllGlobals()
+  })
+
+  it('un aviso de incidencia lleva a Gestión', async () => {
+    stubApi()
+    const user = userEvent.setup()
+
+    renderTurno()
+    await user.click(await screen.findByRole('button', { name: 'Ver incidencia' }))
+
+    expect(screen.getByRole('link', { name: 'Gestión' })).toHaveAttribute('aria-current', 'page')
+    vi.unstubAllGlobals()
+  })
+
+  it('sin ritmo en los puestos lo dice en vez de inventar un plan', async () => {
+    stubApi()
+    const original = { ...turnoBody }
+    Object.assign(turnoBody, { plan_turno: null, plan_ahora: null, eficiencia: null })
+
+    renderTurno()
+
+    expect(await screen.findByText('Sin plan del turno')).toBeInTheDocument()
+    expect(screen.getByText('Eficiencia del turno').closest('article')).toHaveTextContent('--')
+    Object.assign(turnoBody, original)
     vi.unstubAllGlobals()
   })
 
@@ -236,7 +251,7 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     stubApi()
     const user = userEvent.setup()
 
-    renderPage()
+    renderTurno()
 
     // En la pestaña Turno no aparece la vista de costes
     expect(screen.getByRole('link', { name: 'Turno' })).toHaveAttribute('aria-current', 'page')
@@ -265,37 +280,19 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('el botón Modo TV abre el Andon', async () => {
+  it('el botón Modo TV abre la pantalla de planta y Esc la cierra', async () => {
     stubApi()
     const user = userEvent.setup()
 
-    renderPage()
+    renderTurno()
+    await screen.findByRole('region', { name: 'Estado' })
     await user.click(screen.getByRole('button', { name: 'Modo TV' }))
 
-    expect(screen.getByRole('dialog', { name: 'Andon de planta' })).toBeInTheDocument()
-    vi.unstubAllGlobals()
-  })
-
-  it('sin estimado lo dice en vez de inventar una desviación', async () => {
-    stubApi()
-    Object.assign(kpisBody, { estimated_cost: null, cost_variance: null })
-
-    renderPage()
-
-    expect(
-      await screen.findByText('Sin órdenes completadas con estimado (€/kg y objetivo de kg)'),
-    ).toBeInTheDocument()
-    Object.assign(kpisBody, { estimated_cost: 1000, cost_variance: -100 })
-    vi.unstubAllGlobals()
-  })
-
-  it('muestra alertas coherentes: incidencias abiertas y stock bajo mínimos', async () => {
-    stubApi()
-
-    renderPage()
-
-    expect(await screen.findByText('2 incidencias abiertas')).toBeInTheDocument()
-    expect(screen.getByText(/1 materiales bajo mínimos:.*FLEJE-D265-18/)).toBeInTheDocument()
+    const tv = screen.getByRole('dialog', { name: 'Modo TV' })
+    expect(tv).toHaveTextContent('Turno B')
+    expect(tv).toHaveTextContent('1.180')
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Modo TV' })).not.toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
@@ -311,15 +308,14 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('sin datos muestra marcadores vacíos, no inventa valores', () => {
+  it('sin conexión lo dice, no inventa valores', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
       json: async () => ({}),
     }))
-    renderPage()
-    expect(screen.getByText('Centro de mando')).toBeInTheDocument()
-    expect(screen.getAllByText('--').length).toBeGreaterThan(0)
+    renderTurno()
+    expect(await screen.findByText(/No se pudo cargar el turno/)).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 })
@@ -399,12 +395,6 @@ describe('Incidencias de planta en el Supervisor (spec 04 §3.3)', () => {
   ) {
     const base = vi.fn((url: string, init?: RequestInit) => {
       if (url.includes('/api/v1/incidencias')) return fetchMock(url, init)
-      if (url.includes('/supervisor/oee')) {
-        return Promise.resolve({ ok: true, json: async () => oeeBody })
-      }
-      if (url.includes('/supervisor/kpis')) {
-        return Promise.resolve({ ok: true, json: async () => kpisBody })
-      }
       if (url.includes('/api/v1/orders')) {
         return Promise.resolve({ ok: true, json: async () => [] })
       }
