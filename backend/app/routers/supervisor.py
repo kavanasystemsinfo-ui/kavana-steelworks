@@ -94,6 +94,20 @@ def get_puestos(
     return estado_puestos(db, current_user.tenant_id)
 
 
+@router.get("/turno")
+def get_turno(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Vista Turno del panel: plan, previsión, paradas, puestos, órdenes y pendientes."""
+    from app.services.panel_turno import resumen_turno
+
+    return resumen_turno(db, current_user.tenant_id)
+
+
 @router.get("/alertas")
 def get_alertas(
     db: DbDep,

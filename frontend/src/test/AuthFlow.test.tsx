@@ -46,14 +46,14 @@ describe('Guard de rutas por rol (Fase 6)', () => {
   it('supervisor ve /supervisor y no los paneles de operario', () => {
     sessionStorage.setItem('kavana_token', makeToken('supervisor'))
     renderApp('/supervisor')
-    expect(screen.getByText(/oee/i)).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
     expect(screen.queryByText(/vincular bobina/i)).not.toBeInTheDocument()
   })
 
   it('admin ve el nav completo (hereda supervisor)', () => {
     sessionStorage.setItem('kavana_token', makeToken('admin'))
     renderApp('/supervisor')
-    expect(screen.getByText(/oee/i)).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
     expect(screen.getByText(/operario/i)).toBeInTheDocument()
     expect(screen.getByText(/materias primas/i)).toBeInTheDocument()
   })
@@ -71,7 +71,7 @@ describe('Guard de rutas por rol (Fase 6)', () => {
   it('supervisor NO puede entrar a /admin y cae a su home', () => {
     sessionStorage.setItem('kavana_token', makeToken('supervisor'))
     renderApp('/admin')
-    expect(screen.getByText(/oee/i)).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
     expect(screen.queryByText(/gestión de empresa/i)).not.toBeInTheDocument()
   })
 
@@ -85,7 +85,7 @@ describe('Guard de rutas por rol (Fase 6)', () => {
     await user.type(screen.getByLabelText(/usuario/i), 'supervisor@demo.local')
     await user.type(screen.getByLabelText(/contraseña/i), 'kavana')
     await user.click(screen.getByRole('button', { name: /entrar/i }))
-    expect(await screen.findByText(/oee/i)).toBeInTheDocument()
+    expect(await screen.findByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
     expect(sessionStorage.getItem('kavana_token')).toBeTruthy()
   })
 
