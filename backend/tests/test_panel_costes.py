@@ -19,7 +19,7 @@ from decimal import Decimal
 import pytest
 
 from app.models import Incidencia, Product, Workstation
-from app.services.panel_costes import panel_costes
+from app.services.panel_costes import familia_material, panel_costes
 from tests.helpers import make_material, make_order, make_order_line
 
 AHORA = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
@@ -356,3 +356,86 @@ def test_periodo_vacio_devuelve_ceros(db_session, tenant):
 def test_periodo_invalido(db_session, tenant):
     with pytest.raises(ValueError, match="periodo"):
         panel_costes(db_session, tenant.id, "decada", ahora=AHORA)
+
+
+# --------------------------------------------------------------------------- #
+# Coste por familia de material (derivada del código, sin campo en BD)
+# --------------------------------------------------------------------------- #
+def test_familia_material_por_convencion_de_codigo(db_session, tenant):
+    galva = make_material(db_session, tenant, code="FLEJE-G175-12", cost=1.42)
+    decap = make_material(db_session, tenant, code="FLEJE-D265-15", cost=1.23)
+    alu = make_material(db_session, tenant, code="ALU-1050", cost=2.9)
+    raro = make_material(db_session, tenant, code="TORN-M8", cost=0.08)
+
+    assert familia_material(galva) == "galvanizado"
+    assert familia_material(decap) == "decapado"
+    assert familia_material(alu) == "aluminio"
+    assert familia_material(raro) == "sin_clasificar"
+    assert familia_material(None) == "sin_clasificar"
+
+
+def test_familia_material_tambien_por_nombre(db_session, tenant):
+    material = make_material(db_session, tenant, code="MAT-01", cost=1.4)
+    material.name = "Fleje decapado DC01 265x1,5"
+    db_session.commit()
+
+    assert familia_material(material) == "decapado"
+
+
+def _orden_de_familia(db, tenant, numero, *, codigo, kg=100.0, coste_linea=157.0):
+    """Orden completada con una línea en kg de un material de código conocido."""
+    material = make_material(db, tenant, code=codigo, cost=1.42)
+    order = make_order(db, tenant, numero=numero)
+    order.estado = "completed"
+
+    linea = make_order_line(
+        db, order, workstation="LINEA-1", total_quantity=10.0, material=material
+    )
+    linea.target_material_unit = "kg"
+    linea.target_material_qty = Decimal(str(kg))
+    linea.real_material_qty = Decimal(str(kg))
+    linea.real_material_cost = Decimal(str(kg * 1.42))
+    linea.real_cost = Decimal(str(coste_linea))
+
+    order.updated_at = AHORA
+    db.commit()
+    return order
+
+
+def test_por_familia_agrupa_y_calcula_su_ratio(db_session, tenant):
+    _orden_de_familia(db_session, tenant, "OP-GALVA", codigo="FLEJE-G175-12", kg=100.0)
+    _orden_de_familia(
+        db_session, tenant, "OP-DECAP", codigo="FLEJE-D265-15", kg=60.0, coste_linea=100.2
+    )
+
+    datos = panel_costes(db_session, tenant.id, "mes", ahora=AHORA)
+    familias = {fila["familia"]: fila for fila in datos["por_familia"]}
+
+    assert [fila["familia"] for fila in datos["por_familia"]] == ["galvanizado", "decapado"]
+    galva = familias["galvanizado"]
+    assert galva["etiqueta"] == "Galvanizado"
+    assert galva["kg"] == 100.0
+    assert galva["material"] == 1.42
+    assert galva["transformacion"] == 0.15  # (157 − 142) / 100 kg
+    assert galva["ordenes"] == 1
+    # Los kilos por familia reparten el total del periodo sin inventar.
+    assert sum(fila["kg"] for fila in datos["por_familia"]) == datos["kg_total"]
+
+
+def test_por_familia_calcula_la_merma_sobre_el_material(db_session, tenant):
+    _orden_de_familia(db_session, tenant, "OP-MERMA-FAM", codigo="FLEJE-G175-12")
+
+    datos = panel_costes(db_session, tenant.id, "mes", ahora=AHORA)
+    galva = datos["por_familia"][0]
+
+    # Chatarra 0 en esta orden: la merma se mide igual y sale 0, no se omite.
+    assert galva["merma_pct"] == 0.0
+
+
+def test_material_sin_familia_conocida_cae_en_sin_clasificar(db_session, tenant):
+    _orden_de_familia(db_session, tenant, "OP-RARO", codigo="MAT-RARO-01")
+
+    datos = panel_costes(db_session, tenant.id, "mes", ahora=AHORA)
+
+    assert [fila["familia"] for fila in datos["por_familia"]] == ["sin_clasificar"]
+    assert datos["por_familia"][0]["etiqueta"] == "Sin clasificar"

@@ -4,6 +4,34 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de costes: coste por familia de material (fase 7)
+
+- **Problema:** con el €/kg ya partido en material y transformación, seguía sin
+  poder compararse un mes con otro: un fleje galvanizado de 1,42 €/kg y uno
+  decapado de 1,19 €/kg no son el mismo producto, y el mix de la cartera mueve
+  la media sin que la planta cambie nada. Hacía falta ver el coste separado por
+  familia.
+- **Solución:** `por_familia` en el contrato del panel: una fila por familia
+  (galvanizado, decapado, aluminio, `sin_clasificar`) con kg, €/kg de material,
+  €/kg de transformación, merma sobre el material y órdenes; solo familias con
+  kg y ordenadas por kilos. La familia se deriva de `familia_material()`
+  (convención de código FLEJE-G/FLEJE-D/ALU y palabras del nombre: galva,
+  DX51D, Z275, decapado, DC01, aluminio). No hay columna `familia` en
+  `materials`: lo no reconocido se reporta como «sin clasificar», nunca se
+  adivina. El CSV gana el bloque «Coste por familia» y la vista, la tabla
+  «Coste por familia de material».
+- **Decisión de producto (Jorge):** familia derivada del código primero, sin
+  migración. Un campo editable en el maestro queda como fase 8, solo si el
+  catálogo real no sigue una convención reconocible.
+- **Archivos:** `backend/app/services/panel_costes.py`,
+  `backend/app/services/panel_costes_csv.py`, `backend/tests/test_panel_costes.py`,
+  `backend/tests/test_panel_costes_api.py`,
+  `frontend/src/components/VistaCostes.tsx`, `frontend/src/lib/api.ts`,
+  `frontend/src/test/VistaCostes.test.tsx`, `docs/guias/guia-supervisor.md`.
+- **Verificación:** suite completa en verde con 5 tests nuevos de familia y
+  agregado; vitest con el test de la tabla; `ruff check app tests`, build TS y
+  oxlint limpios; verificado en producción contra la API real.
+
 ## 2026-10-27 — Panel de costes: desglose del €/kg en material y transformación (fase 6)
 
 - **Problema:** un €/kg global mezcla dos cosas que se gestionan al revés: el

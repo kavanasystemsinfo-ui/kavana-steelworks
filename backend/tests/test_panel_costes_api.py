@@ -135,6 +135,7 @@ def test_contrato_completo_del_panel(db_session, tenant, panel):
         "coste_paradas",
         "tendencia",
         "ordenes",
+        "por_familia",
     }
     assert [bloque["clave"] for bloque in datos["reparto"]] == [
         "material",
@@ -233,6 +234,9 @@ def test_csv_para_excel(db_session, tenant, panel):
     assert "€/kg;3,00" in lineas  # coma decimal, dos decimales
     assert "Material €/kg;2,00" in lineas, "el desglose viaja al CSV para Excel"
     assert "Transformación €/kg;1,00" in lineas
+    assert "Coste por familia" in lineas
+    assert "Familia;kg;Material €/kg;Transformación €/kg;Merma %;Órdenes" in lineas
+    assert any(linea.startswith("Sin clasificar;") for linea in lineas)
     assert "Coste total (€);300,00" in lineas
     assert "Material;200,00;66,67" in lineas
     assert "Reparto del coste;Euros;%" in lineas

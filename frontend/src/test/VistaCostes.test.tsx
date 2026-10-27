@@ -15,6 +15,26 @@ const panelBody = {
   ordenes_completadas: 2,
   desviacion: { pct: 10.0, euros: 40.0, ordenes_con_estimado: 2 },
   chatarra: { euros: 12.5, pct_material: 2.8 },
+  por_familia: [
+    {
+      familia: 'galvanizado',
+      etiqueta: 'Galvanizado',
+      kg: 120.0,
+      material: 1.42,
+      transformacion: 0.15,
+      merma_pct: 2.5,
+      ordenes: 2,
+    },
+    {
+      familia: 'decapado',
+      etiqueta: 'Decapado',
+      kg: 72.5,
+      material: 1.19,
+      transformacion: 0.21,
+      merma_pct: 0.0,
+      ordenes: 1,
+    },
+  ],
   reparto: [
     { clave: 'material', etiqueta: 'Material', euros: 440.0, pct: 68.75 },
     { clave: 'mano_obra', etiqueta: 'Mano de obra', euros: 200.0, pct: 31.25 },
@@ -125,6 +145,20 @@ describe('Vista Costes (panel de mando)', () => {
     expect(tarjeta('€/kg del periodo')).toHaveTextContent('Transformación 0,80 €/kg')
   })
 
+  it('muestra el coste por familia tal como lo manda el backend', async () => {
+    stubFetch()
+
+    render(<VistaCostes />)
+
+    await screen.findByText('Coste por familia de material')
+    const galva = screen.getByText('Galvanizado').closest('tr')
+    expect(galva).toHaveTextContent('120')
+    expect(galva).toHaveTextContent('1,42')
+    expect(galva).toHaveTextContent('0,15')
+    expect(galva).toHaveTextContent('2,50 %')
+    expect(screen.getByText('Decapado').closest('tr')).toHaveTextContent('1,19')
+  })
+
   it('muestra el reparto y la chatarra con los porcentajes del backend', async () => {
     stubFetch()
 
@@ -185,13 +219,13 @@ describe('Vista Costes (panel de mando)', () => {
     expect(fila).toHaveTextContent('+20,00 %')
   })
 
-  it('sin órdenes completadas lo dice y no pinta tabla', async () => {
+  it('sin órdenes completadas lo dice y no pinta la tabla de órdenes', async () => {
     stubFetch({ ...panelBody, ordenes: [], ordenes_completadas: 0 })
 
     render(<VistaCostes />)
 
     expect(await screen.findByText('Sin órdenes completadas en el periodo.')).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByText('Estimado')).not.toBeInTheDocument()
   })
 
   it('pide el panel del periodo elegido', async () => {
