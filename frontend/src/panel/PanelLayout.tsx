@@ -41,7 +41,7 @@ export function PanelLayout({
   const { turno } = turnoActual(ahora)
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-p-fondo text-p-texto font-panel tabular-nums">
+    <div className="tema-panel -m-4 min-h-[calc(100vh-3.5rem)] bg-p-fondo text-p-texto font-panel tabular-nums">
       <div className="bg-p-tarjeta border-b border-p-borde">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-6 py-2 flex flex-wrap items-center gap-x-6 gap-y-2">
           <nav aria-label="Vistas del panel" className="flex flex-wrap gap-1">

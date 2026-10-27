@@ -85,3 +85,41 @@ body {
   font-family: var(--font-display);
   font-weight: 400;
 }
+
+/* Tema del panel de mando para las herramientas con estilo antiguo (pestaña
+   Gestión): los tokens kavana-* se reasignan a la paleta clara del panel solo
+   dentro de .tema-panel, y las etiquetas dejan las mayúsculas y la letra
+   monoespaciada. Fuera del panel la aplicación conserva su estilo. */
+.tema-panel {
+  color-scheme: light;
+  --color-kavana-dark: var(--color-p-fondo);
+  --color-kavana-surface: var(--color-p-tarjeta);
+  --color-kavana-panel: var(--color-p-tarjeta);
+  --color-kavana-orange: var(--color-p-plan);
+  --color-kavana-steel: var(--color-p-gris);
+  --color-kavana-text: var(--color-p-texto);
+  --color-kavana-text-dim: var(--color-p-texto2);
+  --color-kavana-border: var(--color-p-borde);
+  --color-kavana-ok: var(--color-p-ok);
+  --color-kavana-warn: var(--color-p-aviso);
+  --color-kavana-danger: var(--color-p-mal);
+}
+.tema-panel .label-industrial {
+  font-family: var(--font-panel);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tema-panel .mono-data {
+  font-family: var(--font-panel);
+  letter-spacing: 0;
+}
+.tema-panel .uppercase {
+  text-transform: none;
+}
+.tema-panel .tracking-widest {
+  letter-spacing: 0;
+}
+.tema-panel .rounded-sm {
+  border-radius: 8px;
+}
