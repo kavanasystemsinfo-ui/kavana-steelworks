@@ -108,6 +108,24 @@ def get_turno(
     return resumen_turno(db, current_user.tenant_id)
 
 
+@router.get("/planta")
+def get_planta(
+    db: DbDep,
+    periodo: str = "semana",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Vista Planta del panel: eficiencia, paradas por causa, puestos y entregas."""
+    from app.services.panel_planta import resumen_planta
+
+    try:
+        return resumen_planta(db, current_user.tenant_id, periodo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/alertas")
 def get_alertas(
     db: DbDep,
