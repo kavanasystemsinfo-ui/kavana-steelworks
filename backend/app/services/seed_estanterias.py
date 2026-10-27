@@ -21,10 +21,11 @@ Contenido:
 Contenido honesto: datos ficticios de demostración, sin clientes reales.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -344,6 +345,17 @@ def seed_estanterias(db: Session) -> dict:
     _renombrar_tenant(db, tenant)
 
     if db.scalar(select(Product).where(Product.code == "EST-PORTICO")) is not None:
+        # Reparaciones de siembras antiguas ya desplegadas: datos coherentes y
+        # costes derivados de los consumos, nunca cifras escritas a mano.
+        # La reparación del histórico es best-effort: datos de demo no pueden
+        # impedir que arranque la API (set -e en el entrypoint).
+        try:
+            reparar_historico_demo(db, tenant.id)
+        except Exception:  # noqa: BLE001 - disponibilidad por delante de la demo
+            db.rollback()
+            logging.getLogger(__name__).exception(
+                "no se pudo reparar el histórico de la demo; se deja como está"
+            )
         reparar_costes_demo(db, tenant.id)
         db.commit()
         return {"created": False, "tenant": str(tenant.id)}
@@ -455,6 +467,160 @@ def reparar_costes_demo(db: Session, tenant_id) -> None:
         db.flush()
         actualizar_costes_orden(db, orden)
     db.flush()
+
+
+HISTORICO_DEMO_COHERENTE = {
+    # línea: (material correcto, metros por pieza, consumo real grabado, bobina)
+    1: ("FLEJE-D265-18", "3.0", "1120", "COIL-FD265-002"),
+    2: ("FLEJE-D265-18", "2.7", "605", "COIL-FD265-003"),
+}
+
+
+def reparar_historico_demo(db: Session, tenant_id) -> dict:
+    """Devuelve la orden completada de la demo a una historia coherente.
+
+    Siembras antiguas dejaron OP-EST-2600 con una bobina de acero de 1.500 mm
+    de ancho y 3 mm de espesor para fabricar montantes de estantería de 2,5 m:
+    el objetivo salía 8.753 kg por línea frente a 450 kg consumidos, y el panel
+    de costes lo enseñaba como -94 % de desviación. La fórmula no estaba mal;
+    el material asignado no era el del producto.
+
+    Corrige la referencia de material, el objetivo (geometría del fleje x
+    piezas), el consumo real grabado y su bobina, dejando el kardex cuadrado
+    (devuelve lo consumido a la bobina vieja y lo descuenta de la nueva).
+    Conserva la mano de obra ya registrada.
+
+    Idempotente: si la línea ya coincide con la definición, no la toca.
+    Solo actúa sobre el tenant demo y sobre esa orden.
+    """
+    from app.services.costes import actualizar_costes_orden
+
+    cambios = {"lineas": 0, "consumos": 0, "transacciones": 0}
+    orden = db.scalar(
+        select(Order).where(
+            Order.tenant_id == tenant_id, Order.numero == "OP-EST-2600"
+        )
+    )
+    if orden is None:
+        return cambios
+
+    materiales_afectados: set = set()
+
+    for linea in orden.lines:
+        definicion = HISTORICO_DEMO_COHERENTE.get(linea.linea_numero)
+        if definicion is None:
+            continue
+        mat_code, metros_txt, consumo_txt, coil_id = definicion
+        mat = db.scalar(
+            select(Material).where(
+                Material.tenant_id == tenant_id, Material.code == mat_code
+            )
+        )
+        if mat is None:
+            continue
+        metros = Decimal(metros_txt)
+        consumo = Decimal(consumo_txt)
+        objetivo = _objetivo_material(mat, linea.total_quantity, metros_txt)
+        if objetivo is None:
+            continue
+
+        if (
+            linea.material_id == mat.id
+            and linea.meters_per_piece == metros
+            and linea.target_material_qty == objetivo
+            and linea.real_material_qty == consumo
+        ):
+            continue  # ya coherente
+
+        mano_obra = max(
+            (linea.real_cost or Decimal("0")) - (linea.real_material_cost or Decimal("0")),
+            Decimal("0"),
+        )
+        consumos = db.scalars(
+            select(MaterialConsumo).where(MaterialConsumo.order_line_id == linea.id)
+        ).all()
+        for c in consumos:
+            if c.material_id:
+                materiales_afectados.add(c.material_id)
+            viejo = db.get(StockItem, c.stock_item_id) if c.stock_item_id else None
+            if viejo is not None:
+                viejo.cantidad_disponible = (
+                    viejo.cantidad_disponible or Decimal("0")
+                ) + (c.consumed_quantity or Decimal("0"))
+
+        destino = db.scalar(
+            select(StockItem).where(
+                StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id
+            )
+        )
+        if destino is None:
+            continue
+
+        destino.cantidad_disponible = (
+            destino.cantidad_disponible or Decimal("0")
+        ) - consumo
+        materiales_afectados.add(mat.id)
+
+        kg_pieza = (consumo / (linea.total_quantity or Decimal("1"))).quantize(
+            Decimal("0.000001")
+        )
+        total_cost = (consumo * mat.cost_per_unit).quantize(Decimal("0.01"))
+
+        if consumos:
+            primero = consumos[0]
+            for sobrante in consumos[1:]:
+                db.delete(sobrante)
+            primero.material_id = mat.id
+            primero.stock_item_id = destino.id
+            primero.lote = destino.lote
+            primero.consumed_quantity = consumo
+            primero.produced_quantity = linea.total_quantity
+            primero.meters_per_piece = metros
+            primero.kg_por_pieza = kg_pieza
+            primero.cost_per_unit = mat.cost_per_unit
+            primero.total_cost = total_cost
+            primero.unit = mat.unit
+            cambios["consumos"] += 1
+
+        transaccion = db.scalar(
+            select(MaterialTransaction).where(
+                MaterialTransaction.linea_orden_id == linea.id,
+                MaterialTransaction.tipo == "salida_produccion",
+            )
+        )
+        if transaccion is not None:
+            transaccion.material_id = mat.id
+            transaccion.stock_item_id = destino.id
+            transaccion.cantidad = consumo
+            transaccion.cantidad_anterior = destino.cantidad_disponible + consumo
+            transaccion.cantidad_nueva = destino.cantidad_disponible
+            cambios["transacciones"] += 1
+
+        linea.material_id = mat.id
+        linea.meters_per_piece = metros
+        linea.target_material_qty = objetivo
+        linea.target_material_unit = mat.unit
+        linea.real_material_qty = consumo
+        linea.real_material_cost = total_cost
+        linea.real_cost = total_cost + mano_obra
+        cambios["lineas"] += 1
+
+    for mat_id in materiales_afectados:
+        mat_afectado = db.get(Material, mat_id)
+        if mat_afectado is None:
+            continue
+        mat_afectado.stock_current = (
+            db.execute(
+                select(func.coalesce(func.sum(StockItem.cantidad_disponible), 0)).where(
+                    StockItem.material_id == mat_id
+                )
+            ).scalar()
+            or Decimal("0")
+        )
+
+    db.flush()
+    actualizar_costes_orden(db, orden)
+    return cambios
 
 
 def _renombrar_tenant(db: Session, tenant: Tenant) -> None:

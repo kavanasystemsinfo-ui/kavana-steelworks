@@ -36,6 +36,17 @@ narrativa de ingeniería.
   completa 409 passed + 1 skipped; 122 tests de frontend (11 nuevos) y build
   de TypeScript, oxlint y ruff limpios. La forma del contrato se tomó de una
   respuesta real del endpoint, no de un dict a mano.
+- **Corrección de datos de demo (27-10, tras desplegar):** la orden completada
+  `OP-EST-2600` venía de una siembra antigua con una bobina de 1.500 mm de
+  ancho para montantes de estantería de 2,5 m, así que el panel en producción
+  mostraba −94,03 % de desviación (12.546,38 € estimados frente a 748,50 €
+  reales). La fórmula era correcta; el material asignado no era el del
+  producto. `reparar_historico_demo()` en `seed_estanterias.py` (idempotente,
+  solo tenant demo, se ejecuta en cada arranque) devuelve la orden a su
+  definición: fleje 265×1,8, objetivo por geometría (1.113 y 601 kg), consumo
+  real de 1.120 y 605 kg reasignado a sus bobinas, kardex cuadrado y mano de
+  obra conservada. La desviación queda en +0,6 %. 4 tests nuevos, uno de ellos
+  reproduce el −94 % y comprueba que tras la reparación el panel baja del 5 %.
 
 ## 2026-10-26 — Adopción selectiva del legacy: coste, planta de un vistazo y demo honesta (ADR-021)
 
