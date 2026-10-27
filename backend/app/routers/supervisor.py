@@ -37,7 +37,7 @@ def get_oee(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """OEE global del turno actual (A × P × Q, clamp a 100)."""
@@ -54,7 +54,7 @@ def get_kpis(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """KPIs financieros: coste real vs estimado, varianzas, merma."""
@@ -71,7 +71,7 @@ def get_costes_ordenes(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Coste real (material + mano de obra) vs estimado de cada orden."""
@@ -85,7 +85,7 @@ def get_puestos(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Monitor de puestos: orden, bobina, progreso, última actividad, incidencias."""
@@ -99,7 +99,7 @@ def get_turno(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Vista Turno del panel: plan, previsión, paradas, puestos, órdenes y pendientes."""
@@ -114,7 +114,7 @@ def get_planta(
     periodo: str = "semana",
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Vista Planta del panel: eficiencia, paradas por causa, puestos y entregas."""
@@ -131,7 +131,7 @@ def get_alertas(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Stock bajo mínimos e incidencias abiertas (misma regla que su detalle)."""
@@ -148,7 +148,7 @@ def get_informe_turno(
     formato: str = "json",
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Informe del turno A/B/C de una fecha (JSON o CSV para Excel)."""
@@ -183,7 +183,7 @@ def get_objetivos(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Objetivos de planta de la empresa (los no configurados, con su valor por defecto)."""
@@ -220,7 +220,7 @@ def get_panel_costes(
     formato: str = "json",
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Vista Costes del panel de mando: resumen, reparto, paradas, tendencia y órdenes.

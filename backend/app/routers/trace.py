@@ -60,7 +60,7 @@ def get_order_trace(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Serie temporal completa de eventos de una orden (timestamp asc)."""

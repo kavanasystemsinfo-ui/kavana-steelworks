@@ -72,6 +72,7 @@ def _client(db_session, headers=None):
 
 # ── 401: sin token o token inválido ────────────────────────────────
 
+
 def test_endpoint_protegido_sin_token_devuelve_401(db_session, tenant, user):
     client = _client(db_session)
     r = client.get("/api/v1/orders")
@@ -96,6 +97,7 @@ def test_login_es_publico(db_session, tenant, user):
 
 
 # ── 403: rol sin permiso ───────────────────────────────────────────
+
 
 def test_operario_no_puede_ver_oee(db_session, tenant, user):
     client = _client(db_session, auth_headers(db_session, tenant, role="operator"))
@@ -123,6 +125,7 @@ def test_materias_no_puede_gestionar_incidencias(db_session, tenant, user):
 
 # ── 200: rol correcto ──────────────────────────────────────────────
 
+
 def test_supervisor_puede_ver_oee(db_session, tenant, user):
     client = _client(db_session, auth_headers(db_session, tenant, role="supervisor"))
     r = client.get("/api/v1/supervisor/oee")
@@ -141,15 +144,17 @@ def test_operario_puede_listar_materiales(db_session, tenant, user):
     assert r.status_code == 200, r.text
 
 
-def test_admin_hereda_supervisor(db_session, tenant, user):
-    client = _client(db_session, auth_headers(db_session, tenant, role="admin"))
-    r = client.get("/api/v1/supervisor/oee")
-    assert r.status_code == 200, r.text
-    r2 = client.get("/api/v1/orders")
-    assert r2.status_code == 200, r2.text
+def test_cada_rol_solo_su_panel(db_session, tenant, user):
+    admin = _client(db_session, auth_headers(db_session, tenant, role="admin"))
+    assert admin.get("/api/v1/supervisor/oee").status_code == 403
+    assert admin.get("/api/v1/orders").status_code == 403
+    supervisor = _client(db_session, auth_headers(db_session, tenant, role="supervisor"))
+    assert supervisor.get("/api/v1/stock-items").status_code == 403
+    assert supervisor.post("/api/v1/production/record", json={}).status_code == 403
 
 
 # ── Público móvil ──────────────────────────────────────────────────
+
 
 def test_subida_movil_sigue_siendo_publica(db_session, tenant, user):
     from datetime import UTC, datetime, timedelta

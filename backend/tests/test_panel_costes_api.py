@@ -86,11 +86,10 @@ def test_supervisor_ve_el_panel(db_session, tenant, panel):
     }
 
 
-def test_admin_hereda_el_panel(db_session, tenant, panel):
+def test_admin_no_entra_al_panel(db_session, tenant, panel):
     r = panel(tenant, role="admin").get(URL)
 
-    assert r.status_code == 200, r.text
-    assert r.json()["periodo"] == "mes"
+    assert r.status_code == 403, r.text
 
 
 def test_operario_no_puede_ver_el_panel(db_session, tenant, panel):

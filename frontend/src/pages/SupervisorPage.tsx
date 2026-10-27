@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { InformeTurno } from '../components/InformeTurno'
 import { ModoTv } from '../components/ModoTv'
@@ -71,7 +71,6 @@ export function SupervisorPage() {
   const [modoTv, setModoTv] = useState(false)
   const salirTv = useCallback(() => setModoTv(false), [])
   const turno = useTurno()
-  const navigate = useNavigate()
 
   const [orders, setOrders] = useState<OrderItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState('')
@@ -138,10 +137,6 @@ export function SupervisorPage() {
 
   // Los avisos de la vista Turno llevan a donde se resuelven
   const irDesdeTurno = (destino: DestinoTurno) => {
-    if (destino === 'stock') {
-      navigate('/materias-primas')
-      return
-    }
     if (destino === 'puestos') {
       document.getElementById('puestos-turno')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return

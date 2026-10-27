@@ -50,12 +50,19 @@ describe('Guard de rutas por rol (Fase 6)', () => {
     expect(screen.queryByText(/vincular bobina/i)).not.toBeInTheDocument()
   })
 
-  it('admin ve el nav completo (hereda supervisor)', () => {
+  it('supervisor NO puede entrar a /operario ni ve los otros paneles', () => {
+    sessionStorage.setItem('kavana_token', makeToken('supervisor'))
+    renderApp('/operario')
+    expect(screen.getByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /operario/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /materias primas/i })).not.toBeInTheDocument()
+  })
+
+  it('admin NO puede entrar a /supervisor y cae a /admin', () => {
     sessionStorage.setItem('kavana_token', makeToken('admin'))
     renderApp('/supervisor')
-    expect(screen.getByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
-    expect(screen.getByText(/operario/i)).toBeInTheDocument()
-    expect(screen.getByText(/materias primas/i)).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Vistas del panel' })).not.toBeInTheDocument()
+    expect(screen.getByText(/usuarios/i)).toBeInTheDocument()
   })
 
   it('admin entra al panel /admin y ve la gestión de empresa', () => {

@@ -179,7 +179,7 @@ def list_orders(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Órdenes del tenant (creación descendente, límite 50)."""
@@ -209,7 +209,7 @@ def list_available_orders(
     workstation: str | None = None,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor")),
     ] = None,
 ):
     """Órdenes disponibles para el panel del operario (port de manufacturing).
@@ -272,7 +272,7 @@ def create_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Crea una orden con sus líneas (número automático por secuencia)."""
@@ -318,7 +318,7 @@ def update_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Edita la cabecera de la orden (cliente, fecha de entrega, notas)."""
@@ -341,7 +341,7 @@ def transition_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Máquina de estados de la orden (port de manufacturing).
@@ -375,7 +375,7 @@ def delete_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Elimina una orden solo mientras es borrador (las líneas caen en cascada)."""
@@ -392,7 +392,7 @@ def get_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor")),
     ] = None,
 ):
     """Obtener una orden específica con sus líneas para edición/vinculación."""

@@ -13,7 +13,7 @@ import {
 } from '../panel/turno'
 import { BarraProgreso, EstadoBanner, KpiCard, Pastilla, Seccion } from '../panel/ui'
 
-export type DestinoTurno = 'incidencias' | 'ordenes' | 'stock' | 'puestos'
+export type DestinoTurno = 'incidencias' | 'ordenes' | 'puestos'
 
 const URGENCIA: Record<PanelTurno['pendientes'][number]['urgencia'], { texto: string; tono: Tono }> = {
   urgente: { texto: 'Urgente', tono: 'mal' },
@@ -21,9 +21,13 @@ const URGENCIA: Record<PanelTurno['pendientes'][number]['urgencia'], { texto: st
   revisar: { texto: 'Revisar', tono: 'gris' },
 }
 
-const ACCION: Record<PanelTurno['pendientes'][number]['accion'], { texto: string; destino: DestinoTurno }> = {
+// El stock lo repone Materias Primas desde su panel: aquí no lleva botón
+const ACCION: Record<
+  PanelTurno['pendientes'][number]['accion'],
+  { texto: string; destino: DestinoTurno } | null
+> = {
   incidencia: { texto: 'Ver incidencia', destino: 'incidencias' },
-  stock: { texto: 'Ver stock', destino: 'stock' },
+  stock: null,
   orden: { texto: 'Ver orden', destino: 'ordenes' },
   puesto: { texto: 'Ver puesto', destino: 'puestos' },
 }
@@ -197,13 +201,13 @@ export function VistaTurno({
                         {p.minutos !== null && p.accion === 'incidencia' && ` Abierta hace ${fmtDuracion(p.minutos)}.`}
                       </p>
                     </div>
-                    <button
+                    {a && <button
                       type="button"
                       onClick={() => onIr(a.destino)}
                       className="flex-none min-h-[36px] px-3 rounded-lg border border-p-borde bg-p-tarjeta text-[13px] font-semibold text-p-texto cursor-pointer hover:border-p-texto2"
                     >
                       {a.texto}
-                    </button>
+                    </button>}
                   </li>
                 )
               })}
