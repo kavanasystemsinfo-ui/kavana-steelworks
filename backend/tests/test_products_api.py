@@ -76,8 +76,10 @@ def test_get_lista_con_componentes(db_session, tenant):
     item = next(p for p in r.json() if p["code"] == "EST-PORTICO")
     assert item["name"] == "Portico P50"
     assert len(item["components"]) == 2
-    refs = {(c["manufacturing_model_id"] is not None, c["material_id"] is not None)
-            for c in item["components"]}
+    refs = {
+        (c["manufacturing_model_id"] is not None, c["material_id"] is not None)
+        for c in item["components"]
+    }
     assert refs == {(True, False), (False, True)}
 
 

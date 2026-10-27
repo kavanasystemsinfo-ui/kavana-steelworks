@@ -103,7 +103,7 @@ def registrar_autocontrol(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Registra un autocontrol del operario y devuelve el estado evaluado."""
@@ -138,7 +138,7 @@ def get_quality_records(
     limit: int = 20,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor")),
     ] = None,
 ):
     """Últimos registros de calidad del tenant (spec 04 §3.2.4)."""
@@ -213,9 +213,7 @@ def _record_out(r) -> dict:
         "notes": r.notes,
         "created_at": r.created_at,
         "operator": (
-            {"id": r.operator.id, "name": r.operator.name}
-            if r.operator is not None
-            else None
+            {"id": r.operator.id, "name": r.operator.name} if r.operator is not None else None
         ),
         "measurements": [
             {

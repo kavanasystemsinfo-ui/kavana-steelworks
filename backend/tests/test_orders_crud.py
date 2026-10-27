@@ -107,12 +107,16 @@ def test_crear_con_modelo_y_producto_declarados(db_session, tenant):
     db_session.commit()
 
     client, _ = _client(db_session, tenant)
-    payload = _payload(lines=[{
-        "workstation_id": "LINEA-1",
-        "total_quantity": 40,
-        "modelo_id": str(modelo.id),
-        "product_id": str(producto.id),
-    }])
+    payload = _payload(
+        lines=[
+            {
+                "workstation_id": "LINEA-1",
+                "total_quantity": 40,
+                "modelo_id": str(modelo.id),
+                "product_id": str(producto.id),
+            }
+        ]
+    )
 
     r = client.post("/api/v1/orders", json=payload)
 
@@ -139,11 +143,15 @@ def test_crear_rechaza_modelo_de_otro_tenant(db_session, tenant):
     db_session.commit()
 
     client, _ = _client(db_session, tenant)
-    payload = _payload(lines=[{
-        "workstation_id": "LINEA-1",
-        "total_quantity": 10,
-        "modelo_id": str(ajeno.id),
-    }])
+    payload = _payload(
+        lines=[
+            {
+                "workstation_id": "LINEA-1",
+                "total_quantity": 10,
+                "modelo_id": str(ajeno.id),
+            }
+        ]
+    )
 
     r = client.post("/api/v1/orders", json=payload)
 

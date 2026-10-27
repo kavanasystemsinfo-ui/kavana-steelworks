@@ -350,7 +350,10 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
             {
                 "urgencia": "hoy",
                 "titulo": f"Stock bajo mínimo: {m['name']}",
-                "detalle": f"Quedan {m['stock']:g} {m['unidad']}, mínimo {m['minimo']:g}.",
+                "detalle": (
+                    f"Quedan {m['stock']:g} {m['unidad']}, mínimo {m['minimo']:g}. "
+                    "Avisa a Materias Primas para reponer."
+                ),
                 "minutos": None,
                 "accion": "stock",
                 "ref": m["code"],

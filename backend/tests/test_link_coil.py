@@ -194,8 +194,12 @@ def _vincular(db, tenant, user, bobina, orden, linea):
     from app.services.inventory import link_coil
 
     return link_coil(
-        db, tenant.id, user.id,
-        stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
+        db,
+        tenant.id,
+        user.id,
+        stock_item_id=bobina.id,
+        order_id=orden.id,
+        line_id=linea.id,
     )
 
 
@@ -228,8 +232,12 @@ def test_tras_desvincular_se_puede_vincular_en_otra_maquina(db_session, tenant, 
     bobina, (orden_a, linea_a), (orden_b, linea_b) = _dos_lineas(db_session, tenant)
     _vincular(db_session, tenant, user, bobina, orden_a, linea_a)
     unlink_coil(
-        db_session, tenant.id, user.id,
-        stock_item_id=bobina.id, order_id=orden_a.id, line_id=linea_a.id,
+        db_session,
+        tenant.id,
+        user.id,
+        stock_item_id=bobina.id,
+        order_id=orden_a.id,
+        line_id=linea_a.id,
     )
 
     resultado = _vincular(db_session, tenant, user, bobina, orden_b, linea_b)

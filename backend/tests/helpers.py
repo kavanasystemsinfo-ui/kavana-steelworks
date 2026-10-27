@@ -24,7 +24,6 @@ def make_tenant(db, name="Aceros Test", slug=None):
     return t
 
 
-
 def make_user(db, tenant, email="operario@test.local", role="operator", name="Usuario Test"):
     """Crea un usuario con password 'kavana' (hash bcrypt real) y devuelve el User."""
     from app.services.auth import hash_password
@@ -50,9 +49,7 @@ def auth_headers(db, tenant, role="operator", email=None):
     from app.services.auth import login
 
     email = email or f"{role}@test.local"
-    user = db.scalar(
-        __import__("sqlalchemy").select(User).where(User.email == email)
-    )
+    user = db.scalar(__import__("sqlalchemy").select(User).where(User.email == email))
     if user is None:
         user = make_user(db, tenant, email=email, role=role)
     token = login(db, tenant.id, email, "kavana")
@@ -87,7 +84,6 @@ def authed_client_for(db, user):
     client = TestClient(app)
     client.headers.update(auth_headers_for(db, user))
     return client
-
 
 
 def make_material(db, tenant, code="ACERO-01", cost=1.0, density=7850):

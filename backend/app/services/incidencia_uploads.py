@@ -83,13 +83,9 @@ def adjuntar_foto(db: Session, *, session_id: uuid.UUID, buf: bytes) -> dict:
     if sesion is None:
         raise UploadError("Sesión de subida no encontrada", 404)
     if sesion.status != "pending":
-        raise UploadError(
-            "La sesión ya no está pendiente (foto subida o incidencia creada)", 409
-        )
+        raise UploadError("La sesión ya no está pendiente (foto subida o incidencia creada)", 409)
     if _caducada(sesion.expires_at):
-        raise UploadError(
-            "La sesión ha caducado. Vuelve a abrir el modal de incidencias.", 410
-        )
+        raise UploadError("La sesión ha caducado. Vuelve a abrir el modal de incidencias.", 410)
 
     validacion = validar_foto(buf)
     if not validacion["ok"]:
@@ -103,14 +99,16 @@ def adjuntar_foto(db: Session, *, session_id: uuid.UUID, buf: bytes) -> dict:
     return {"ok": True, "mime": validacion["mime"], "size": validacion["size"]}
 
 
-def obtener_sesion(
-    db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID
-) -> dict:
+def obtener_sesion(db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict:
     """Estado de la sesión para el polling del modal (con foto como data URL)."""
-    sesion = db.query(IncidenciaUploadSession).filter(
-        IncidenciaUploadSession.tenant_id == tenant_id,
-        IncidenciaUploadSession.session_id == session_id,
-    ).first()
+    sesion = (
+        db.query(IncidenciaUploadSession)
+        .filter(
+            IncidenciaUploadSession.tenant_id == tenant_id,
+            IncidenciaUploadSession.session_id == session_id,
+        )
+        .first()
+    )
     if sesion is None:
         raise UploadError("Sesión de subida no encontrada", 404)
 
@@ -146,15 +144,17 @@ def _serializar_sesion(sesion) -> dict:
     }
 
 
-def obtener_foto(
-    db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID
-) -> tuple[bytes, str]:
+def obtener_foto(db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID) -> tuple[bytes, str]:
     """Bytes de la foto para el preview del modal."""
-    sesion = db.query(IncidenciaUploadSession).filter(
-        IncidenciaUploadSession.tenant_id == tenant_id,
-        IncidenciaUploadSession.session_id == session_id,
-        IncidenciaUploadSession.photo.is_not(None),
-    ).first()
+    sesion = (
+        db.query(IncidenciaUploadSession)
+        .filter(
+            IncidenciaUploadSession.tenant_id == tenant_id,
+            IncidenciaUploadSession.session_id == session_id,
+            IncidenciaUploadSession.photo.is_not(None),
+        )
+        .first()
+    )
     if sesion is None:
         raise UploadError("Foto no encontrada", 404)
     return sesion.photo, sesion.photo_mime
@@ -172,16 +172,22 @@ def finalizar(
     db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID, incidencia_id: uuid.UUID
 ) -> bool:
     """Copia la foto de la sesión a la incidencia y marca la sesión 'used'."""
-    sesion = db.query(IncidenciaUploadSession).filter(
-        IncidenciaUploadSession.tenant_id == tenant_id,
-        IncidenciaUploadSession.session_id == session_id,
-    ).first()
+    sesion = (
+        db.query(IncidenciaUploadSession)
+        .filter(
+            IncidenciaUploadSession.tenant_id == tenant_id,
+            IncidenciaUploadSession.session_id == session_id,
+        )
+        .first()
+    )
     if sesion is None or sesion.status != "uploaded" or sesion.photo is None:
         return False
 
-    incidencia = db.query(Incidencia).filter(
-        Incidencia.id == incidencia_id, Incidencia.tenant_id == tenant_id
-    ).first()
+    incidencia = (
+        db.query(Incidencia)
+        .filter(Incidencia.id == incidencia_id, Incidencia.tenant_id == tenant_id)
+        .first()
+    )
     if incidencia is None:
         return False
 

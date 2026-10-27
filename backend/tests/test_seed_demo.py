@@ -23,9 +23,7 @@ def test_seed_demo_crea_datos(db_session):
     assert linea.workstation_id == "LINEA-1"
 
     operario = (
-        db_session.query(User)
-        .filter(User.tenant_id == tenant.id, User.role == "operator")
-        .one()
+        db_session.query(User).filter(User.tenant_id == tenant.id, User.role == "operator").one()
     )
     assert operario.role == "operator"
 

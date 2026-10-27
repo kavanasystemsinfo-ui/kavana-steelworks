@@ -108,8 +108,15 @@ def _escenario_incoherente(db, tenant, user):
     db.commit()
     db.refresh(viejo)
 
-    return {"orden": orden, "bobina": bobina, "fleje": fleje, "viejo": viejo,
-            "nuevo_1": nuevo_1, "nuevo_2": nuevo_2, "lineas": lineas}
+    return {
+        "orden": orden,
+        "bobina": bobina,
+        "fleje": fleje,
+        "viejo": viejo,
+        "nuevo_1": nuevo_1,
+        "nuevo_2": nuevo_2,
+        "lineas": lineas,
+    }
 
 
 def test_repara_la_orden_incoherente(db_session, tenant, user):
@@ -129,9 +136,9 @@ def test_repara_la_orden_incoherente(db_session, tenant, user):
         assert linea.material_id == datos["fleje"].id
         assert linea.target_material_qty == objetivo
         assert linea.real_material_qty == Decimal(consumo)
-        assert linea.real_material_cost == (
-            Decimal(consumo) * Decimal("1.22")
-        ).quantize(Decimal("0.01"))
+        assert linea.real_material_cost == (Decimal(consumo) * Decimal("1.22")).quantize(
+            Decimal("0.01")
+        )
         # la mano de obra ya registrada se conserva
         mano = Decimal("145.67") if numero == 1 else Decimal("86.17")
         assert linea.real_cost == linea.real_material_cost + mano
@@ -168,8 +175,7 @@ def test_no_toca_nada_si_ya_es_coherente(db_session, tenant, user):
     db_session.commit()
 
     stock_antes = {
-        s.coil_id: s.cantidad_disponible
-        for s in db_session.scalars(select(StockItem)).all()
+        s.coil_id: s.cantidad_disponible for s in db_session.scalars(select(StockItem)).all()
     }
 
     cambios = reparar_historico_demo(db_session, tenant.id)
@@ -177,8 +183,7 @@ def test_no_toca_nada_si_ya_es_coherente(db_session, tenant, user):
 
     assert cambios == {"lineas": 0, "consumos": 0, "transacciones": 0}
     stock_despues = {
-        s.coil_id: s.cantidad_disponible
-        for s in db_session.scalars(select(StockItem)).all()
+        s.coil_id: s.cantidad_disponible for s in db_session.scalars(select(StockItem)).all()
     }
     assert stock_antes == stock_despues
 

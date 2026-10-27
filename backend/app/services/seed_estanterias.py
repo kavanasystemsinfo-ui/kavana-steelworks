@@ -115,232 +115,586 @@ MATERIALES = [
 # (code, lote, material_code, cantidad, unit, ancho, espesor, coste, dias, ubicacion)
 LOTES = [
     (
-        "COIL-S355-001", "S355-2610-01", "ACERO-S355", "2500", "kg",
-        "1500", "3.0", "1.05", 30, "ALMACEN-1",
+        "COIL-S355-001",
+        "S355-2610-01",
+        "ACERO-S355",
+        "2500",
+        "kg",
+        "1500",
+        "3.0",
+        "1.05",
+        30,
+        "ALMACEN-1",
     ),
     (
-        "COIL-S355-002", "S355-2610-02", "ACERO-S355", "2300", "kg",
-        "1500", "3.0", "1.05", 20, "ALMACEN-1",
+        "COIL-S355-002",
+        "S355-2610-02",
+        "ACERO-S355",
+        "2300",
+        "kg",
+        "1500",
+        "3.0",
+        "1.05",
+        20,
+        "ALMACEN-1",
     ),
     (
-        "COIL-S355-003", "S355-2610-03", "ACERO-S355", "1800", "kg",
-        "1500", "3.0", "1.05", 10, "ALMACEN-2",
+        "COIL-S355-003",
+        "S355-2610-03",
+        "ACERO-S355",
+        "1800",
+        "kg",
+        "1500",
+        "3.0",
+        "1.05",
+        10,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FG175-001", "DX51D-441207", "FLEJE-G175-12", "3200", "kg",
-        "175", "1.2", "1.42", 30, "ALMACEN-1",
+        "COIL-FG175-001",
+        "DX51D-441207",
+        "FLEJE-G175-12",
+        "3200",
+        "kg",
+        "175",
+        "1.2",
+        "1.42",
+        30,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FG175-002", "DX51D-441315", "FLEJE-G175-12", "2400", "kg",
-        "175", "1.2", "1.42", 15, "ALMACEN-2",
+        "COIL-FG175-002",
+        "DX51D-441315",
+        "FLEJE-G175-12",
+        "2400",
+        "kg",
+        "175",
+        "1.2",
+        "1.42",
+        15,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FG185-001", "DX51D-441422", "FLEJE-G185-12", "2800", "kg",
-        "185", "1.2", "1.42", 22, "ALMACEN-1",
+        "COIL-FG185-001",
+        "DX51D-441422",
+        "FLEJE-G185-12",
+        "2800",
+        "kg",
+        "185",
+        "1.2",
+        "1.42",
+        22,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FG190-001", "DX51D-441533", "FLEJE-G190-12", "3500", "kg",
-        "190", "1.2", "1.42", 26, "ALMACEN-2",
+        "COIL-FG190-001",
+        "DX51D-441533",
+        "FLEJE-G190-12",
+        "3500",
+        "kg",
+        "190",
+        "1.2",
+        "1.42",
+        26,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FG190-002", "DX51D-441608", "FLEJE-G190-12", "1800", "kg",
-        "190", "1.2", "1.42", 10, "ALMACEN-2",
+        "COIL-FG190-002",
+        "DX51D-441608",
+        "FLEJE-G190-12",
+        "1800",
+        "kg",
+        "190",
+        "1.2",
+        "1.42",
+        10,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FG190-003", "DX51D-441719", "FLEJE-G190-18", "2600", "kg",
-        "190", "1.8", "1.40", 18, "ALMACEN-1",
+        "COIL-FG190-003",
+        "DX51D-441719",
+        "FLEJE-G190-18",
+        "2600",
+        "kg",
+        "190",
+        "1.8",
+        "1.40",
+        18,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FD265-001", "DC01-338915", "FLEJE-D265-15", "2600", "kg",
-        "265", "1.5", "1.23", 24, "ALMACEN-2",
+        "COIL-FD265-001",
+        "DC01-338915",
+        "FLEJE-D265-15",
+        "2600",
+        "kg",
+        "265",
+        "1.5",
+        "1.23",
+        24,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FD265-002", "DC01-339044", "FLEJE-D265-18", "3100", "kg",
-        "265", "1.8", "1.22", 28, "ALMACEN-1",
+        "COIL-FD265-002",
+        "DC01-339044",
+        "FLEJE-D265-18",
+        "3100",
+        "kg",
+        "265",
+        "1.8",
+        "1.22",
+        28,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FD265-003", "DC01-339166", "FLEJE-D265-18", "2200", "kg",
-        "265", "1.8", "1.22", 12, "ALMACEN-2",
+        "COIL-FD265-003",
+        "DC01-339166",
+        "FLEJE-D265-18",
+        "2200",
+        "kg",
+        "265",
+        "1.8",
+        "1.22",
+        12,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FD310-001", "DC01-339271", "FLEJE-D310-15", "2400", "kg",
-        "310", "1.5", "1.23", 20, "ALMACEN-1",
+        "COIL-FD310-001",
+        "DC01-339271",
+        "FLEJE-D310-15",
+        "2400",
+        "kg",
+        "310",
+        "1.5",
+        "1.23",
+        20,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FD320-001", "DC01-339388", "FLEJE-D320-20", "2800", "kg",
-        "320", "2.0", "1.19", 16, "ALMACEN-2",
+        "COIL-FD320-001",
+        "DC01-339388",
+        "FLEJE-D320-20",
+        "2800",
+        "kg",
+        "320",
+        "2.0",
+        "1.19",
+        16,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FD365-001", "DC01-339492", "FLEJE-D365-18", "3400", "kg",
-        "365", "1.8", "1.20", 27, "ALMACEN-1",
+        "COIL-FD365-001",
+        "DC01-339492",
+        "FLEJE-D365-18",
+        "3400",
+        "kg",
+        "365",
+        "1.8",
+        "1.20",
+        27,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FD365-002", "DC01-339517", "FLEJE-D365-18", "2000", "kg",
-        "365", "1.8", "1.20", 11, "ALMACEN-2",
+        "COIL-FD365-002",
+        "DC01-339517",
+        "FLEJE-D365-18",
+        "2000",
+        "kg",
+        "365",
+        "1.8",
+        "1.20",
+        11,
+        "ALMACEN-2",
     ),
     (
-        "COIL-FD365-003", "DC01-339633", "FLEJE-D365-20", "3600", "kg",
-        "365", "2.0", "1.19", 23, "ALMACEN-1",
+        "COIL-FD365-003",
+        "DC01-339633",
+        "FLEJE-D365-20",
+        "3600",
+        "kg",
+        "365",
+        "2.0",
+        "1.19",
+        23,
+        "ALMACEN-1",
     ),
     (
-        "COIL-FD370-001", "DC01-339750", "FLEJE-D370-20", "2500", "kg",
-        "370", "2.0", "1.19", 14, "ALMACEN-2",
+        "COIL-FD370-001",
+        "DC01-339750",
+        "FLEJE-D370-20",
+        "2500",
+        "kg",
+        "370",
+        "2.0",
+        "1.19",
+        14,
+        "ALMACEN-2",
     ),
     ("LOTE-U100-001", "U100-2610", "PERFIL-U100", "400", "m", None, None, "6.50", 22, "EXTERIOR-1"),
     ("LOTE-L60-001", "L60-2610", "PERFIL-L60", "300", "m", None, None, "4.20", 22, "EXTERIOR-1"),
     ("LOTE-TUB-001", "TUB-2610", "TUBO-4020", "350", "m", None, None, "3.80", 15, "EXTERIOR-1"),
     ("LOTE-TORN-001", "TORN-2610", "TORN-M8", "5000", "uds", None, None, "0.08", 18, "ALMACEN-3"),
     (
-        "LOTE-MALLA-001", "MALLA-2610", "MALLA-ES5", "120", "uds",
-        None, None, "12.50", 18, "ALMACEN-3",
+        "LOTE-MALLA-001",
+        "MALLA-2610",
+        "MALLA-ES5",
+        "120",
+        "uds",
+        None,
+        None,
+        "12.50",
+        18,
+        "ALMACEN-3",
     ),
 ]
 
 # (code, name, material_code, checks) donde check =
 # (name, tipo, tool, nominal, tol_plus, tol_minus, is_critical)
 PIEZAS = [
-    ("MONTANTE-P50", "Puntal 135x1,8", "FLEJE-D265-18", [
-        ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
-        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("LARGUERO-E27", "Larguero 135x1,8", "FLEJE-D265-18", [
-        ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
-        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("BANDEJA-P45", "Bandeja plegada 45 mm", "ACERO-DC01", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
-    ]),
-    ("TRAVESANO-STD", "Travesaño 91x1,2", "FLEJE-G175-12", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
-        ("Acabado zinc", "visual", None, None, None, None, False),
-    ]),
-    ("DIAGONAL-STD", "Barra diagonal", "PERFIL-L60", [
-        ("Largo Total", "numeric", "Cinta metrica", "1800", "3", "3", True),
-        ("Corte a escuadra", "pass_fail", "Escuadra 90", None, None, None, True),
-    ]),
-    ("ATIRANTADO-STD", "Barra atirantado", "TUBO-4020", [
-        ("Largo Total", "numeric", "Cinta metrica", "1100", "3", "3", True),
-        ("Soldadura de testa", "visual", None, None, None, None, True),
-    ]),
-    ("CARRIL-GP", "Carril driver calle GP", "ACERO-S355", [
-        ("Largo Total", "numeric", "Cinta metrica", "6000", "5", "5", True),
-        ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
-        ("Perforaciones", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("CARRO-PB", "Carro push-back", "ACERO-S355", [
-        ("Ancho Total", "numeric", "Cinta metrica", "1200", "3", "3", True),
-        ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
-        ("Rodamiento", "pass_fail", "Banco pruebas", None, None, None, True),
-    ]),
-    ("RODILLO-DYN", "Rodillo dinamico", "ACERO-DC01", [
-        ("Diametro", "numeric", "Calibrador", "60", "0.5", "0.5", True),
-        ("Giro libre", "pass_fail", "Banco pruebas", None, None, None, True),
-    ]),
-    ("BRAZO-CNT", "Brazo voladizo", "PERFIL-L60", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "3", "3", True),
-        ("Plomado", "pass_fail", "Nivel", None, None, None, True),
-    ]),
-    ("COLUMNA-CNT", "Columna voladizo", "PERFIL-U100", [
-        ("Largo Total", "numeric", "Cinta metrica", "4000", "5", "5", True),
-        ("Espesor", "numeric", "Micrometro", "4.0", "0.2", "0.2", True),
-        ("Verticalidad", "pass_fail", "Nivel", None, None, None, True),
-    ]),
-    ("VIGA-SIGMA", "Viga sigma entreplanta", "ACERO-S355", [
-        ("Largo Total", "numeric", "Cinta metrica", "2700", "3", "3", True),
-        ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
-        ("Perfilado", "visual", None, None, None, None, False),
-    ]),
-    ("ESCUDO-LAT", "Escudo lateral", "ACERO-DC01", [
-        ("Largo Total", "numeric", "Cinta metrica", "1000", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
-    ]),
-    ("ESCALERA-GR", "Escalera de mantenimiento", "PERFIL-U100", [
-        ("Largo Total", "numeric", "Cinta metrica", "3000", "5", "5", True),
-        ("Antideslizante", "pass_fail", "Banco pruebas", None, None, None, True),
-    ]),
-    ("TRAV-101", "Travesaño 101x1,2", "FLEJE-G185-12", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
-        ("Acabado zinc", "visual", None, None, None, None, False),
-    ]),
-    ("TRAV-108", "Travesaño 108x1,2", "FLEJE-G190-12", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
-        ("Acabado zinc", "visual", None, None, None, None, False),
-    ]),
-    ("TRAV-108P", "Travesaño 108x1,8", "FLEJE-G190-18", [
-        ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
-        ("Acabado zinc", "visual", None, None, None, None, False),
-    ]),
-    ("LARG-205", "Larguero 205x1,8", "FLEJE-D365-18", [
-        ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
-        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("LARG-212", "Larguero 212x2,0", "FLEJE-D370-20", [
-        ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
-        ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("PUNT-150", "Puntal 150x1,5", "FLEJE-D310-15", [
-        ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
-        ("Espesor", "numeric", "Micrometro", "1.5", "0.1", "0.1", True),
-        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
-    ("PUNT-165", "Puntal 165x2,0", "FLEJE-D320-20", [
-        ("Largo Total", "numeric", "Cinta metrica", "4000", "3", "3", True),
-        ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
-        ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
-    ]),
+    (
+        "MONTANTE-P50",
+        "Puntal 135x1,8",
+        "FLEJE-D265-18",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+            ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "LARGUERO-E27",
+        "Larguero 135x1,8",
+        "FLEJE-D265-18",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+            ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "BANDEJA-P45",
+        "Bandeja plegada 45 mm",
+        "ACERO-DC01",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+        ],
+    ),
+    (
+        "TRAVESANO-STD",
+        "Travesaño 91x1,2",
+        "FLEJE-G175-12",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+            ("Acabado zinc", "visual", None, None, None, None, False),
+        ],
+    ),
+    (
+        "DIAGONAL-STD",
+        "Barra diagonal",
+        "PERFIL-L60",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1800", "3", "3", True),
+            ("Corte a escuadra", "pass_fail", "Escuadra 90", None, None, None, True),
+        ],
+    ),
+    (
+        "ATIRANTADO-STD",
+        "Barra atirantado",
+        "TUBO-4020",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1100", "3", "3", True),
+            ("Soldadura de testa", "visual", None, None, None, None, True),
+        ],
+    ),
+    (
+        "CARRIL-GP",
+        "Carril driver calle GP",
+        "ACERO-S355",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "6000", "5", "5", True),
+            ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
+            ("Perforaciones", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "CARRO-PB",
+        "Carro push-back",
+        "ACERO-S355",
+        [
+            ("Ancho Total", "numeric", "Cinta metrica", "1200", "3", "3", True),
+            ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
+            ("Rodamiento", "pass_fail", "Banco pruebas", None, None, None, True),
+        ],
+    ),
+    (
+        "RODILLO-DYN",
+        "Rodillo dinamico",
+        "ACERO-DC01",
+        [
+            ("Diametro", "numeric", "Calibrador", "60", "0.5", "0.5", True),
+            ("Giro libre", "pass_fail", "Banco pruebas", None, None, None, True),
+        ],
+    ),
+    (
+        "BRAZO-CNT",
+        "Brazo voladizo",
+        "PERFIL-L60",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "3", "3", True),
+            ("Plomado", "pass_fail", "Nivel", None, None, None, True),
+        ],
+    ),
+    (
+        "COLUMNA-CNT",
+        "Columna voladizo",
+        "PERFIL-U100",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "4000", "5", "5", True),
+            ("Espesor", "numeric", "Micrometro", "4.0", "0.2", "0.2", True),
+            ("Verticalidad", "pass_fail", "Nivel", None, None, None, True),
+        ],
+    ),
+    (
+        "VIGA-SIGMA",
+        "Viga sigma entreplanta",
+        "ACERO-S355",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "2700", "3", "3", True),
+            ("Espesor", "numeric", "Micrometro", "3.0", "0.15", "0.15", True),
+            ("Perfilado", "visual", None, None, None, None, False),
+        ],
+    ),
+    (
+        "ESCUDO-LAT",
+        "Escudo lateral",
+        "ACERO-DC01",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1000", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+        ],
+    ),
+    (
+        "ESCALERA-GR",
+        "Escalera de mantenimiento",
+        "PERFIL-U100",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "3000", "5", "5", True),
+            ("Antideslizante", "pass_fail", "Banco pruebas", None, None, None, True),
+        ],
+    ),
+    (
+        "TRAV-101",
+        "Travesaño 101x1,2",
+        "FLEJE-G185-12",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+            ("Acabado zinc", "visual", None, None, None, None, False),
+        ],
+    ),
+    (
+        "TRAV-108",
+        "Travesaño 108x1,2",
+        "FLEJE-G190-12",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.2", "0.1", "0.1", True),
+            ("Acabado zinc", "visual", None, None, None, None, False),
+        ],
+    ),
+    (
+        "TRAV-108P",
+        "Travesaño 108x1,8",
+        "FLEJE-G190-18",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "1200", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+            ("Acabado zinc", "visual", None, None, None, None, False),
+        ],
+    ),
+    (
+        "LARG-205",
+        "Larguero 205x1,8",
+        "FLEJE-D365-18",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.8", "0.1", "0.1", True),
+            ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "LARG-212",
+        "Larguero 212x2,0",
+        "FLEJE-D370-20",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "2700", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
+            ("Perforaciones testa", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "PUNT-150",
+        "Puntal 150x1,5",
+        "FLEJE-D310-15",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "3000", "2", "2", True),
+            ("Espesor", "numeric", "Micrometro", "1.5", "0.1", "0.1", True),
+            ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
+    (
+        "PUNT-165",
+        "Puntal 165x2,0",
+        "FLEJE-D320-20",
+        [
+            ("Largo Total", "numeric", "Cinta metrica", "4000", "3", "3", True),
+            ("Espesor", "numeric", "Micrometro", "2.0", "0.1", "0.1", True),
+            ("Ranuras punzonadas", "pass_fail", "Galga patron", None, None, None, True),
+        ],
+    ),
 ]
 
 # (code, name, description, [(tipo, code, quantity)...]) tipo: "pieza" | "material"
 PRODUCTOS = [
-    ("EST-PORTICO", "Rack Portico", "Estanteria convencional de palets.",
-     [("pieza", "MONTANTE-P50", "8"), ("pieza", "LARGUERO-E27", "12"),
-      ("pieza", "DIAGONAL-STD", "8"), ("pieza", "ATIRANTADO-STD", "4"),
-      ("pieza", "TRAVESANO-STD", "4"), ("material", "TORN-M8", "64")]),
-    ("EST-CALLEJON", "Callejon GP", "Drive-in con carriles de arrastre.",
-     [("pieza", "MONTANTE-P50", "8"), ("pieza", "CARRIL-GP", "8"),
-      ("pieza", "ESCUDO-LAT", "8"), ("pieza", "LARGUERO-E27", "4"),
-      ("material", "TORN-M8", "72")]),
-    ("EST-DESLIZ", "Pasillo Desliz", "Sistema movil de palets.",
-     [("pieza", "MONTANTE-P50", "6"), ("pieza", "CARRO-PB", "6"),
-      ("pieza", "CARRIL-GP", "12"), ("material", "TORN-M8", "48")]),
-    ("EST-CORCEL", "Canal Corcel", "Pallet shuttle con carril central.",
-     [("pieza", "MONTANTE-P50", "8"), ("pieza", "CARRO-PB", "8"),
-      ("pieza", "CARRIL-GP", "16"), ("material", "TORN-M8", "80")]),
-    ("EST-GRAVEDAD", "Pasillo Gravedad", "Almacen dinamico por gravedad.",
-     [("pieza", "MONTANTE-P50", "6"), ("pieza", "RODILLO-DYN", "96"),
-      ("pieza", "LARGUERO-E27", "6"), ("material", "TORN-M8", "56")]),
-    ("EST-REVERSA", "Linea Reversa", "Push-back de ultima posicion.",
-     [("pieza", "MONTANTE-P50", "6"), ("pieza", "CARRO-PB", "8"),
-      ("pieza", "LARGUERO-E27", "12"), ("material", "TORN-M8", "56")]),
-    ("EST-TITAN", "Bloque Titan", "Rack pesado para carga industrial.",
-     [("pieza", "MONTANTE-P50", "6"), ("pieza", "LARGUERO-E27", "12"),
-      ("pieza", "BANDEJA-P45", "24"), ("pieza", "DIAGONAL-STD", "6"),
-      ("material", "TORN-M8", "72")]),
-    ("EST-PLUMA", "Estante Pluma", "Balda ligeras para piezas menudas.",
-     [("pieza", "MONTANTE-P50", "4"), ("pieza", "TRAVESANO-STD", "8"),
-      ("pieza", "BANDEJA-P45", "12"), ("material", "TORN-M8", "40")]),
-    ("EST-VOLADIZO", "Mastil Voladizo", "Cantilever para bobinas y perfiles.",
-     [("pieza", "COLUMNA-CNT", "4"), ("pieza", "BRAZO-CNT", "16"),
-      ("pieza", "ATIRANTADO-STD", "4"), ("material", "TORN-M8", "48")]),
-    ("EST-ALTILLO", "Planta Altillo", "Entreplanta con barandilla y malla.",
-     [("pieza", "VIGA-SIGMA", "8"), ("pieza", "COLUMNA-CNT", "8"),
-      ("pieza", "BANDEJA-P45", "16"), ("material", "MALLA-ES5", "12"),
-      ("material", "TORN-M8", "96")]),
-    ("EST-MEDIA", "Estanteria Media 108", "Balda media carga con travesanos 108 galva.",
-     [("pieza", "PUNT-150", "6"), ("pieza", "TRAV-108", "9"),
-      ("pieza", "LARGUERO-E27", "6"), ("material", "TORN-M8", "48")]),
-    ("EST-PESADA", "Rack Pesado 212", "Rack palets con largueros 212x2 y puntales 165.",
-     [("pieza", "PUNT-165", "6"), ("pieza", "LARG-212", "12"),
-      ("pieza", "DIAGONAL-STD", "6"), ("material", "TORN-M8", "72")]),
+    (
+        "EST-PORTICO",
+        "Rack Portico",
+        "Estanteria convencional de palets.",
+        [
+            ("pieza", "MONTANTE-P50", "8"),
+            ("pieza", "LARGUERO-E27", "12"),
+            ("pieza", "DIAGONAL-STD", "8"),
+            ("pieza", "ATIRANTADO-STD", "4"),
+            ("pieza", "TRAVESANO-STD", "4"),
+            ("material", "TORN-M8", "64"),
+        ],
+    ),
+    (
+        "EST-CALLEJON",
+        "Callejon GP",
+        "Drive-in con carriles de arrastre.",
+        [
+            ("pieza", "MONTANTE-P50", "8"),
+            ("pieza", "CARRIL-GP", "8"),
+            ("pieza", "ESCUDO-LAT", "8"),
+            ("pieza", "LARGUERO-E27", "4"),
+            ("material", "TORN-M8", "72"),
+        ],
+    ),
+    (
+        "EST-DESLIZ",
+        "Pasillo Desliz",
+        "Sistema movil de palets.",
+        [
+            ("pieza", "MONTANTE-P50", "6"),
+            ("pieza", "CARRO-PB", "6"),
+            ("pieza", "CARRIL-GP", "12"),
+            ("material", "TORN-M8", "48"),
+        ],
+    ),
+    (
+        "EST-CORCEL",
+        "Canal Corcel",
+        "Pallet shuttle con carril central.",
+        [
+            ("pieza", "MONTANTE-P50", "8"),
+            ("pieza", "CARRO-PB", "8"),
+            ("pieza", "CARRIL-GP", "16"),
+            ("material", "TORN-M8", "80"),
+        ],
+    ),
+    (
+        "EST-GRAVEDAD",
+        "Pasillo Gravedad",
+        "Almacen dinamico por gravedad.",
+        [
+            ("pieza", "MONTANTE-P50", "6"),
+            ("pieza", "RODILLO-DYN", "96"),
+            ("pieza", "LARGUERO-E27", "6"),
+            ("material", "TORN-M8", "56"),
+        ],
+    ),
+    (
+        "EST-REVERSA",
+        "Linea Reversa",
+        "Push-back de ultima posicion.",
+        [
+            ("pieza", "MONTANTE-P50", "6"),
+            ("pieza", "CARRO-PB", "8"),
+            ("pieza", "LARGUERO-E27", "12"),
+            ("material", "TORN-M8", "56"),
+        ],
+    ),
+    (
+        "EST-TITAN",
+        "Bloque Titan",
+        "Rack pesado para carga industrial.",
+        [
+            ("pieza", "MONTANTE-P50", "6"),
+            ("pieza", "LARGUERO-E27", "12"),
+            ("pieza", "BANDEJA-P45", "24"),
+            ("pieza", "DIAGONAL-STD", "6"),
+            ("material", "TORN-M8", "72"),
+        ],
+    ),
+    (
+        "EST-PLUMA",
+        "Estante Pluma",
+        "Balda ligeras para piezas menudas.",
+        [
+            ("pieza", "MONTANTE-P50", "4"),
+            ("pieza", "TRAVESANO-STD", "8"),
+            ("pieza", "BANDEJA-P45", "12"),
+            ("material", "TORN-M8", "40"),
+        ],
+    ),
+    (
+        "EST-VOLADIZO",
+        "Mastil Voladizo",
+        "Cantilever para bobinas y perfiles.",
+        [
+            ("pieza", "COLUMNA-CNT", "4"),
+            ("pieza", "BRAZO-CNT", "16"),
+            ("pieza", "ATIRANTADO-STD", "4"),
+            ("material", "TORN-M8", "48"),
+        ],
+    ),
+    (
+        "EST-ALTILLO",
+        "Planta Altillo",
+        "Entreplanta con barandilla y malla.",
+        [
+            ("pieza", "VIGA-SIGMA", "8"),
+            ("pieza", "COLUMNA-CNT", "8"),
+            ("pieza", "BANDEJA-P45", "16"),
+            ("material", "MALLA-ES5", "12"),
+            ("material", "TORN-M8", "96"),
+        ],
+    ),
+    (
+        "EST-MEDIA",
+        "Estanteria Media 108",
+        "Balda media carga con travesanos 108 galva.",
+        [
+            ("pieza", "PUNT-150", "6"),
+            ("pieza", "TRAV-108", "9"),
+            ("pieza", "LARGUERO-E27", "6"),
+            ("material", "TORN-M8", "48"),
+        ],
+    ),
+    (
+        "EST-PESADA",
+        "Rack Pesado 212",
+        "Rack palets con largueros 212x2 y puntales 165.",
+        [
+            ("pieza", "PUNT-165", "6"),
+            ("pieza", "LARG-212", "12"),
+            ("pieza", "DIAGONAL-STD", "6"),
+            ("material", "TORN-M8", "72"),
+        ],
+    ),
 ]
 
 
@@ -476,9 +830,7 @@ def reparar_costes_demo(db: Session, tenant_id) -> None:
                         linea.real_material_qty = sum(
                             (c.consumed_quantity for c in consumos), Decimal("0")
                         )
-                    linea.real_material_cost = sum(
-                        (c.total_cost for c in consumos), Decimal("0")
-                    )
+                    linea.real_material_cost = sum((c.total_cost for c in consumos), Decimal("0"))
 
             if (linea.real_time or 0) == 0 and linea.estado == "completed":
                 marcas = db.scalars(
@@ -531,9 +883,7 @@ def reparar_historico_demo(db: Session, tenant_id) -> dict:
 
     cambios = {"lineas": 0, "consumos": 0, "transacciones": 0}
     orden = db.scalar(
-        select(Order).where(
-            Order.tenant_id == tenant_id, Order.numero == "OP-EST-2600"
-        )
+        select(Order).where(Order.tenant_id == tenant_id, Order.numero == "OP-EST-2600")
     )
     if orden is None:
         return cambios
@@ -546,9 +896,7 @@ def reparar_historico_demo(db: Session, tenant_id) -> dict:
             continue
         mat_code, metros_txt, consumo_txt, coil_id = definicion
         mat = db.scalar(
-            select(Material).where(
-                Material.tenant_id == tenant_id, Material.code == mat_code
-            )
+            select(Material).where(Material.tenant_id == tenant_id, Material.code == mat_code)
         )
         if mat is None:
             continue
@@ -578,26 +926,20 @@ def reparar_historico_demo(db: Session, tenant_id) -> dict:
                 materiales_afectados.add(c.material_id)
             viejo = db.get(StockItem, c.stock_item_id) if c.stock_item_id else None
             if viejo is not None:
-                viejo.cantidad_disponible = (
-                    viejo.cantidad_disponible or Decimal("0")
-                ) + (c.consumed_quantity or Decimal("0"))
+                viejo.cantidad_disponible = (viejo.cantidad_disponible or Decimal("0")) + (
+                    c.consumed_quantity or Decimal("0")
+                )
 
         destino = db.scalar(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id
-            )
+            select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id)
         )
         if destino is None:
             continue
 
-        destino.cantidad_disponible = (
-            destino.cantidad_disponible or Decimal("0")
-        ) - consumo
+        destino.cantidad_disponible = (destino.cantidad_disponible or Decimal("0")) - consumo
         materiales_afectados.add(mat.id)
 
-        kg_pieza = (consumo / (linea.total_quantity or Decimal("1"))).quantize(
-            Decimal("0.000001")
-        )
+        kg_pieza = (consumo / (linea.total_quantity or Decimal("1"))).quantize(Decimal("0.000001"))
         total_cost = (consumo * mat.cost_per_unit).quantize(Decimal("0.01"))
 
         if consumos:
@@ -643,14 +985,11 @@ def reparar_historico_demo(db: Session, tenant_id) -> dict:
         mat_afectado = db.get(Material, mat_id)
         if mat_afectado is None:
             continue
-        mat_afectado.stock_current = (
-            db.execute(
-                select(func.coalesce(func.sum(StockItem.cantidad_disponible), 0)).where(
-                    StockItem.material_id == mat_id
-                )
-            ).scalar()
-            or Decimal("0")
-        )
+        mat_afectado.stock_current = db.execute(
+            select(func.coalesce(func.sum(StockItem.cantidad_disponible), 0)).where(
+                StockItem.material_id == mat_id
+            )
+        ).scalar() or Decimal("0")
 
     db.flush()
     actualizar_costes_orden(db, orden)
@@ -687,9 +1026,7 @@ def _asegurar_grupos_y_puestos(db: Session, tenant_id) -> None:
 
     for code, name, grupo_name, color, coste, metodo in PUESTOS:
         existe = db.scalar(
-            select(Workstation).where(
-                Workstation.tenant_id == tenant_id, Workstation.code == code
-            )
+            select(Workstation).where(Workstation.tenant_id == tenant_id, Workstation.code == code)
         )
         if existe is None:
             db.add(
@@ -737,9 +1074,7 @@ def _asegurar_materiales(db: Session, tenant_id) -> dict[str, Material]:
 
     for code, lote, mat_code, cantidad, unit, ancho, espesor, coste, dias, ubicacion in LOTES:
         existe = db.scalar(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id, StockItem.coil_id == code
-            )
+            select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.coil_id == code)
         )
         if existe is None:
             mat = materiales[mat_code]
@@ -760,9 +1095,12 @@ def _asegurar_materiales(db: Session, tenant_id) -> dict[str, Material]:
                     estado="activo",
                     es_pico=False,
                     grado_acero=(
-                        "DX51D+Z275" if mat_code.startswith("FLEJE-G")
-                        else "DC01" if mat_code.startswith("FLEJE-D")
-                        else mat_code.split("-")[0] if mat_code.startswith("ACERO")
+                        "DX51D+Z275"
+                        if mat_code.startswith("FLEJE-G")
+                        else "DC01"
+                        if mat_code.startswith("FLEJE-D")
+                        else mat_code.split("-")[0]
+                        if mat_code.startswith("ACERO")
                         else None
                     ),
                 )
@@ -786,9 +1124,7 @@ def _asegurar_entradas_kardex(db, tenant_id, materiales, usuario) -> None:
     for coil_id, lote, mat_code, cantidad, *_resto in LOTES:
         mat = materiales[mat_code]
         stock = db.scalar(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id
-            )
+            select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id)
         )
         ya_registrada = db.scalar(
             select(MaterialTransaction).where(
@@ -872,9 +1208,7 @@ def _asegurar_productos(db, tenant_id, piezas, materiales) -> dict[str, Product]
             db.add(prod)
             db.flush()
             for pos, (tipo, ref, cantidad) in enumerate(componentes, 1):
-                db.add(
-                    _componente_producto(prod, tipo, ref, cantidad, pos, piezas, materiales)
-                )
+                db.add(_componente_producto(prod, tipo, ref, cantidad, pos, piezas, materiales))
             db.flush()
         productos[code] = prod
     return productos
@@ -906,24 +1240,96 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
     # Las líneas son pasos en cascada (WIP): un paso nunca pide más piezas ni
     # lleva más hechas que el anterior; si no, la orden no se puede terminar.
     definiciones = [
-        ("OP-EST-2601", "active", "Ferreteria Norte S.L.", 7, [
-            (1, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
-             "80", "30", "in_progress", "2.7"),
-            (2, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
-             "80", "0", "pending", "3.0"),
-        ]),
-        ("OP-EST-2602", "active", "Logistica Vallecas S.A.", 14, [
-            (1, "EST-VOLADIZO", "COLUMNA-CNT", "PERFIL-U100", "CORTE-1",
-             "60", "12", "in_progress", "4.0"),
-            (2, "EST-ALTILLO", "VIGA-SIGMA", "ACERO-S355", "GALV-1",
-             "60", "12", "in_progress", "2.7"),
-        ]),
-        ("OP-EST-2600", "completed", "Almacenes Duero S.A.", -5, [
-            (1, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
-             "100", "100", "completed", "3.0"),
-            (2, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
-             "60", "60", "completed", "2.7"),
-        ]),
+        (
+            "OP-EST-2601",
+            "active",
+            "Ferreteria Norte S.L.",
+            7,
+            [
+                (
+                    1,
+                    "EST-TITAN",
+                    "LARGUERO-E27",
+                    "FLEJE-D265-18",
+                    "DOBL-1",
+                    "80",
+                    "30",
+                    "in_progress",
+                    "2.7",
+                ),
+                (
+                    2,
+                    "EST-PORTICO",
+                    "MONTANTE-P50",
+                    "FLEJE-D265-18",
+                    "PUNZ-1",
+                    "80",
+                    "0",
+                    "pending",
+                    "3.0",
+                ),
+            ],
+        ),
+        (
+            "OP-EST-2602",
+            "active",
+            "Logistica Vallecas S.A.",
+            14,
+            [
+                (
+                    1,
+                    "EST-VOLADIZO",
+                    "COLUMNA-CNT",
+                    "PERFIL-U100",
+                    "CORTE-1",
+                    "60",
+                    "12",
+                    "in_progress",
+                    "4.0",
+                ),
+                (
+                    2,
+                    "EST-ALTILLO",
+                    "VIGA-SIGMA",
+                    "ACERO-S355",
+                    "GALV-1",
+                    "60",
+                    "12",
+                    "in_progress",
+                    "2.7",
+                ),
+            ],
+        ),
+        (
+            "OP-EST-2600",
+            "completed",
+            "Almacenes Duero S.A.",
+            -5,
+            [
+                (
+                    1,
+                    "EST-PORTICO",
+                    "MONTANTE-P50",
+                    "FLEJE-D265-18",
+                    "PUNZ-1",
+                    "100",
+                    "100",
+                    "completed",
+                    "3.0",
+                ),
+                (
+                    2,
+                    "EST-TITAN",
+                    "LARGUERO-E27",
+                    "FLEJE-D265-18",
+                    "DOBL-1",
+                    "60",
+                    "60",
+                    "completed",
+                    "2.7",
+                ),
+            ],
+        ),
     ]
 
     for numero, estado, cliente, dias_entrega, lineas in definiciones:
@@ -940,8 +1346,17 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
             db.add(orden)
             db.flush()
             for linea in lineas:
-                (linea_num, prod_code, modelo_code, mat_code, puesto,
-                 total, producido, estado_linea, metros) = linea
+                (
+                    linea_num,
+                    prod_code,
+                    modelo_code,
+                    mat_code,
+                    puesto,
+                    total,
+                    producido,
+                    estado_linea,
+                    metros,
+                ) = linea
                 pieza = piezas[modelo_code]
                 mat = materiales[mat_code]
                 db.add(
@@ -1004,17 +1419,13 @@ def _historico(db, tenant_id, ordenes, piezas, materiales, operario, materiales_
     # kg/ud = ancho_desarrollado x espesor x densidad x largo
     # puntal 265x1,8x3,0m = 11,20 kg/ud; larguero 265x1,8x2,7m = 10,08 kg/ud
     consumos = [
-        (linea_1, "FLEJE-D265-18", "COIL-FD265-002", "1120", "100",
-         "11.200000", "3.0"),
-        (linea_2, "FLEJE-D265-18", "COIL-FD265-003", "605", "60",
-         "10.080000", "2.7"),
+        (linea_1, "FLEJE-D265-18", "COIL-FD265-002", "1120", "100", "11.200000", "3.0"),
+        (linea_2, "FLEJE-D265-18", "COIL-FD265-003", "605", "60", "10.080000", "2.7"),
     ]
     for linea, mat_code, coil_id, cantidad, producido, kg_pieza, metros in consumos:
         mat = materiales[mat_code]
         stock = db.scalar(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id
-            )
+            select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id)
         )
         ya = db.scalar(
             select(MaterialConsumo).where(
@@ -1027,11 +1438,9 @@ def _historico(db, tenant_id, ordenes, piezas, materiales, operario, materiales_
         cantidad_dec = Decimal(cantidad)
         stock.cantidad_disponible -= cantidad_dec
         mat.stock_current = sum(
-            db.execute(
-                select(StockItem.cantidad_disponible).where(
-                    StockItem.material_id == mat.id
-                )
-            ).scalars().all(),
+            db.execute(select(StockItem.cantidad_disponible).where(StockItem.material_id == mat.id))
+            .scalars()
+            .all(),
             Decimal("0"),
         )
         total_cost = (cantidad_dec * mat.cost_per_unit).quantize(Decimal("0.01"))

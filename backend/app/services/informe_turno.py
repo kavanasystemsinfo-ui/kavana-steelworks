@@ -118,8 +118,15 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
         )
 
     campos_suma = (
-        "piezas", "consumo_kg", "consumo_m", "merma_kg", "merma_coste",
-        "autocontroles", "autocontroles_nok", "incidencias", "parada_min",
+        "piezas",
+        "consumo_kg",
+        "consumo_m",
+        "merma_kg",
+        "merma_coste",
+        "autocontroles",
+        "autocontroles_nok",
+        "incidencias",
+        "parada_min",
     )
     totales = {c: round(sum(p[c] for p in puestos), 2) for c in campos_suma}
 
@@ -163,7 +170,5 @@ def informe_csv(informe: dict) -> str:
     for p in informe["puestos"]:
         escritor.writerow([celda(p[c]) for c, _ in COLUMNAS_CSV])
     totales = informe["totales"]
-    escritor.writerow(
-        ["TOTAL", ""] + [celda(totales[c]) for c, _ in COLUMNAS_CSV[2:]]
-    )
+    escritor.writerow(["TOTAL", ""] + [celda(totales[c]) for c, _ in COLUMNAS_CSV[2:]])
     return salida.getvalue()

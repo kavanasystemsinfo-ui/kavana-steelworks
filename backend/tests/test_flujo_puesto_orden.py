@@ -64,9 +64,7 @@ def test_workstations_no_devuelve_puestos_de_otro_tenant(db_session, tenant):
     _make_workstation(db_session, tenant, "PROPIA-1")
     operario = make_user(db_session, tenant, email="op-ws2@test.local", role="operator")
 
-    app.dependency_overrides[admin_router.get_db] = _override_get_db(
-        admin_router, db_session
-    )
+    app.dependency_overrides[admin_router.get_db] = _override_get_db(admin_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/admin/workstations")
@@ -99,9 +97,7 @@ def _operario_con_ordenes(db, tenant, email):
 def test_available_con_workstation_filtra_por_ese_puesto(db_session, tenant):
     operario = _operario_con_ordenes(db_session, tenant, "op-pws1@test.local")
 
-    app.dependency_overrides[orders_router.get_db] = _override_get_db(
-        orders_router, db_session
-    )
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(orders_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/orders/available?workstation=LINEA-9")
@@ -117,9 +113,7 @@ def test_available_con_workstation_filtra_por_ese_puesto(db_session, tenant):
 def test_available_sin_workstation_usa_default_del_usuario(db_session, tenant):
     operario = _operario_con_ordenes(db_session, tenant, "op-pws2@test.local")
 
-    app.dependency_overrides[orders_router.get_db] = _override_get_db(
-        orders_router, db_session
-    )
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(orders_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/orders/available")
@@ -135,9 +129,7 @@ def test_available_sin_workstation_usa_default_del_usuario(db_session, tenant):
 def test_available_con_workstation_inexistente_devuelve_400(db_session, tenant):
     operario = _operario_con_ordenes(db_session, tenant, "op-pws3@test.local")
 
-    app.dependency_overrides[orders_router.get_db] = _override_get_db(
-        orders_router, db_session
-    )
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(orders_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/orders/available?workstation=NOEXISTE")
@@ -152,9 +144,7 @@ def test_available_con_workstation_de_otro_tenant_devuelve_400(db_session, tenan
     _make_workstation(db_session, otro, "AJENA-2")
     operario = make_user(db_session, tenant, email="op-pws4@test.local", role="operator")
 
-    app.dependency_overrides[orders_router.get_db] = _override_get_db(
-        orders_router, db_session
-    )
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(orders_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/orders/available?workstation=AJENA-2")
@@ -164,15 +154,11 @@ def test_available_con_workstation_de_otro_tenant_devuelve_400(db_session, tenan
     assert r.status_code == 400, r.text
 
 
-def test_available_con_workstation_valido_sin_ordenes_devuelve_vacio(
-    db_session, tenant
-):
+def test_available_con_workstation_valido_sin_ordenes_devuelve_vacio(db_session, tenant):
     _make_workstation(db_session, tenant, "LINEA-VACIA")
     operario = make_user(db_session, tenant, email="op-pws5@test.local", role="operator")
 
-    app.dependency_overrides[orders_router.get_db] = _override_get_db(
-        orders_router, db_session
-    )
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(orders_router, db_session)
     try:
         client = authed_client_for(db_session, operario)
         r = client.get("/api/v1/orders/available?workstation=LINEA-VACIA")

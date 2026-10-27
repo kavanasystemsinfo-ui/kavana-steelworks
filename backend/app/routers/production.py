@@ -47,7 +47,7 @@ def record_production(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Registra producción incremental: el FIFO consume el material automático.

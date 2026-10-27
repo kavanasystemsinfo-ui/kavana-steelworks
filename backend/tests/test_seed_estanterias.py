@@ -76,14 +76,10 @@ def test_crea_piezas_con_plan_de_calidad(db_session):
 def test_crea_materias_primas_con_stock(db_session):
     _sembrar(db_session)
     tenant = db_session.scalar(select(Tenant).where(Tenant.slug == "demo"))
-    materiales = db_session.scalars(
-        select(Material).where(Material.tenant_id == tenant.id)
-    ).all()
+    materiales = db_session.scalars(select(Material).where(Material.tenant_id == tenant.id)).all()
     assert len(materiales) >= 8
 
-    bobinas = db_session.scalars(
-        select(StockItem).where(StockItem.tenant_id == tenant.id)
-    ).all()
+    bobinas = db_session.scalars(select(StockItem).where(StockItem.tenant_id == tenant.id)).all()
     assert len(bobinas) >= 12
     for b in bobinas:
         assert b.cantidad_disponible > 0
@@ -116,9 +112,7 @@ def test_crea_grupos_y_puestos_de_trabajo(db_session):
 def test_crea_ordenes_activas_con_lineas(db_session):
     _sembrar(db_session)
     tenant = db_session.scalar(select(Tenant).where(Tenant.slug == "demo"))
-    ordenes = db_session.scalars(
-        select(Order).where(Order.tenant_id == tenant.id)
-    ).all()
+    ordenes = db_session.scalars(select(Order).where(Order.tenant_id == tenant.id)).all()
     activas = [o for o in ordenes if o.estado == "active"]
     assert len(ordenes) >= 3
     assert len(activas) >= 2

@@ -44,9 +44,7 @@ class IncidenciaUploadSession(UUIDMixin, TimestampMixin, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    status: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="pending"
-    )
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     photo: Mapped[bytes | None] = mapped_column(LargeBinary)
     photo_mime: Mapped[str | None] = mapped_column(String(50))

@@ -241,6 +241,7 @@ def test_produccion_actualiza_coste_laboral(db_session, tenant, user):
     db_session.refresh(line)
     assert float(line.real_time) == pytest.approx(90.0, abs=0.01)  # 1,5 h × 60
 
+
 def test_produccion_registra_turno_abc_en_trazabilidad(db_session, tenant, user):
     """Fase 1: ProductionLog.shift se puebla con A/B/C (antes siempre NULL)."""
     from sqlalchemy import select

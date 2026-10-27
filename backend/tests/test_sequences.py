@@ -42,9 +42,7 @@ def test_next_sequence_avanza_y_no_repite(db_session, tenant):
     assert n1 != n2
     assert n2.endswith("002")
 
-    fila = db_session.query(Sequence).filter_by(
-        tenant_id=tenant.id, sequence_type="order"
-    ).one()
+    fila = db_session.query(Sequence).filter_by(tenant_id=tenant.id, sequence_type="order").one()
     assert fila.next_number == 3  # ya apunta al siguiente
 
 

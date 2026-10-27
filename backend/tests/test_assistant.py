@@ -62,9 +62,7 @@ def test_busqueda_recupera_fifo():
 
 def test_pregunta_fuera_del_corpus_no_recupera_nada():
     """Una pregunta ajena al proyecto no debe traer documentos con puntuacion."""
-    docs = assistant.buscar(
-        assistant.get_indice(), "¿cuál es la receta de la paella valenciana?"
-    )
+    docs = assistant.buscar(assistant.get_indice(), "¿cuál es la receta de la paella valenciana?")
     assert all(d["score"] == 0 for d in docs)
 
 
@@ -90,6 +88,7 @@ def test_persona_prohibe_inventar(monkeypatch):
 def test_modo_degradado_no_llama_al_llm(monkeypatch):
     """Sin corpus cargado (contexto base y busqueda vacios) responde enlatado y
     no gasta ninguna llamada al modelo."""
+
     def _explota(*a, **k):
         raise AssertionError("No debe llamarse al LLM si no hay contexto alguno")
 
@@ -118,9 +117,7 @@ def test_modo_tech_usa_persona_reclutador(monkeypatch):
     monkeypatch.setattr(assistant, "llamar_openrouter", _fake_llm)
     import asyncio
 
-    r = asyncio.run(
-        assistant.responder("key", "¿qué ADRs hay sobre multi-tenant?", modo="tech")
-    )
+    r = asyncio.run(assistant.responder("key", "¿qué ADRs hay sobre multi-tenant?", modo="tech"))
     assert "RECLUTADOR" in capturado["system"].upper()
     assert "ADR" in r["respuesta"] or r["respuesta"] == "respuesta técnica"
     assert r["fuentes"]

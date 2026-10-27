@@ -607,11 +607,7 @@ def link_coil(
     # FOR UPDATE: dos vinculaciones simultáneas de la misma bobina se
     # serializan y la segunda ve la primera (PostgreSQL; SQLite lo ignora)
     bobina = db.get(StockItem, stock_item_id, with_for_update=True)
-    if (
-        bobina is None
-        or bobina.tenant_id != tenant_id
-        or bobina.estado not in ("activo", "pico")
-    ):
+    if bobina is None or bobina.tenant_id != tenant_id or bobina.estado not in ("activo", "pico"):
         raise ValueError("Bobina no encontrada o inactiva")
 
     order = db.get(Order, order_id)
@@ -627,9 +623,7 @@ def link_coil(
     # cobraba la bobina entera en cada una (coste duplicado). Para moverla,
     # se desvincula (reembolso de lo no consumido, ADR-019) y se vincula.
     otra = db.scalar(
-        select(OrderLine).where(
-            OrderLine.active_coil_id == bobina.id, OrderLine.id != linea.id
-        )
+        select(OrderLine).where(OrderLine.active_coil_id == bobina.id, OrderLine.id != linea.id)
     )
     if otra is not None:
         otra_orden = db.get(Order, otra.order_id)
@@ -798,4 +792,3 @@ def unlink_coil(
         "refunded_qty": float(restante),
         "refunded_cost": float(reembolso),
     }
-

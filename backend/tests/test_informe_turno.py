@@ -46,17 +46,51 @@ def test_informe_agrega_por_puesto_solo_dentro_del_turno(db_session, tenant, use
     order = make_order(db_session, tenant, numero="OP-INF")
     l1 = make_order_line(db_session, order, workstation="PERF-1")
     l2 = make_order_line(db_session, order, workstation="PERF-2", linea_numero=2)
-    _log(db_session, tenant, user, order, l1, "produce", 10, EN_TURNO_A,
-         consumedAmount=50.5, consumedMaterial="kg")
-    _log(db_session, tenant, user, order, l1, "produce", 5, EN_TURNO_A,
-         consumedAmount=25, consumedMaterial="kg")
+    _log(
+        db_session,
+        tenant,
+        user,
+        order,
+        l1,
+        "produce",
+        10,
+        EN_TURNO_A,
+        consumedAmount=50.5,
+        consumedMaterial="kg",
+    )
+    _log(
+        db_session,
+        tenant,
+        user,
+        order,
+        l1,
+        "produce",
+        5,
+        EN_TURNO_A,
+        consumedAmount=25,
+        consumedMaterial="kg",
+    )
     _log(db_session, tenant, user, order, l1, "scrap", 3.2, EN_TURNO_A, merma_cost=4.0)
     _log(db_session, tenant, user, order, l2, "quality_check", 0, EN_TURNO_A, status="nok")
-    _log(db_session, tenant, user, order, l1, "produce", 99, EN_TURNO_B,
-         consumedAmount=1, consumedMaterial="kg")  # fuera del turno A
+    _log(
+        db_session,
+        tenant,
+        user,
+        order,
+        l1,
+        "produce",
+        99,
+        EN_TURNO_B,
+        consumedAmount=1,
+        consumedMaterial="kg",
+    )  # fuera del turno A
     inc = Incidencia(
-        tenant_id=tenant.id, puesto="PERF-2", operario_id=user.id,
-        descripcion="Atasco", tipo="maquina", estado="abierta",
+        tenant_id=tenant.id,
+        puesto="PERF-2",
+        operario_id=user.id,
+        descripcion="Atasco",
+        tipo="maquina",
+        estado="abierta",
         tiempo_parada_min=Decimal("15"),
     )
     db_session.add(inc)
@@ -88,8 +122,18 @@ def test_turno_sin_actividad_sale_vacio(db_session, tenant):
 def test_csv_con_punto_y_coma_y_coma_decimal(db_session, tenant, user):
     order = make_order(db_session, tenant, numero="OP-CSV")
     line = make_order_line(db_session, order, workstation="PERF-1")
-    _log(db_session, tenant, user, order, line, "produce", 4, EN_TURNO_A,
-         consumedAmount=12.25, consumedMaterial="kg")
+    _log(
+        db_session,
+        tenant,
+        user,
+        order,
+        line,
+        "produce",
+        4,
+        EN_TURNO_A,
+        consumedAmount=12.25,
+        consumedMaterial="kg",
+    )
     db_session.commit()
 
     texto = informe_csv(informe_turno(db_session, tenant.id, FECHA, "A"))

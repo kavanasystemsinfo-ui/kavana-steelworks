@@ -4,6 +4,23 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Un panel por rol
+
+- **Problema:** supervisor y admin podían entrar a los paneles de operario y
+  materias primas (y el admin al de supervisor) y usar sus acciones; en
+  Manufacturing cada usuario solo entra a su panel.
+- **Solución:** matriz de acceso de un panel por rol (`lib/roles.ts`) y, en el
+  servidor, las acciones de cada panel solo para su rol: producir, vincular,
+  autocontrol y alta de incidencias → operario; recepción y stock → materias
+  primas; panel de mando, órdenes, trazabilidad e incidencias → supervisor.
+  Catálogo, puestos y modelos de calidad siguen siendo de lectura compartida.
+  El aviso de stock bajo de la vista Turno ya no lleva a Materias Primas: dice
+  a quién avisar.
+- **Archivos:** routers `production`, `stock`, `quality`, `incidencias`,
+  `orders`, `supervisor`, `trace`; `services/panel_turno.py`;
+  `frontend/src/lib/roles.ts`, `VistaTurno.tsx`, `SupervisorPage.tsx`; tests.
+- **Verificación:** pytest 442 ok, vitest 133 ok, ruff y oxlint limpios.
+
 ## 2026-10-27 — Panel de mando: vista Planta (fase 2)
 
 - **Problema:** la pestaña Planta solo mostraba "disponible en la siguiente

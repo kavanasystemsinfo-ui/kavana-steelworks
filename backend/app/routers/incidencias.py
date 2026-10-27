@@ -120,7 +120,7 @@ def crear_sesion_subida(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Crea una sesión QR de subida para el operario (TTL 15 min)."""
@@ -193,7 +193,7 @@ def crear_incidencia(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Reporta una incidencia desde el puesto (operario)."""
@@ -221,7 +221,7 @@ def listar_incidencias(
     limit: int = 50,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Incidencias del tenant para el Supervisor (desc, límite 50)."""
@@ -238,7 +238,7 @@ def actualizar_incidencia(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Cambia estado y/o resolución financiera (Supervisor)."""
@@ -270,7 +270,7 @@ async def subir_foto_incidencia(
     db: DbDep = None,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Adjunta la foto de la incidencia (BYTEA, validación por magic bytes).

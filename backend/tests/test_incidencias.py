@@ -19,7 +19,7 @@ from app.models.incidencia import Incidencia
 from app.routers import incidencias as inc_router
 from app.services.events import broker
 from app.services.oee_kpis import calcular_oee
-from tests.helpers import authed_client_for, make_order, make_order_line
+from tests.helpers import authed_client_for, make_order, make_order_line, make_user
 
 
 def _override_get_db(db_session):
@@ -37,6 +37,12 @@ def _crear(
     descripcion="Atasco en cizalla",
     tipo="maquina",
 ):
+    # Solo el operario da de alta incidencias: si el test usa un supervisor,
+    # la crea un operario del mismo tenant.
+    if user.role != "operator":
+        user = db_session.query(type(user)).filter_by(email="op-inc@test.local").first() or (
+            make_user(db_session, tenant, email="op-inc@test.local", role="operator")
+        )
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
         client = authed_client_for(db_session, user)
@@ -179,9 +185,7 @@ def test_actualizar_resolucion_conserva_campos_previos(db_session, tenant, user)
             f"/api/v1/incidencias/{inc.id}",
             json={"resolucion_tipo": "ajuste", "tiempo_parada_min": 15},
         )
-        r = client.patch(
-            f"/api/v1/incidencias/{inc.id}", json={"coste": 50}
-        )
+        r = client.patch(f"/api/v1/incidencias/{inc.id}", json={"coste": 50})
     finally:
         app.dependency_overrides.clear()
 
@@ -199,9 +203,7 @@ def test_actualizar_incidencia_404(db_session, tenant, user):
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
         client = authed_client_for(db_session, user)
-        r = client.patch(
-            f"/api/v1/incidencias/{uuid.uuid4()}", json={"estado": "resuelta"}
-        )
+        r = client.patch(f"/api/v1/incidencias/{uuid.uuid4()}", json={"estado": "resuelta"})
     finally:
         app.dependency_overrides.clear()
     assert r.status_code == 404
@@ -296,22 +298,20 @@ def test_get_incidencias_incluye_foto_data_url(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = authed_client_for(db_session, user)
-        client.post(
+        operario = db_session.query(type(user)).filter_by(email="op-inc@test.local").one()
+        authed_client_for(db_session, operario).post(
             f"/api/v1/incidencias/{inc.id}/foto",
             files={"foto": ("foto.png", PNG_DEMO, "image/png")},
         )
-        r = client.get("/api/v1/incidencias")
+        r = authed_client_for(db_session, user).get("/api/v1/incidencias")
     finally:
         app.dependency_overrides.clear()
 
     assert r.status_code == 200, r.text
     item = r.json()["incidencias"][0]
-    assert item["foto_data_url"] == (
-        "data:image/png;base64," + PNG_DEMO.decode("latin-1")
-    ).replace("data-de-prueba", "") + "data-de-prueba" or item["foto_data_url"].startswith(
-        "data:image/png;base64,"
-    )
+    assert item["foto_data_url"] == ("data:image/png;base64," + PNG_DEMO.decode("latin-1")).replace(
+        "data-de-prueba", ""
+    ) + "data-de-prueba" or item["foto_data_url"].startswith("data:image/png;base64,")
     assert item["foto_size"] == len(PNG_DEMO)
 
 

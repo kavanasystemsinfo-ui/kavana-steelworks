@@ -2,8 +2,9 @@
 
  * operator → /operario (escaneo, vincular, producir, autocontrol, incidencias)
  * materials → /materias-primas (recepción e inventario)
- * supervisor → /supervisor (OEE, KPIs, trazabilidad, incidencias)
- * admin → hereda supervisor (y puede operar)
+ * supervisor → /supervisor (panel de mando, órdenes, incidencias)
+ * admin → /admin (empresa, usuarios, puestos, catálogo)
+ * Cada rol entra solo a su panel; para ver otro, se entra con su usuario.
  */
 
 export type Role = 'operator' | 'materials' | 'supervisor' | 'admin'
@@ -39,8 +40,8 @@ export const ALL_NAV: NavItem[] = [
 const ACCESS: Record<Role, string[]> = {
   operator: ['/operario'],
   materials: ['/materias-primas'],
-  supervisor: ['/operario', '/materias-primas', '/supervisor'],
-  admin: ['/operario', '/materias-primas', '/supervisor', '/admin'],
+  supervisor: ['/supervisor'],
+  admin: ['/admin'],
 }
 
 export function canAccess(role: Role, path: string): boolean {

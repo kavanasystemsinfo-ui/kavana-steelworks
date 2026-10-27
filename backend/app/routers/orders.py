@@ -144,8 +144,7 @@ def _cargar(db: Session, order_id: uuid.UUID, tenant_id: uuid.UUID) -> Order:
 def _validar_lineas(db: Session, tenant_id: uuid.UUID, lines: list[LineIn]) -> None:
     """Todo lo que referencia una línea debe existir en el tenant."""
     codigos = {
-        c
-        for (c,) in db.query(Workstation.code).filter(Workstation.tenant_id == tenant_id).all()
+        c for (c,) in db.query(Workstation.code).filter(Workstation.tenant_id == tenant_id).all()
     }
     for ln in lines:
         if ln.workstation_id not in codigos:
@@ -154,22 +153,30 @@ def _validar_lineas(db: Session, tenant_id: uuid.UUID, lines: list[LineIn]) -> N
                 detail=f"Puesto de trabajo inexistente: {ln.workstation_id}",
             )
         if ln.modelo_id is not None:
-            ok = db.query(ManufacturingModel.id).filter(
-                ManufacturingModel.id == ln.modelo_id,
-                ManufacturingModel.tenant_id == tenant_id,
-            ).first()
+            ok = (
+                db.query(ManufacturingModel.id)
+                .filter(
+                    ManufacturingModel.id == ln.modelo_id,
+                    ManufacturingModel.tenant_id == tenant_id,
+                )
+                .first()
+            )
             if ok is None:
                 raise HTTPException(status_code=400, detail="modelo_id no pertenece al tenant")
         if ln.product_id is not None:
-            ok = db.query(Product.id).filter(
-                Product.id == ln.product_id, Product.tenant_id == tenant_id
-            ).first()
+            ok = (
+                db.query(Product.id)
+                .filter(Product.id == ln.product_id, Product.tenant_id == tenant_id)
+                .first()
+            )
             if ok is None:
                 raise HTTPException(status_code=400, detail="product_id no pertenece al tenant")
         if ln.material_id is not None:
-            ok = db.query(Material.id).filter(
-                Material.id == ln.material_id, Material.tenant_id == tenant_id
-            ).first()
+            ok = (
+                db.query(Material.id)
+                .filter(Material.id == ln.material_id, Material.tenant_id == tenant_id)
+                .first()
+            )
             if ok is None:
                 raise HTTPException(status_code=400, detail="material_id no pertenece al tenant")
 
@@ -179,7 +186,7 @@ def list_orders(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Órdenes del tenant (creación descendente, límite 50)."""
@@ -209,7 +216,7 @@ def list_available_orders(
     workstation: str | None = None,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor")),
     ] = None,
 ):
     """Órdenes disponibles para el panel del operario (port de manufacturing).
@@ -272,7 +279,7 @@ def create_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Crea una orden con sus líneas (número automático por secuencia)."""
@@ -318,7 +325,7 @@ def update_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Edita la cabecera de la orden (cliente, fecha de entrega, notas)."""
@@ -341,7 +348,7 @@ def transition_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Máquina de estados de la orden (port de manufacturing).
@@ -375,7 +382,7 @@ def delete_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "supervisor")),
     ] = None,
 ):
     """Elimina una orden solo mientras es borrador (las líneas caen en cascada)."""
@@ -392,7 +399,7 @@ def get_order(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator", "supervisor")),
     ] = None,
 ):
     """Obtener una orden específica con sus líneas para edición/vinculación."""

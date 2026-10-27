@@ -174,9 +174,7 @@ def test_evaluar_inspeccion_check_sin_medicion_se_omite():
             {"name": "B", "tipo": "visual", "critical": True},
         ]
     )
-    procesadas, estado = evaluar_inspeccion(
-        plan, [{"check_name": "A", "value_entered": 100}]
-    )
+    procesadas, estado = evaluar_inspeccion(plan, [{"check_name": "A", "value_entered": 100}])
     assert estado == "approved"
     assert len(procesadas) == 1  # B no se contó ni bloqueó
 
@@ -192,9 +190,7 @@ def test_evaluar_inspeccion_pass_fail_normalizacion_estricta():
         ("no", False),
     ]
     for valor, esperado in casos:
-        _, estado = evaluar_inspeccion(
-            plan, [{"check_name": "Visual", "value_entered": valor}]
-        )
+        _, estado = evaluar_inspeccion(plan, [{"check_name": "Visual", "value_entered": valor}])
         assert estado == ("approved" if esperado else "rejected"), f"valor={valor!r}"
 
 
@@ -210,9 +206,7 @@ def test_evaluar_inspeccion_valor_no_numerico_falla():
             }
         ]
     )
-    _, estado = evaluar_inspeccion(
-        plan, [{"check_name": "Largo", "value_entered": "abc"}]
-    )
+    _, estado = evaluar_inspeccion(plan, [{"check_name": "Largo", "value_entered": "abc"}])
     assert estado == "rejected"
 
 
@@ -229,9 +223,7 @@ def test_evaluar_inspeccion_context_override_nominal():
         ]
     )
     # Sin override: 1990 está fuera de 1500±10
-    _, estado = evaluar_inspeccion(
-        plan, [{"check_name": "Largo Total", "value_entered": 1990}]
-    )
+    _, estado = evaluar_inspeccion(plan, [{"check_name": "Largo Total", "value_entered": 1990}])
     assert estado == "rejected"
     # Con override a 2000: 1990 pasa
     procesadas, estado = evaluar_inspeccion(
@@ -294,9 +286,7 @@ def test_registrar_autocontrol_crea_record_y_log(db_session, tenant, user):
     assert log.metadata_["measurementsCount"] == 3
 
 
-def test_registrar_autocontrol_aplica_largo_dinamico_de_la_orden(
-    db_session, tenant, user
-):
+def test_registrar_autocontrol_aplica_largo_dinamico_de_la_orden(db_session, tenant, user):
     orden = make_order(db_session, tenant, numero="OP-CAL-LARGO")
     linea = make_order_line(db_session, orden, workstation="LINEA-1")
     linea.meters_per_piece = Decimal("2.0")  # largo real 2.000 mm
@@ -337,9 +327,7 @@ def test_registrar_autocontrol_aplica_largo_dinamico_de_la_orden(
     assert float(medicion.nominal) == 2000.0  # override por meters_per_piece
 
 
-def test_registrar_autocontrol_rechazado_no_bloquea_produccion(
-    db_session, tenant, user
-):
+def test_registrar_autocontrol_rechazado_no_bloquea_produccion(db_session, tenant, user):
     orden = make_order(db_session, tenant, numero="OP-CAL-REJ")
     make_order_line(db_session, orden, workstation="LINEA-1")
     modelo = make_model(db_session, tenant, checks=plan_basico())

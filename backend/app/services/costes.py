@@ -149,8 +149,7 @@ def costes_por_orden(db: Session, tenant_id: uuid.UUID) -> list[dict]:
 def actualizar_costes_orden(db: Session, order: Order) -> None:
     """Roll-up de las líneas a la cabecera de la orden (no hace commit)."""
     materiales = {
-        m.id: m
-        for m in db.scalars(select(Material).where(Material.tenant_id == order.tenant_id))
+        m.id: m for m in db.scalars(select(Material).where(Material.tenant_id == order.tenant_id))
     }
     lineas = db.scalars(select(OrderLine).where(OrderLine.order_id == order.id)).all()
     real_material = real_total = estimado = Decimal("0")

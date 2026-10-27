@@ -31,8 +31,12 @@ def test_cuenta_solo_incidencias_abiertas(db_session, tenant, user):
     for estado in ("abierta", "en_revision", "resuelta", "cerrada"):
         db_session.add(
             Incidencia(
-                tenant_id=tenant.id, puesto="PERF-1", operario_id=user.id,
-                descripcion=estado, tipo="otro", estado=estado,
+                tenant_id=tenant.id,
+                puesto="PERF-1",
+                operario_id=user.id,
+                descripcion=estado,
+                tipo="otro",
+                estado=estado,
             )
         )
     db_session.commit()

@@ -49,16 +49,12 @@ def evaluar_inspeccion(plan, mediciones, context_overrides=None):
     fallo_critico = False
 
     for check in plan:
-        entrada = next(
-            (m for m in mediciones if m["check_name"] == check.name), None
-        )
+        entrada = next((m for m in mediciones if m["check_name"] == check.name), None)
         if entrada is None:
             continue  # check sin medición: no bloquea (spec 04 regla 6)
 
         valor = entrada["value_entered"]
-        nominal_efectivo = overrides.get(check.name, {}).get(
-            "nominal_value", check.nominal_value
-        )
+        nominal_efectivo = overrides.get(check.name, {}).get("nominal_value", check.nominal_value)
 
         if check.tipo == "numeric":
             pasa = evaluar_numerico(
@@ -226,8 +222,8 @@ def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
       iniciado 30 minutos atrás para que el recordatorio aparezca.
     - last_check_at: created_at del último QualityRecord del operario.
 
-    Ambos null si no existen y no hay datos de demo. La fuente de verdad de 
-    "cuándo se hizo el último control" son los QualityRecord; el turno 
+    Ambos null si no existen y no hay datos de demo. La fuente de verdad de
+    "cuándo se hizo el último control" son los QualityRecord; el turno
     activo lo crea login().
     """
     turno = (
@@ -239,6 +235,7 @@ def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
     if turno is None:
         # Demo: simulate an active shift started 30 minutes ago
         from datetime import datetime, timedelta
+
         demo_start = datetime.utcnow() - timedelta(minutes=30)
         shift_started_at = demo_start.isoformat()
     else:
@@ -254,4 +251,3 @@ def estado_recordatorios(db: Session, operator_id: uuid.UUID) -> dict:
         "shift_started_at": shift_started_at,
         "last_check_at": last_check_at,
     }
-

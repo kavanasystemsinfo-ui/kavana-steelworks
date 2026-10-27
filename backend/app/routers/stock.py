@@ -36,7 +36,6 @@ def get_current_user(
     return autenticar(db, authorization)
 
 
-
 class ReceiveCoilRequest(BaseModel):
     tenant_id: uuid.UUID
     material_id: uuid.UUID
@@ -71,7 +70,7 @@ def receive(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "materials", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "materials")),
     ] = None,
 ):
     """Registra una bobina entrante (entrada directa a producción)."""
@@ -159,7 +158,7 @@ def sugerencias_picos(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Picos y retales en almacén para aconsejar su uso antes de abrir
@@ -196,7 +195,7 @@ def scan_coil(
     db: DbDep = None,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Escaneo de bobina (flujo operario): busca por coil_id o lote.
@@ -224,7 +223,7 @@ def link(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Vincula la bobina a la orden (cobro BULK por adelantado)."""
@@ -250,7 +249,6 @@ class FinBobinaRequest(BaseModel):
     radio_mm: float = Field(ge=0)
 
 
-
 class UnlinkCoilRequest(BaseModel):
     stock_item_id: uuid.UUID
     order_id: uuid.UUID
@@ -263,7 +261,7 @@ def unlink(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Desvincula la bobina de la linea (reembolso de lo no consumido)."""
@@ -288,7 +286,7 @@ def fin_bobina(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Fin de bobina: el operario mide los milímetros de radio restantes
@@ -321,7 +319,7 @@ def retirar(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "operator")),
     ] = None,
 ):
     """Botón 'Retirar': segunda opción del fin de bobina (visión Jorge).
@@ -350,7 +348,7 @@ def list_stock(
     db: DbDep,
     current_user: Annotated[
         User,
-        Depends(require_roles(get_current_user, "materials", "supervisor", "admin")),
+        Depends(require_roles(get_current_user, "materials")),
     ] = None,
 ):
     """Lista bobinas (para el panel de Materias Primas)."""

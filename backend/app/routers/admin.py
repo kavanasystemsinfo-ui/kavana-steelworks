@@ -426,9 +426,7 @@ def create_workstation(body: WorkstationCreate, db: DbDep, current_user: AdminDe
         color=body.color,
         hourly_cost=Decimal(str(body.hourly_cost)),
         piezas_hora_nominal=(
-            Decimal(str(body.piezas_hora_nominal))
-            if body.piezas_hora_nominal is not None
-            else None
+            Decimal(str(body.piezas_hora_nominal)) if body.piezas_hora_nominal is not None else None
         ),
         registration_method=body.registration_method,
         maintenance_interval_hours=body.maintenance_interval_hours,

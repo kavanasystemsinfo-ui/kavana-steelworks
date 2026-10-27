@@ -59,9 +59,7 @@ class TenantRole(UUIDMixin, TimestampMixin, Base):
     """Rol configurable del tenant con permisos granulares (spec 07 §2.2)."""
 
     __tablename__ = "tenant_roles"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "role_key", name="uq_tenantrole_key"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "role_key", name="uq_tenantrole_key"),)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
@@ -84,9 +82,7 @@ class Sequence(UUIDMixin, TimestampMixin, Base):
         UniqueConstraint(
             "tenant_id", "sequence_type", "prefix", name="uq_sequence_tenant_type_prefix"
         ),
-        CheckConstraint(
-            f"sequence_type IN {TIPOS_SECUENCIA}", name="ck_sequence_tipo"
-        ),
+        CheckConstraint(f"sequence_type IN {TIPOS_SECUENCIA}", name="ck_sequence_tipo"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -102,9 +98,7 @@ class WorkstationGroup(UUIDMixin, TimestampMixin, Base):
     """Grupo de puestos (p.ej. 'Línea 1' agrupa varios puestos)."""
 
     __tablename__ = "workstation_groups"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "name", name="uq_wsgroup_name"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_wsgroup_name"),)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
@@ -145,9 +139,7 @@ class Workstation(UUIDMixin, TimestampMixin, Base):
     )
     # Ritmo nominal (piezas/hora): base del plan del turno en el panel de mando.
     piezas_hora_nominal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
-    registration_method: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="quantity"
-    )
+    registration_method: Mapped[str] = mapped_column(String(10), nullable=False, default="quantity")
     maintenance_interval_hours: Mapped[int] = mapped_column(
         nullable=False, default=0
     )  # 0 = deshabilitado
