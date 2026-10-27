@@ -444,6 +444,7 @@ def create_retal(
 
     # 4) Reembolsar a la línea lo que deja de estar comprometido + merma a scrap
     linea.real_material_qty = (linea.real_material_qty or Decimal("0")) - real_remaining
+    linea.real_material_cost = (linea.real_material_cost or Decimal("0")) - coste_reembolso
     linea.real_cost = (linea.real_cost or Decimal("0")) - coste_reembolso
     order.real_total_cost = (order.real_total_cost or Decimal("0")) - coste_reembolso
     if hidden_merma > Decimal("0.01"):

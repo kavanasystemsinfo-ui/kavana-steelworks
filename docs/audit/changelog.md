@@ -4,6 +4,25 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Chatarra realista en la demo
+
+- **Problema:** la chatarra de la demo salía alta (5,8 % en 150 ticks). Cuando
+  la bobina no daba para las piezas del tick, el simulador hacía fin de bobina
+  con radio 0 y el resto (hasta 515 kg) contaba como merma; con la guardia de
+  kilos, tiraba también una bobina que aún tenía material. Además, el fin de
+  bobina con sobrante reembolsaba el coste total de la línea pero no el de
+  material, y el material podía superar al total de la orden.
+- **Solución:** el simulador reintenta con la mitad de piezas hasta agotar la
+  bobina, así que el fin de bobina solo deja puntas. Ante la guardia de kilos
+  mide el radio real (inversa de la fórmula v2) y el sobrante queda como pico
+  en el puesto. "Sin stock disponible" también cierra la bobina, en lugar de
+  atascar la línea. `create_retal` resta también `real_material_cost`, igual
+  que `unlink_coil`.
+- **Archivos:** `services/simulador.py`, `services/inventory.py`,
+  `tests/test_simulador.py`.
+- **Verificación:** chatarra 0,2 % en 150 ticks (test nuevo: < 2 %); pytest
+  443 ok, ruff limpio.
+
 ## 2026-10-27 — Un panel por rol
 
 - **Problema:** supervisor y admin podían entrar a los paneles de operario y

@@ -29,7 +29,7 @@ import asyncio
 import logging
 import random
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -125,6 +125,38 @@ def _reponer_bobina(db: Session, tenant_id, material_id, user_id) -> StockItem |
         ubicacion="ALMACEN",
         grado_acero=ultima.grado_acero,
     )
+
+
+def _sin_material(exc: Exception) -> bool:
+    """El sistema rechazó la producción porque la bobina no da para más."""
+    return "Stock insuficiente" in str(exc) or "Sin stock disponible" in str(exc)
+
+
+def _bloqueo_kilos(exc: Exception) -> bool:
+    """Guardia de kilos: la línea pide más material vinculado (la bobina no está vacía)."""
+    return "BLOQUEO DE SEGURIDAD" in str(exc)
+
+
+def _radio_medido(bobina: StockItem) -> int | None:
+    """Radio (mm enteros, como lo mide el operario) del material que queda.
+
+    Inversa de peso_desde_radio_mm; al redondear hacia abajo el milímetro
+    queda una merma pequeña, como en planta. None si la bobina no tiene ancho.
+    """
+    import math
+
+    from app.services.coil_math import DIAMETRO_INTERIOR_MM_DEFAULT
+
+    if not bobina.width_mm or bobina.cantidad_disponible <= 0:
+        return None
+    material = bobina.material
+    densidad = float(
+        material.density_calibrada if material and material.density_calibrada else 7.7807
+    )
+    r_int = DIAMETRO_INTERIOR_MM_DEFAULT / 2000
+    area = float(bobina.cantidad_disponible) / (densidad * 1000 * float(bobina.width_mm) / 1000)
+    r_ext = math.sqrt(area / math.pi + r_int**2)
+    return max(int((r_ext - r_int) * 1000), 0)
 
 
 def _operario_demo(db: Session, tenant_id) -> User | None:
@@ -286,23 +318,38 @@ def simular_tick(
         else:
             piezas = min(Decimal(rng.randint(1, 4)), tope)
             horas = (piezas * MINUTOS_POR_PIEZA / 60).quantize(Decimal("0.01"))
-        try:
-            record_production(
-                db, tenant.id, operario.id,
-                order_id=orden.id, line_id=linea.id,
-                incremental_quantity=piezas, hours_worked=horas,
-                observaciones="simulador demo",
-            )
-            acciones.append(f"produce {piezas} uds en {etiqueta}")
-        except ValueError as exc:
-            db.rollback()
-            saltos.append(f"{etiqueta}: {exc}")
+        # Si la bobina no da para todas las piezas, el operario produce las
+        # que salen del resto: se reintenta con la mitad hasta una pieza. Así
+        # el fin de bobina solo deja puntas (menos de una pieza), no un resto
+        # de cientos de kilos contado como chatarra.
+        error = None
+        while piezas >= 1:
+            try:
+                record_production(
+                    db, tenant.id, operario.id,
+                    order_id=orden.id, line_id=linea.id,
+                    incremental_quantity=piezas, hours_worked=horas,
+                    observaciones="simulador demo",
+                )
+                acciones.append(f"produce {piezas} uds en {etiqueta}")
+                error = None
+                break
+            except ValueError as exc:
+                db.rollback()
+                error = exc
+                if not _sin_material(exc):
+                    break
+                mitad = (piezas / 2).quantize(Decimal("1"), rounding=ROUND_DOWN)
+                if mitad >= 1:
+                    horas = max((horas * mitad / piezas).quantize(Decimal("0.01")), Decimal("0.01"))
+                piezas = mitad
+        if error is not None:
+            saltos.append(f"{etiqueta}: {error}")
             # Bobina agotada: el operario hace "fin de bobina" (radio 0 =
-            # no queda nada; lo que el sistema creía que quedaba es merma).
-            # Sin ancho (perfiles en metros) no hay fórmula de radio: se
-            # desvincula. En el siguiente tick se vincula la siguiente FIFO.
-            agotada = "BLOQUEO DE SEGURIDAD" in str(exc) or "Stock insuficiente" in str(exc)
-            if agotada and linea.active_coil_id is not None:
+            # no queda nada; las puntas que el sistema creía que quedaban son
+            # merma). Sin ancho (perfiles en metros) no hay fórmula de radio:
+            # se desvincula. En el siguiente tick se vincula la siguiente FIFO.
+            if _sin_material(error) and linea.active_coil_id is not None:
                 codigo = linea.active_coil_code
                 try:
                     create_retal(
@@ -314,6 +361,25 @@ def simular_tick(
                 except ValueError:
                     db.rollback()
                     soltar_bobina(linea, orden, "bobina agotada")
+            elif _bloqueo_kilos(error) and linea.active_coil_id is not None:
+                # La bobina aún tiene material: el operario mide el radio real
+                # y el sobrante queda en el puesto como pico, no como chatarra.
+                # El siguiente tick vincula otra bobina y la línea sigue.
+                codigo = linea.active_coil_code
+                bobina = db.get(StockItem, linea.active_coil_id)
+                radio = _radio_medido(bobina)
+                try:
+                    if radio is None:
+                        raise ValueError("sin ancho")
+                    create_retal(
+                        db, tenant.id, operario.id,
+                        stock_item_id=bobina.id, radio_mm=radio,
+                        order_id=orden.id, line_id=linea.id,
+                    )
+                    acciones.append(f"fin de bobina {codigo} en {etiqueta} (queda pico)")
+                except ValueError:
+                    db.rollback()
+                    soltar_bobina(linea, orden, "bloqueo de kilos")
             continue
 
         # Línea terminada: la bobina queda libre para otra línea (una bobina,
