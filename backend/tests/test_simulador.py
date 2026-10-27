@@ -115,3 +115,30 @@ def test_el_backend_arranca_y_para_el_bucle_del_simulador(monkeypatch):
     monkeypatch.setattr(main.settings, "simulador_minutos", 5)
     with TestClient(main.app) as client:
         assert client.get("/health").status_code == 200
+
+
+def test_la_chatarra_del_simulador_es_solo_puntas(db_session):
+    """El fin de bobina no tira a chatarra cientos de kilos: el simulador
+    agota la bobina con menos piezas y, si salta la guardia de kilos, deja
+    el sobrante como pico. La chatarra queda por debajo del 2 % del material."""
+    from datetime import UTC, datetime
+
+    tenant = _demo(db_session)
+    inicio = datetime.now(UTC)
+    rng = random.Random(11)
+    for _ in range(150):
+        simular_tick(db_session, rng)
+
+    logs = db_session.scalars(
+        select(ProductionLog).where(
+            ProductionLog.tenant_id == tenant.id, ProductionLog.timestamp >= inicio
+        )
+    ).all()
+    material = sum(
+        float(log.metadata_.get("consumedAmount") or 0)
+        for log in logs
+        if log.action == "produce" and log.metadata_.get("consumedMaterial") == "kg"
+    )
+    chatarra = sum(float(log.quantity or 0) for log in logs if log.action == "scrap")
+    assert material > 0
+    assert chatarra / (material + chatarra) < 0.02
