@@ -117,6 +117,10 @@ export function VistaCostes() {
                 <span className="text-base text-kavana-text-dim"> €/kg</span>
               </p>
               <p className="text-xs text-kavana-text-dim">
+                Material {fmtDec(datos.coste_kg.material, 2)} €/kg · Transformación{' '}
+                {fmtDec(datos.coste_kg.transformacion, 2)} €/kg
+              </p>
+              <p className="text-xs text-kavana-text-dim">
                 Periodo anterior {fmtDec(datos.coste_kg.periodo_anterior, 2)} €/kg
               </p>
               <p className="text-xs text-kavana-text-dim">

@@ -44,9 +44,13 @@ Entre las tarjetas y el coste por orden. Eliges **Semana**, **Mes** o
 trimestre natural (agosto y septiembre son el tercer trimestre; octubre abre
 el cuarto). Una orden cuenta en el periodo en que se tocó por última vez.
 
-- **€/kg del periodo**, con el €/kg del periodo anterior y el objetivo de la
-  empresa si lo has configurado en Admin (Empresa). Sin objetivo, lo dice: no
-  enseña un cero que parezca un objetivo.
+- **€/kg del periodo**, partido en sus dos mitades: **material** (lo que
+  cuesta el acero, con la merma ya dentro) y **transformación** (mano de obra).
+  Las dos cifras suman el €/kg. Sirve para saber si el problema es que se
+  compró caro o que la planta va lenta: el material es la mayor parte del
+  coste y no lo controla la planta; la transformación sí. Debajo, el €/kg del
+  periodo anterior y el objetivo de la empresa si lo has configurado en Admin
+  (Empresa). Sin objetivo, lo dice: no enseña un cero que parezca un objetivo.
 - **Coste total**, kilos valorados y órdenes completadas. Solo las líneas
   medidas en kilos entran en el €/kg; las líneas en metros se cuentan aparte
   para no mezclar unidades. El coste total sí las incluye.

@@ -4,6 +4,35 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de costes: desglose del €/kg en material y transformación (fase 6)
+
+- **Problema:** un €/kg global mezcla dos cosas que se gestionan al revés: el
+  material (80-90 % del coste, lo marca el mercado y el grado del acero) y la
+  transformación (mano de obra, lo que sí controla la planta). Con un objetivo
+  único en €/kg, un mes con más galvanizada que decapada sube el ratio sin que
+  la planta haya hecho nada mal: la cifra no permite decidir. En la propia demo,
+  el fleje galva DX51D+Z275 va a 1,42 €/kg y el decapado DC01 a 1,19 €/kg.
+- **Solución:** `coste_kg` pasa a llevar `material` y `transformacion`, además
+  de `valor`, `periodo_anterior` y `objetivo`. `material` = material de las
+  líneas en kg (con la merma ya pagada dentro) / kg buenos; `transformacion` se
+  calcula por diferencia para que las dos cifras sumen `valor` exacto (el
+  residuo del redondeo, máximo un céntimo, cae en transformación). Sin kg en la
+  ventana, ambas van a 0. El desglose viaja al CSV (filas «Material €/kg» y
+  «Transformación €/kg») y a la tarjeta de la vista Costes.
+- **Decisión de producto:** NO se pone objetivo global de €/kg. El objetivo
+  solo tiene sentido sobre la transformación o la merma, y por familia de
+  material (galvanizado / decapado / aluminio); eso es una fase posterior, con
+  campo `familia` en el maestro de materiales. La merma se compara por ancho de
+  corte, no en global: el recorte de orillos es un ancho fijo por lado y pesa
+  mucho más en flejes estrechos.
+- **Archivos:** `backend/app/services/panel_costes.py`,
+  `backend/app/services/panel_costes_csv.py`,
+  `frontend/src/components/VistaCostes.tsx`, `frontend/src/lib/api.ts`,
+  `docs/guias/guia-supervisor.md`.
+- **Verificación:** 415 passed + 1 skipped (pytest completo), 2 tests nuevos del
+  desglose; 123 passed (vitest, 1 nuevo); `ruff check app tests` limpio; build
+  TS y oxlint limpios.
+
 ## 2026-10-27 — Panel de costes: €/kg del periodo con tendencia, reparto y CSV (fases 1-4)
 
 - **Problema:** el panel enseñaba coste por orden y acumulados, pero no
