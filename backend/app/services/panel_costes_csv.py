@@ -76,6 +76,24 @@ def panel_costes_csv(datos: dict) -> str:
         _fila(escritor, [bloque["etiqueta"], bloque["euros"], bloque["pct"]])
 
     escritor.writerow([])
+    escritor.writerow(["Coste por familia"])
+    escritor.writerow(
+        ["Familia", "kg", "Material €/kg", "Transformación €/kg", "Merma %", "Órdenes"]
+    )
+    for familia in datos["por_familia"]:
+        _fila(
+            escritor,
+            [
+                familia["etiqueta"],
+                familia["kg"],
+                familia["material"],
+                familia["transformacion"],
+                familia["merma_pct"],
+                familia["ordenes"],
+            ],
+        )
+
+    escritor.writerow([])
     escritor.writerow(["Coste de paradas", "Valor"])
     _fila(escritor, ["Total (€)", paradas["total"]])
     _fila(escritor, ["Horas paradas", paradas["horas"]])

@@ -38,6 +38,13 @@ Decisiones de esta capa (no re-decidir sin migración):
   cuenta el material de las líneas en kg, igual que el total. Es la lectura que
   separa «compré caro» de «la planta va lenta»: el material es el 80-90 % del
   coste y no lo controla la planta; la transformación sí.
+- **Coste por familia de material.** ``por_familia`` agrupa las líneas en kg por
+  familia derivada del código o del nombre (``familia_material``): galvanizado,
+  decapado, aluminio y ``sin_clasificar``. Cada fila lleva kg, €/kg de material,
+  €/kg de transformación, merma sobre el material y nº de órdenes; las familias
+  sin kg no se listan. No hay columna ``familia`` en ``materials``: la
+  derivación es explícita y lo no reconocido se reporta como «sin clasificar»,
+  nunca se adivina.
 - **Coste de paradas = incidencias creadas en la ventana**, valoradas a
   ``tiempo_parada_min / 60 × coste_hora_puesto`` del puesto de la incidencia
   (con el coste global de empresa como respaldo, igual que el resto del
@@ -63,6 +70,18 @@ TOPE_ORDENES = 10
 LIMITE_CHATARRA_PCT = 5.0
 LIMITE_PARADA_MIN = 60.0
 UMBRAL_DESVIACION_PCT = 3.0
+
+# Familias de material para leer el coste sin que el mix lo distorsione. Se
+# derivan del código o del nombre porque `materials` no tiene columna `familia`
+# (fase 8 si el maestro real no sigue una convención). Lo que no se reconoce cae
+# en «sin clasificar»: es un dato honesto, no un error.
+SIN_CLASIFICAR = "sin_clasificar"
+ETIQUETAS_FAMILIA = {
+    "galvanizado": "Galvanizado",
+    "decapado": "Decapado",
+    "aluminio": "Aluminio",
+    SIN_CLASIFICAR: "Sin clasificar",
+}
 
 # Mismas etiquetas que el desplegable de incidencias del operario.
 ETIQUETAS_TIPO_INCIDENCIA = {
@@ -178,10 +197,44 @@ def _coste_kg(material: float, mano_obra: float, chatarra: float, kg: float) -> 
     return (max(material - chatarra, 0.0) + mano_obra + chatarra) / kg
 
 
-def _acumular(lineas: list[OrderLine], materiales: dict) -> dict:
-    """Suma euros de las líneas, separando el subconjunto medido en kg."""
+def familia_material(material: Material | None) -> str:
+    """Familia del material derivada de su código o de su nombre.
+
+    No hay columna ``familia`` en ``materials``: se reconoce la convención de
+    códigos del catálogo (``FLEJE-G`` galvanizado, ``FLEJE-D`` decapado,
+    ``ALU`` aluminio) y las palabras del nombre (galva, DX51D, Z275, decapado,
+    DC01, aluminio). Cualquier otra cosa es ``sin_clasificar``, que se reporta
+    como tal en vez de adivinar.
+    """
+    if material is None:
+        return SIN_CLASIFICAR
+    codigo = (material.code or "").strip().upper()
+    texto = f"{codigo} {material.name or ''}".upper()
+
+    if codigo.startswith("ALU") or "ALUMINIO" in texto:
+        return "aluminio"
+    if codigo.startswith("FLEJE-G") or any(
+        palabra in texto for palabra in ("GALV", "DX51", "Z275")
+    ):
+        return "galvanizado"
+    if codigo.startswith("FLEJE-D") or any(
+        palabra in texto for palabra in ("DECAP", "DC01")
+    ):
+        return "decapado"
+    return SIN_CLASIFICAR
+
+
+def _acumular(
+    lineas: list[OrderLine], materiales: dict, orden_id: uuid.UUID | None = None
+) -> dict:
+    """Suma euros de las líneas, separando el subconjunto medido en kg.
+
+    Las familias se acumulan solo con las líneas en kg (las mismas que forman el
+    €/kg), para que sus ratios y su merma sean comparables con el total.
+    """
     total = {"material": 0.0, "mano_obra": 0.0, "chatarra": 0.0}
     en_kg = {"material": 0.0, "mano_obra": 0.0, "chatarra": 0.0}
+    familias: dict[str, dict] = {}
     kg = 0.0
     metros = 0
     chatarra_por_puesto: dict[str, float] = {}
@@ -202,10 +255,28 @@ def _acumular(lineas: list[OrderLine], materiales: dict) -> dict:
 
         unidad = (linea.target_material_unit or "").strip().lower()
         if unidad == "kg":
-            kg += float(linea.real_material_qty or 0)
+            kg_linea = float(linea.real_material_qty or 0)
+            kg += kg_linea
             en_kg["material"] += material
             en_kg["mano_obra"] += mano_obra
             en_kg["chatarra"] += chatarra
+
+            familia = familias.setdefault(
+                familia_material(materiales.get(linea.material_id)),
+                {
+                    "material": 0.0,
+                    "mano_obra": 0.0,
+                    "chatarra": 0.0,
+                    "kg": 0.0,
+                    "ordenes": set(),
+                },
+            )
+            familia["material"] += material
+            familia["mano_obra"] += mano_obra
+            familia["chatarra"] += chatarra
+            familia["kg"] += kg_linea
+            if orden_id is not None:
+                familia["ordenes"].add(str(orden_id))
         elif unidad == "m":
             metros += 1
 
@@ -227,6 +298,7 @@ def _acumular(lineas: list[OrderLine], materiales: dict) -> dict:
         "coste_kg_numerador": max(en_kg["material"] - en_kg["chatarra"], 0.0)
         + en_kg["mano_obra"]
         + en_kg["chatarra"],
+        "familias": familias,
     }
 
 
@@ -257,12 +329,13 @@ def _resumen_ventana(
     metros = 0
     material = mano_obra = chatarra = 0.0
     material_kg = mano_obra_kg = chatarra_kg = 0.0
+    familias: dict[str, dict] = {}
     estimado = comparable = 0.0
     con_estimado = 0
 
     for orden in ordenes:
         propias = lineas.get(orden.id, [])
-        acumulado = _acumular(propias, ctx["materiales"])
+        acumulado = _acumular(propias, ctx["materiales"], orden.id)
         fila = ctx["filas"].get(str(orden.id), {})
 
         est = fila.get("estimado_material")
@@ -306,6 +379,17 @@ def _resumen_ventana(
         mano_obra_kg += acumulado["mano_obra_kg"]
         chatarra_kg += acumulado["chatarra_kg"]
 
+        for clave, datos_familia in acumulado["familias"].items():
+            destino = familias.setdefault(
+                clave,
+                {"material": 0.0, "mano_obra": 0.0, "chatarra": 0.0, "kg": 0.0, "ordenes": set()},
+            )
+            destino["material"] += datos_familia["material"]
+            destino["mano_obra"] += datos_familia["mano_obra"]
+            destino["chatarra"] += datos_familia["chatarra"]
+            destino["kg"] += datos_familia["kg"]
+            destino["ordenes"] |= datos_familia["ordenes"]
+
     return {
         "detalle": detalle,
         "ordenes": len(ordenes),
@@ -317,6 +401,7 @@ def _resumen_ventana(
         # Solo las líneas medidas en kg: es la base del €/kg y de su desglose.
         "material_kg": material_kg,
         "mano_obra_kg": mano_obra_kg,
+        "familias": familias,
         "coste": material + mano_obra,
         "coste_kg": _coste_kg(material_kg, mano_obra_kg, chatarra_kg, kg),
         "desviacion": {
@@ -331,6 +416,34 @@ def _puesto_mas_chatarra(chatarra_por_puesto: dict[str, float]) -> str | None:
     if not chatarra_por_puesto:
         return None
     return max(chatarra_por_puesto.items(), key=lambda kv: kv[1])[0]
+
+
+def _por_familia(familias: dict[str, dict]) -> list[dict]:
+    """Una fila por familia con kilos; las que no tienen kg no se enseñan."""
+    filas = []
+    for clave, datos in familias.items():
+        if datos["kg"] <= 0:
+            continue
+        material = _r2(datos["material"] / datos["kg"])
+        total = _r2((datos["material"] + datos["mano_obra"]) / datos["kg"])
+        filas.append(
+            {
+                "familia": clave,
+                "etiqueta": ETIQUETAS_FAMILIA[clave],
+                "kg": _r2(datos["kg"]),
+                "material": material,
+                "transformacion": _r2(total - material),
+                "merma_pct": (
+                    _r2(datos["chatarra"] / datos["material"] * 100)
+                    if datos["material"] > 0
+                    else 0.0
+                ),
+                "ordenes": len(datos["ordenes"]),
+            }
+        )
+    # Determinista: por kilos y, a igualdad, por etiqueta.
+    filas.sort(key=lambda fila: (-fila["kg"], fila["etiqueta"]))
+    return filas
 
 
 # --------------------------------------------------------------------------- #
@@ -538,6 +651,7 @@ def panel_costes(
             )
         ],
         "coste_paradas": _coste_paradas(db, tenant_id, desde, hasta),
+        "por_familia": _por_familia(actual["familias"]),
         "tendencia": _tendencia(db, tenant_id, hoy, ctx),
         "ordenes": [
             {

@@ -223,6 +223,45 @@ export function VistaCostes() {
             </div>
           </div>
 
+          {/* Coste por familia de material: agrupa el backend, aquí solo se formatea */}
+          <div className="border border-kavana-border rounded-sm p-3 space-y-2">
+            <p className="text-xs text-kavana-text-dim">Coste por familia de material</p>
+            {datos.por_familia.length === 0 ? (
+              <p className="text-sm text-kavana-text-dim">
+                Sin kilos valorados por familia en el periodo.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-kavana-text-dim text-xs">
+                      <th className="py-1 pr-2">Familia</th>
+                      <th className="py-1 pr-2 text-right">kg</th>
+                      <th className="py-1 pr-2 text-right">Material €/kg</th>
+                      <th className="py-1 pr-2 text-right">Transformación €/kg</th>
+                      <th className="py-1 pr-2 text-right">Merma</th>
+                      <th className="py-1 text-right">Órdenes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datos.por_familia.map((f) => (
+                      <tr key={f.familia} className="border-t border-kavana-border">
+                        <td className="py-1 pr-2">{f.etiqueta}</td>
+                        <td className="py-1 pr-2 text-right mono-data">{fmtNum(f.kg, 1)}</td>
+                        <td className="py-1 pr-2 text-right mono-data">{fmtDec(f.material, 2)}</td>
+                        <td className="py-1 pr-2 text-right mono-data">
+                          {fmtDec(f.transformacion, 2)}
+                        </td>
+                        <td className="py-1 pr-2 text-right mono-data">{fmtPct(f.merma_pct)}</td>
+                        <td className="py-1 text-right mono-data">{f.ordenes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Tendencia de 8 semanas: valores del backend, barra proporcional al máximo */}
           <div className="border border-kavana-border rounded-sm p-3 space-y-2">
             <p className="text-xs text-kavana-text-dim">Tendencia de €/kg (8 semanas)</p>

@@ -61,6 +61,13 @@ el cuarto). Una orden cuenta en el periodo en que se tocó por última vez.
   comparación que enseñar.
 - **Reparto del coste**: material, mano de obra y chatarra. Suma el coste
   total.
+- **Coste por familia de material**: galvanizado, decapado, aluminio y «sin
+  clasificar». Cada fila lleva kilos, €/kg de material, €/kg de transformación,
+  merma sobre el material y número de órdenes. La familia se deduce del código
+  o del nombre del material (FLEJE-G, FLEJE-D, ALU, galva, decapado, DC01,
+  DX51D); lo que no se reconoce aparece como «sin clasificar» en vez de
+  suponerse. Sirve para ver si un mes se va en acero caro o en planta lenta sin
+  que el mix de materiales engañe.
 - **Coste de paradas**: incidencias del periodo valoradas a €/h del puesto (o
   al coste global de la empresa), desglosadas por tipo.
 - **Tendencia**: €/kg de las últimas ocho semanas.

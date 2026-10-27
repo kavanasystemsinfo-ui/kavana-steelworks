@@ -196,6 +196,16 @@ export interface PanelCostesCosteKg {
   transformacion: number
 }
 
+export interface PanelCostesFamilia {
+  familia: string
+  etiqueta: string
+  kg: number
+  material: number
+  transformacion: number
+  merma_pct: number
+  ordenes: number
+}
+
 export interface PanelCostesReparto {
   clave: string
   etiqueta: string
@@ -239,6 +249,7 @@ export interface PanelCostes {
   ordenes_completadas: number
   desviacion: { pct: number | null; euros: number | null; ordenes_con_estimado: number }
   chatarra: { euros: number; pct_material: number }
+  por_familia: PanelCostesFamilia[]
   reparto: PanelCostesReparto[]
   coste_paradas: PanelCostesParadas
   tendencia: PanelCostesTendencia[]
