@@ -604,17 +604,40 @@ def link_coil(
 
         user_id = _system_user(db, tenant_id)
 
-    bobina = db.get(StockItem, stock_item_id)
-    if bobina is None or bobina.estado not in ("activo", "pico"):
+    # FOR UPDATE: dos vinculaciones simultáneas de la misma bobina se
+    # serializan y la segunda ve la primera (PostgreSQL; SQLite lo ignora)
+    bobina = db.get(StockItem, stock_item_id, with_for_update=True)
+    if (
+        bobina is None
+        or bobina.tenant_id != tenant_id
+        or bobina.estado not in ("activo", "pico")
+    ):
         raise ValueError("Bobina no encontrada o inactiva")
 
     order = db.get(Order, order_id)
-    if order is None:
+    if order is None or order.tenant_id != tenant_id:
         raise ValueError(f"Orden {order_id} no existe")
 
     linea = db.get(OrderLine, line_id)
     if linea is None or linea.order_id != order.id:
         raise ValueError("Línea no encontrada para la orden")
+
+    # Una bobina física está en un solo sitio (decisión Jorge 2026-10-26):
+    # si ya está activa en otra línea, se rechaza. Vincularla en dos líneas
+    # cobraba la bobina entera en cada una (coste duplicado). Para moverla,
+    # se desvincula (reembolso de lo no consumido, ADR-019) y se vincula.
+    otra = db.scalar(
+        select(OrderLine).where(
+            OrderLine.active_coil_id == bobina.id, OrderLine.id != linea.id
+        )
+    )
+    if otra is not None:
+        otra_orden = db.get(Order, otra.order_id)
+        raise ValueError(
+            f"La bobina {bobina.coil_id or bobina.lote} ya está vinculada a la orden "
+            f"{otra_orden.numero if otra_orden else '?'} en el puesto "
+            f"{otra.workstation_id or '?'}. Desvincúlala allí antes de usarla aquí."
+        )
 
     # Validación de compatibilidad (visión Jorge, anexo A punto 8): el modelo
     # de la orden declara el material que gasta; no se vincula una bobina de

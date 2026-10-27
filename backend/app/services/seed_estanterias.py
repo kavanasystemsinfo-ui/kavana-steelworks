@@ -344,6 +344,7 @@ def seed_estanterias(db: Session) -> dict:
     _renombrar_tenant(db, tenant)
 
     if db.scalar(select(Product).where(Product.code == "EST-PORTICO")) is not None:
+        reparar_costes_demo(db, tenant.id)
         db.commit()
         return {"created": False, "tenant": str(tenant.id)}
 
@@ -360,6 +361,100 @@ def seed_estanterias(db: Session) -> dict:
 
     db.commit()
     return {"created": True, "tenant": str(tenant.id)}
+
+
+def _objetivo_material(mat: Material, total: Decimal, metros) -> Decimal | None:
+    """Objetivo de material de la línea en la unidad del material.
+
+    kg: kg/pieza por fórmula de densidad (ancho x espesor x largo) x piezas.
+    m: metros/pieza x piezas. Sin dimensiones: None (sin estimado, no se
+    inventa). Antes se sembraba el número de piezas como si fueran kg.
+    """
+    from app.services.production import DENSIDAD_CALIBRADA_KAVANA_KG_DM3, _calcular_kg_por_pieza
+
+    if not metros:
+        return None
+    if mat.unit == "m":
+        return (Decimal(str(metros)) * total).quantize(Decimal("0.0001"))
+    if mat.unit != "kg":
+        return None
+    densidad = (mat.density_calibrada or DENSIDAD_CALIBRADA_KAVANA_KG_DM3) * 1000
+    kg_pieza = _calcular_kg_por_pieza(
+        ancho_mm=mat.dimension_ancho_mm,
+        espesor_mm=mat.dimension_espesor_mm,
+        largo_m=Decimal(str(metros)),
+        densidad_kgm3=densidad,
+    )
+    if kg_pieza <= 0:
+        return None
+    return (kg_pieza * total).quantize(Decimal("0.0001"))
+
+
+def reparar_costes_demo(db: Session, tenant_id) -> None:
+    """Reconstruye los costes de las líneas de la demo desde sus datos reales.
+
+    Idempotente y solo para el tenant demo. Corrige dos defectos de siembras
+    anteriores (ya desplegadas):
+    1. target_material_qty sembrado con el número de piezas → se recalcula.
+    2. Líneas históricas sin coste (el coste se escribía a mano en la orden)
+       → material desde material_consumos, tiempo desde production_logs y
+       mano de obra con el €/h del puesto.
+    Después hace el roll-up a la cabecera de cada orden.
+    """
+    from app.services.costes import actualizar_costes_orden, coste_hora_puesto
+
+    ordenes = db.scalars(select(Order).where(Order.tenant_id == tenant_id)).all()
+    for orden in ordenes:
+        for linea in orden.lines:
+            mat = db.get(Material, linea.material_id) if linea.material_id else None
+
+            if (
+                mat is not None
+                and linea.meters_per_piece
+                and linea.target_material_qty is not None
+                and linea.target_material_qty == linea.total_quantity
+            ):
+                linea.target_material_qty = _objetivo_material(
+                    mat, linea.total_quantity, linea.meters_per_piece
+                )
+
+            if (linea.real_material_cost or 0) == 0:
+                consumos = db.scalars(
+                    select(MaterialConsumo).where(
+                        MaterialConsumo.order_line_id == linea.id,
+                        MaterialConsumo.tipo.in_(("automatico", "manual", "ajuste")),
+                    )
+                ).all()
+                if consumos:
+                    if (linea.real_material_qty or 0) == 0:
+                        linea.real_material_qty = sum(
+                            (c.consumed_quantity for c in consumos), Decimal("0")
+                        )
+                    linea.real_material_cost = sum(
+                        (c.total_cost for c in consumos), Decimal("0")
+                    )
+
+            if (linea.real_time or 0) == 0 and linea.estado == "completed":
+                marcas = db.scalars(
+                    select(ProductionLog.timestamp)
+                    .where(ProductionLog.line_id == linea.id)
+                    .order_by(ProductionLog.timestamp.asc())
+                ).all()
+                if len(marcas) >= 2:
+                    minutos = (marcas[-1] - marcas[0]).total_seconds() / 60
+                    linea.real_time = Decimal(str(round(minutos, 2)))
+
+            if (linea.real_cost or 0) == 0 and (
+                (linea.real_material_cost or 0) > 0 or (linea.real_time or 0) > 0
+            ):
+                horas = (linea.real_time or Decimal("0")) / 60
+                mano_obra = (
+                    horas * coste_hora_puesto(db, tenant_id, linea.workstation_id)
+                ).quantize(Decimal("0.01"))
+                linea.real_cost = (linea.real_material_cost or Decimal("0")) + mano_obra
+        db.flush()
+        actualizar_costes_orden(db, orden)
+    db.flush()
 
 
 def _renombrar_tenant(db: Session, tenant: Tenant) -> None:
@@ -608,16 +703,18 @@ def _componente_producto(prod, tipo, ref, cantidad, pos, piezas, materiales):
 def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> dict[str, Order]:
     """2 ordenes activas + 1 completada (referencia para el historico)."""
     ordenes: dict[str, Order] = []
+    # Las líneas son pasos en cascada (WIP): un paso nunca pide más piezas ni
+    # lleva más hechas que el anterior; si no, la orden no se puede terminar.
     definiciones = [
         ("OP-EST-2601", "active", "Ferreteria Norte S.L.", 7, [
             (1, "EST-TITAN", "LARGUERO-E27", "FLEJE-D265-18", "DOBL-1",
              "80", "30", "in_progress", "2.7"),
             (2, "EST-PORTICO", "MONTANTE-P50", "FLEJE-D265-18", "PUNZ-1",
-             "120", "0", "pending", "3.0"),
+             "80", "0", "pending", "3.0"),
         ]),
         ("OP-EST-2602", "active", "Logistica Vallecas S.A.", 14, [
             (1, "EST-VOLADIZO", "COLUMNA-CNT", "PERFIL-U100", "CORTE-1",
-             "40", "0", "pending", "4.0"),
+             "60", "12", "in_progress", "4.0"),
             (2, "EST-ALTILLO", "VIGA-SIGMA", "ACERO-S355", "GALV-1",
              "60", "12", "in_progress", "2.7"),
         ]),
@@ -660,7 +757,7 @@ def _crear_ordenes(db, tenant_id, productos, piezas, materiales, operario) -> di
                         produced_quantity=Decimal(producido),
                         real_time=Decimal("0"),
                         meters_per_piece=Decimal(metros),
-                        target_material_qty=Decimal(total),
+                        target_material_qty=_objetivo_material(mat, Decimal(total), metros),
                         target_material_unit=mat.unit,
                     )
                 )
@@ -778,16 +875,9 @@ def _historico(db, tenant_id, ordenes, piezas, materiales, operario, materiales_
         )
         db.flush()
 
-    # Costes roll-up de la orden completada
-    consumos_total = sum(
-        db.execute(
-            select(MaterialConsumo.total_cost).where(MaterialConsumo.order_id == orden.id)
-        ).scalars().all(),
-        Decimal("0"),
-    )
-    orden.real_material_cost = consumos_total or Decimal("0")
-    orden.real_total_cost = (consumos_total or Decimal("0")) + Decimal("451.50")
-    orden.estimado_total_cost = Decimal("1300.00")
+    # Costes: se derivan de los consumos y los tiempos registrados (líneas y
+    # cabecera), nunca cifras escritas a mano
+    reparar_costes_demo(db, tenant_id)
 
     _calidad_historica(db, tenant_id, orden, piezas, materiales, operario)
     _incidencia_historica(db, tenant_id, orden, operario)

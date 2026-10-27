@@ -76,6 +76,30 @@ def test_log_event_crea_production_log(db_session, tenant, user):
     assert recuperado.action == "produce"
 
 
+def test_log_event_guarda_metadata_con_uuid_y_decimal(db_session, tenant, user):
+    """Bug: un UUID (manufacturingModel) en el metadata perdía el evento."""
+    import uuid
+    from decimal import Decimal
+
+    orden, linea = make_order(db_session, tenant)
+    modelo = uuid.uuid4()
+
+    log = traceability.log_event(
+        db_session,
+        tenant_id=tenant.id,
+        order_id=orden.id,
+        line_id=linea.id,
+        operator_id=user.id,
+        action="produce",
+        quantity=3,
+        metadata={"manufacturingModel": modelo, "kg": Decimal("12.5")},
+    )
+
+    assert log is not None
+    assert log.metadata_["manufacturingModel"] == str(modelo)
+    assert log.metadata_["kg"] == "12.5"
+
+
 def test_log_event_acepta_timestamp_explicito(db_session, tenant, user):
     orden, linea = make_order(db_session, tenant)
     ts = datetime(2026, 8, 15, 8, 30, tzinfo=UTC)

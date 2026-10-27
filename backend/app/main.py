@@ -4,6 +4,8 @@ Fase 2: core con auth JWT, health, y endpoints base. Los routers de
 inventario/recepción se exponen en la Fase 3 (frontend) o según necesidad.
 """
 
+import asyncio
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -46,7 +48,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Arranca el simulador de la demo si está activado (ADR-021)."""
+    tarea = None
+    if settings.simulador_minutos > 0:
+        from app.services.simulador import bucle_simulador
+
+        tarea = asyncio.create_task(bucle_simulador(settings.simulador_minutos))
+    yield
+    if tarea is not None:
+        tarea.cancel()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.app_name,
     version=settings.app_version,
     description="MES/MOM para el sector metalúrgico: bobinas, FIFO, "

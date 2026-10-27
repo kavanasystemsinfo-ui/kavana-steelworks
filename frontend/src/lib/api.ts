@@ -86,13 +86,91 @@ export interface KpisData {
   orders_total: number
   orders_active: number
   orders_completed: number
-  estimated_cost: number
+  /** Material estimado (€/kg × objetivo); null si ninguna orden tiene base. */
+  estimated_cost: number | null
   real_cost: number
-  cost_variance: number
+  real_material_cost: number
+  labor_cost: number
+  real_material_comparable: number
+  orders_with_estimate: number
+  scrap_cost: number
+  /** Material real - estimado, solo en órdenes con estimado; null sin base. */
+  cost_variance: number | null
   cost_efficiency: number
   material_variance: number
   material_efficiency: number
   scrap_rate: number
+}
+
+/** Alertas del centro de mando (GET /supervisor/alertas). */
+export interface AlertasData {
+  stock_bajo_minimos: { code: string; name: string; stock: number; minimo: number; unidad: string }[]
+  incidencias_abiertas: number
+}
+
+export interface InformeTurnoPuesto {
+  puesto: string
+  ordenes: number
+  piezas: number
+  consumo_kg: number
+  consumo_m: number
+  merma_kg: number
+  merma_coste: number
+  autocontroles: number
+  autocontroles_nok: number
+  incidencias: number
+  parada_min: number
+}
+
+/** Informe de un turno A/B/C (GET /supervisor/informe-turno). */
+export interface InformeTurno {
+  fecha: string
+  turno: string
+  inicio: string
+  fin: string
+  puestos: InformeTurnoPuesto[]
+  totales: Omit<InformeTurnoPuesto, 'puesto' | 'ordenes'>
+}
+
+/** Estado de un puesto en planta (GET /supervisor/puestos). */
+export interface PuestoEstado {
+  code: string
+  name: string
+  color: string | null
+  estado: 'incidencia' | 'en_curso' | 'parado' | 'pendiente' | 'libre'
+  orden: {
+    id: string
+    numero: string
+    cliente: string | null
+    linea_id: string
+    piezas: number
+    objetivo: number
+    bobina: string | null
+  } | null
+  ultima_actividad: {
+    accion: string
+    timestamp: string
+    operario: string | null
+  } | null
+  incidencias_abiertas: { id: string; tipo: string; descripcion: string }[]
+}
+
+/** Coste real vs estimado de una orden (GET /supervisor/costes-ordenes). */
+export interface CosteOrden {
+  order_id: string
+  numero: string
+  cliente: string | null
+  estado: string
+  piezas: number
+  objetivo: number
+  real_material: number
+  mano_obra: number
+  real_total: number
+  estimado_material: number | null
+  desviacion_material: number | null
+  real_material_comparable: number
+  scrap_kg: number
+  scrap_coste: number
 }
 
 export interface PlanCheck {
@@ -104,6 +182,65 @@ export interface PlanCheck {
   tolerance_plus: number | null
   tolerance_minus: number | null
   is_critical: boolean
+}
+
+/** Periodo natural de la vista Costes (ventana de planta, TZ_PLANTA). */
+export type PeriodoPanel = 'semana' | 'mes' | 'trimestre'
+
+/** €/kg del periodo con su comparativa y el objetivo de empresa, si existe. */
+export interface PanelCostesCosteKg {
+  valor: number
+  periodo_anterior: number
+  objetivo: number | null
+}
+
+export interface PanelCostesReparto {
+  clave: string
+  etiqueta: string
+  euros: number
+  pct: number
+}
+
+export interface PanelCostesParadas {
+  total: number
+  por_tipo: { tipo: string; etiqueta: string; euros: number }[]
+  horas: number
+}
+
+export interface PanelCostesTendencia {
+  semana: string
+  valor: number
+}
+
+export interface PanelCostesOrden {
+  order_id: string
+  numero: string
+  producto: string | null
+  kg: number
+  estimado: number | null
+  real: number
+  desv_euros: number | null
+  desv_pct: number | null
+  causa: string
+}
+
+/** Vista Costes del panel de mando (GET /supervisor/panel/costes).
+ *  El cliente NO recalcula: muestra tal cual lo que devuelve el backend. */
+export interface PanelCostes {
+  periodo: PeriodoPanel
+  desde: string
+  hasta: string
+  coste_kg: PanelCostesCosteKg
+  coste_total: number
+  kg_total: number
+  lineas_metros_excluidas: number
+  ordenes_completadas: number
+  desviacion: { pct: number | null; euros: number | null; ordenes_con_estimado: number }
+  chatarra: { euros: number; pct_material: number }
+  reparto: PanelCostesReparto[]
+  coste_paradas: PanelCostesParadas
+  tendencia: PanelCostesTendencia[]
+  ordenes: PanelCostesOrden[]
 }
 
 export interface QualityModel {
@@ -364,6 +501,61 @@ export const api = {
     return request('/supervisor/kpis')
   },
 
+  getCostesOrdenes(): Promise<CosteOrden[]> {
+    return request('/supervisor/costes-ordenes')
+  },
+
+  /** Vista Costes del periodo (servicio panel_costes; el cliente no calcula). */
+  getPanelCostes(periodo: PeriodoPanel = 'mes'): Promise<PanelCostes> {
+    return request(`/supervisor/panel/costes?periodo=${periodo}`)
+  },
+
+  /** Descarga el panel de costes en CSV para Excel (con auth) como fichero. */
+  async descargarPanelCostesCsv(periodo: PeriodoPanel = 'mes'): Promise<void> {
+    const token = sessionStorage.getItem('kavana_token')
+    const res = await fetch(`${BASE}/supervisor/panel/costes?periodo=${periodo}&formato=csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Error ${res.status}`)
+    const nombre =
+      res.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] ??
+      `panel-costes-${periodo}.csv`
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombre
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  getPuestos(): Promise<PuestoEstado[]> {
+    return request('/supervisor/puestos')
+  },
+
+  getAlertas(): Promise<AlertasData> {
+    return request('/supervisor/alertas')
+  },
+
+  getInformeTurno(fecha: string, turno: string): Promise<InformeTurno> {
+    return request(`/supervisor/informe-turno?fecha=${fecha}&turno=${turno}`)
+  },
+
+  /** Descarga el informe en CSV (con auth) y lo entrega como fichero. */
+  async descargarInformeCsv(fecha: string, turno: string): Promise<void> {
+    const token = sessionStorage.getItem('kavana_token')
+    const res = await fetch(
+      `${BASE}/supervisor/informe-turno?fecha=${fecha}&turno=${turno}&formato=csv`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    )
+    if (!res.ok) throw new Error(`Error ${res.status}`)
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `informe-turno-${fecha}-${turno}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
   listOrders(): Promise<OrderItem[]> {
     return request('/orders')
   },
@@ -611,6 +803,8 @@ export interface JwtPayload {
   sub: string
   tenant_id: string
   role: string
+  /** Tenant de demostración: la interfaz lo marca como DATOS DE DEMO. */
+  demo?: boolean
   exp: number
 }
 

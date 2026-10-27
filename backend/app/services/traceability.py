@@ -9,6 +9,7 @@ Contrato del legacy:
   posterior = sesión activa.
 """
 
+import json
 import logging
 from datetime import UTC, datetime
 
@@ -56,7 +57,9 @@ def log_event(
         timestamp=timestamp or datetime.now(UTC),
         action=action,
         quantity=quantity,
-        metadata_=metadata or {},
+        # JSON puro: un UUID/Decimal/datetime en el metadata hacía fallar el
+        # INSERT y el evento se perdía en silencio (p. ej. manufacturingModel)
+        metadata_=json.loads(json.dumps(metadata or {}, default=str)),
         shift=shift,
     )
     try:

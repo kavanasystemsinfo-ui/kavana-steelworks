@@ -1,5 +1,6 @@
 """Tests TDD del seed de estanterías (catálogo de productos + BOM)."""
 
+import pytest
 from sqlalchemy import select
 
 from app.models import (
@@ -186,3 +187,62 @@ def test_rename_con_slug_legacy_de_produccion(db_session):
     assert len(tenants) == 1, "no debe duplicar el tenant"
     assert tenants[0].name == "Kavana Estanterías"
     assert db_session.query(Product).count() == 12
+
+
+# ── Costes de la demo: derivados de los datos, nunca escritos a mano ──────
+
+
+def _orden(db, numero):
+    return db.scalar(select(Order).where(Order.numero == numero))
+
+
+def test_objetivo_de_material_en_kg_no_en_piezas(db_session):
+    _sembrar(db_session)
+    orden = _orden(db_session, "OP-EST-2600")
+    puntal = next(ln for ln in orden.lines if ln.linea_numero == 1)
+    # 100 puntales de 265 x 1,8 mm x 3,0 m con densidad calibrada ≈ 11,13 kg/ud
+    assert float(puntal.target_material_qty) == pytest.approx(1113.0, abs=1.0)
+
+
+def test_orden_historica_tiene_coste_en_sus_lineas(db_session):
+    from app.services.costes import costes_por_orden
+
+    _sembrar(db_session)
+    orden = _orden(db_session, "OP-EST-2600")
+    tenant = db_session.scalar(select(Tenant).where(Tenant.slug == "demo"))
+
+    for linea in orden.lines:
+        assert float(linea.real_material_cost) > 0
+        assert float(linea.real_time) > 0
+        assert float(linea.real_cost) > float(linea.real_material_cost)  # + mano de obra
+
+    fila = next(f for f in costes_por_orden(db_session, tenant.id) if f["numero"] == "OP-EST-2600")
+    assert fila["real_total"] == pytest.approx(float(orden.real_total_cost), abs=0.01)
+    assert fila["estimado_material"] is not None
+    assert fila["mano_obra"] > 0
+
+
+def test_reparar_costes_demo_corrige_siembras_antiguas_y_es_idempotente(db_session):
+    from app.services.seed_estanterias import reparar_costes_demo
+
+    _sembrar(db_session)
+    tenant = db_session.scalar(select(Tenant).where(Tenant.slug == "demo"))
+    orden = _orden(db_session, "OP-EST-2600")
+    linea = next(ln for ln in orden.lines if ln.linea_numero == 1)
+    esperado = (float(linea.target_material_qty), float(linea.real_cost))
+
+    # Estado de una siembra antigua desplegada: piezas como kg y sin costes
+    linea.target_material_qty = linea.total_quantity
+    linea.real_material_cost = 0
+    linea.real_material_qty = 0
+    linea.real_time = 0
+    linea.real_cost = 0
+    db_session.commit()
+
+    reparar_costes_demo(db_session, tenant.id)
+    reparar_costes_demo(db_session, tenant.id)
+    db_session.commit()
+    db_session.refresh(linea)
+
+    assert float(linea.target_material_qty) == pytest.approx(esperado[0])
+    assert float(linea.real_cost) == pytest.approx(esperado[1])

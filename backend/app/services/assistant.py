@@ -69,7 +69,7 @@ def _fuentes_corpus() -> list[str]:
         "docs/plan-reconstruccion-v4.md",
         "docs/audit/changelog.md",
     ]
-    for subdir in ("docs/adr", "docs/specs"):
+    for subdir in ("docs/guias", "docs/adr", "docs/specs"):
         d = REPO_ROOT / subdir
         if d.is_dir():
             fuentes.extend(

@@ -16,10 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import RevokedToken, User, UserShift
+from app.models import RevokedToken, Tenant, User, UserShift
 from app.services.shifts import horas_de_turno, turno_desde
 
 settings = get_settings()
+
+SLUGS_DEMO = ("demo", "demo-aceros")
 
 
 def hash_password(password: str) -> str:
@@ -48,10 +50,14 @@ def login(db: Session, tenant_id: uuid.UUID, email: str, password: str) -> str:
 
     ahora = datetime.now(UTC)
     exp = ahora + timedelta(hours=settings.jwt_expire_hours)
+    tenant = db.get(Tenant, tenant_id)
     payload = {
         "sub": str(user.id),
         "tenant_id": str(tenant_id),
         "role": user.role,
+        # La interfaz marca "DATOS DE DEMO" para no presentar datos ficticios
+        # como reales (slugs de buscar_tenant_demo en seed_demo)
+        "demo": tenant is not None and tenant.slug in SLUGS_DEMO,
         "exp": exp,
     }
     token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)

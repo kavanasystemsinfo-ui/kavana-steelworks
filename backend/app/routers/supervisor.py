@@ -1,8 +1,9 @@
 """Router de Supervisor: OEE y KPIs del turno (spec 03)."""
 
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -62,3 +63,114 @@ def get_kpis(
         return calcular_kpis(db, current_user.tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/costes-ordenes")
+def get_costes_ordenes(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Coste real (material + mano de obra) vs estimado de cada orden."""
+    from app.services.costes import costes_por_orden
+
+    return costes_por_orden(db, current_user.tenant_id)
+
+
+@router.get("/puestos")
+def get_puestos(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Monitor de puestos: orden, bobina, progreso, última actividad, incidencias."""
+    from app.services.puestos import estado_puestos
+
+    return estado_puestos(db, current_user.tenant_id)
+
+
+@router.get("/alertas")
+def get_alertas(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Stock bajo mínimos e incidencias abiertas (misma regla que su detalle)."""
+    from app.services.alertas import alertas
+
+    return alertas(db, current_user.tenant_id)
+
+
+@router.get("/informe-turno")
+def get_informe_turno(
+    fecha: date,
+    turno: str,
+    db: DbDep,
+    formato: str = "json",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Informe del turno A/B/C de una fecha (JSON o CSV para Excel)."""
+    from app.services.informe_turno import informe_csv, informe_turno
+
+    try:
+        informe = informe_turno(db, current_user.tenant_id, fecha, turno.upper())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if formato == "csv":
+        nombre = f"informe-turno-{informe['fecha']}-{informe['turno']}.csv"
+        return Response(
+            content="﻿" + informe_csv(informe),  # BOM: Excel detecta UTF-8
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    return informe
+
+
+@router.get("/panel/costes")
+def get_panel_costes(
+    db: DbDep,
+    periodo: str = "mes",
+    formato: str = "json",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Vista Costes del panel de mando: resumen, reparto, paradas, tendencia y órdenes.
+
+    ``periodo`` ∈ ``semana`` | ``mes`` | ``trimestre`` (ventana natural en horario
+    de planta). ``formato=csv`` devuelve el mismo dato en CSV para Excel (BOM,
+    separador ``;`` y coma decimal). El router no calcula: delega en
+    ``panel_costes()`` y solo serializa.
+    """
+    from app.services.panel_costes import panel_costes
+    from app.services.panel_costes_csv import panel_costes_csv
+
+    # Decisión de Jorge (27/10): 400 explícito, no el fallback silencioso a JSON
+    # que hace /informe-turno. Un formato que no se entiende es un error del que
+    # llama, no algo que se deba adivinar.
+    if formato not in ("json", "csv"):
+        raise HTTPException(status_code=400, detail="formato debe ser json o csv")
+
+    try:
+        datos = panel_costes(db, current_user.tenant_id, periodo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if formato == "csv":
+        nombre = f"panel-costes-{datos['periodo']}-{datos['desde'][:10]}.csv"
+        return Response(
+            content="﻿" + panel_costes_csv(datos),  # BOM: Excel detecta UTF-8
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    return datos

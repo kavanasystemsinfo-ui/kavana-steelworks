@@ -33,6 +33,12 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Gate de lint = app/ y tests/ (decisión de Jorge, 2026-10-27, opción A).
+# Fuera del gate a propósito: alembic/versions (migraciones históricas, 88 issues)
+# y los scripts manuales de la raíz (e2e_*.py, 29; test_neg.py, 9). No se limpian
+# en esta fase: son ficheros ya ejecutados o de uso manual, y tocarlos es riesgo
+# sin retorno. Con este exclude, `ruff check .` y el paso de CI dan lo mismo.
+extend-exclude = ["alembic", "e2e_*.py", "test_neg.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

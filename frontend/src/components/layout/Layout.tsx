@@ -51,6 +51,14 @@ export function Layout() {
             ))}
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {getJwtPayload()?.demo && (
+              <span
+                className="label-industrial text-[10px] border border-kavana-warn text-kavana-warn rounded-sm px-2 py-0.5"
+                title="Empresa de demostración: datos ficticios generados por un simulador"
+              >
+                Datos de demo
+              </span>
+            )}
             {role && (
               <span className="text-xs uppercase tracking-wider text-kavana-text-dim">
                 {role}
