@@ -4,10 +4,10 @@ import { api } from '../lib/api'
 import { InformeTurno } from '../components/InformeTurno'
 import { ModoTv } from '../components/ModoTv'
 import { VistaCostes } from '../components/VistaCostes'
+import { VistaPlanta } from '../components/VistaPlanta'
 import { VistaTurno, type DestinoTurno } from '../components/VistaTurno'
 import { PanelLayout } from '../panel/PanelLayout'
 import { useTurno } from '../panel/turno'
-import { Seccion } from '../panel/ui'
 import { vistaDeUrl, type Vista } from '../panel/vistas'
 import type {
   MaterialOut,
@@ -188,14 +188,7 @@ export function SupervisorPage() {
       <PanelLayout vista={vista} onVista={irAVista} onModoTv={() => setModoTv(true)}>
         {vista === 'turno' && <VistaTurno datos={turno.datos} error={turno.error} onIr={irDesdeTurno} />}
         {vista === 'costes' && <VistaCostes />}
-        {vista === 'planta' && (
-          <Seccion
-            titulo="¿Cómo va la planta?"
-            subtitulo="Eficiencia, causas de parada, puesto que frena y entregas en riesgo."
-          >
-            <p className="m-0 text-sm text-p-texto2">Disponible en la siguiente fase.</p>
-          </Seccion>
-        )}
+        {vista === 'planta' && <VistaPlanta />}
         {vista === 'gestion' && (
     <div className="flex flex-col gap-6">
       <div>

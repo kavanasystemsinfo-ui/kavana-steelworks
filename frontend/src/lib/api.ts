@@ -508,6 +508,38 @@ export interface PanelTurno {
   }[]
 }
 
+/** Vista Planta del panel de mando (GET /supervisor/planta). */
+export type PeriodoPlanta = 'hoy' | 'semana' | '8semanas'
+
+export interface FactoresEficiencia {
+  oee: number
+  disponibilidad: number
+  rendimiento: number
+  calidad: number
+}
+
+export interface PanelPlanta {
+  periodo: PeriodoPlanta
+  desde: string
+  hasta: string
+  piezas: number
+  plan: number | null
+  eficiencia: FactoresEficiencia | null
+  paradas: {
+    minutos: number
+    numero: number
+    media_min: number | null
+    por_causa: { causa: string; minutos: number; pct: number | null }[]
+  }
+  chatarra_pct: number | null
+  puestos: ({ puesto: string } & FactoresEficiencia)[]
+  anterior: { eficiencia: number | null; piezas: number; paradas_min: number }
+  entregas: { total: number; a_tiempo: number; tarde: string[] }
+  tendencia: { semana: string; oee: number | null }[]
+  ordenes: PanelTurno['ordenes']
+  objetivos: Objetivos
+}
+
 export interface WorkstationGroupOut {
   id: string
   name: string
@@ -629,6 +661,10 @@ export const api = {
 
   getTurno(): Promise<PanelTurno> {
     return request('/supervisor/turno')
+  },
+
+  getPlanta(periodo: PeriodoPlanta): Promise<PanelPlanta> {
+    return request(`/supervisor/planta?periodo=${periodo}`)
   },
 
   getAlertas(): Promise<AlertasData> {

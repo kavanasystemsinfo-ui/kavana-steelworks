@@ -69,6 +69,37 @@ const turnoBody = {
   ],
 }
 
+const plantaBody = {
+  periodo: 'semana',
+  desde: '2026-10-26T05:00:00+00:00',
+  hasta: '2026-10-28T17:00:00+00:00',
+  piezas: 38400,
+  plan: 42000,
+  eficiencia: { oee: 69, disponibilidad: 84, rendimiento: 86, calidad: 96 },
+  paradas: {
+    minutos: 445,
+    numero: 24,
+    media_min: 19,
+    por_causa: [
+      { causa: 'falta de material', minutos: 190, pct: 43 },
+      { causa: 'avería', minutos: 120, pct: 27 },
+    ],
+  },
+  chatarra_pct: 4,
+  puestos: [
+    { puesto: 'PUNZ-1', oee: 58, disponibilidad: 70, rendimiento: 85, calidad: 97 },
+    { puesto: 'LINEA-1', oee: 81, disponibilidad: 95, rendimiento: 88, calidad: 97 },
+  ],
+  anterior: { eficiencia: 66, piezas: 35000, paradas_min: 505 },
+  entregas: { total: 17, a_tiempo: 14, tarde: ['2591', '2594', '2598'] },
+  tendencia: [
+    { semana: 'S43', oee: 66 },
+    { semana: 'S44', oee: 69 },
+  ],
+  ordenes: [],
+  objetivos: { oee: 75, disponibilidad: 90, rendimiento: 88, calidad: 95, chatarra_max_pct: 3 },
+}
+
 const informeBody = {
   fecha: '2026-10-26',
   turno: 'A',
@@ -137,6 +168,9 @@ const traceOP2 = [
 function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {}) {
   const { orders = ordersBody, trace = {} } = opts
   vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.includes('/supervisor/planta')) {
+      return Promise.resolve({ ok: true, json: async () => ({ ...plantaBody, periodo: url.split('periodo=')[1] }) })
+    }
     if (url.includes('/supervisor/turno')) {
       return Promise.resolve({ ok: true, json: async () => turnoBody })
     }
@@ -266,7 +300,7 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('abre la vista pedida en la URL', async () => {
+  it('abre la vista pedida en la URL: Planta con su frase de estado', async () => {
     stubApi()
 
     render(
@@ -276,7 +310,25 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     )
 
     expect(screen.getByRole('link', { name: 'Planta' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByText('Disponible en la siguiente fase.')).toBeInTheDocument()
+    const estado = await screen.findByRole('region', { name: 'Estado' })
+    expect(estado).toHaveTextContent('Eficiencia 69 %, mejorando, pero 6 puntos por debajo del objetivo')
+    expect(estado).toHaveTextContent('paradas por falta de material')
+    expect(estado).toHaveTextContent('El cuello de botella es PUNZ-1 (58 %)')
+    expect(screen.getByText('Entregas a tiempo').closest('article')).toHaveTextContent('Tarde: 2591, 2594, 2598')
+    expect(screen.getByRole('region', { name: '¿Qué puesto frena la planta?' })).toHaveTextContent('PUNZ-1')
+    vi.unstubAllGlobals()
+  })
+
+  it('Planta cambia de periodo con el selector', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderPage('/supervisor?vista=planta')
+
+    await screen.findByRole('region', { name: 'Estado' })
+    await user.click(screen.getByRole('button', { name: 'Hoy' }))
+
+    expect(screen.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'true')
+    expect((await screen.findAllByText(/vs ayer/)).length).toBeGreaterThan(0)
     vi.unstubAllGlobals()
   })
 

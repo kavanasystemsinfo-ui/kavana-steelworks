@@ -4,6 +4,27 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de mando: vista Planta (fase 2)
+
+- **Problema:** la pestaña Planta solo mostraba "disponible en la siguiente
+  fase"; el jefe de planta o el CTO no tenían dónde ver cómo evoluciona la
+  eficiencia ni dónde se pierde.
+- **Solución:** `GET /supervisor/planta?periodo=hoy|semana|8semanas`
+  (`services/panel_planta.py`): eficiencia del periodo descompuesta en tiempo
+  en marcha, velocidad y calidad (horas trabajadas = piezas / eficiencia de
+  cada evento `produce`; paradas de incidencias recortadas a la ventana),
+  comparación con el periodo anterior de igual duración, piezas frente al plan
+  a ritmo nominal, entregas a tiempo (última producción frente a fecha de
+  entrega), paradas por causa, eficiencia por puesto (el primero es el cuello
+  de botella), tendencia de 8 semanas y órdenes activas en riesgo. Vista
+  `VistaPlanta` según la maqueta, con selector de periodo.
+- **Archivos:** `backend/app/services/panel_planta.py`,
+  `backend/app/routers/supervisor.py`, `frontend/src/components/VistaPlanta.tsx`,
+  `frontend/src/lib/api.ts`, `frontend/src/pages/SupervisorPage.tsx`.
+- **Verificación:** `tests/test_panel_planta.py` (ventanas, factores, plan,
+  puesto que frena, entregas, periodo anterior, sin datos, permisos y tenant);
+  vitest de la vista. Revisado en local con datos del simulador.
+
 ## 2026-10-27 — Panel de mando: pestaña Gestión con el estilo del panel
 
 - **Problema:** la pestaña Gestión (informe de turno, órdenes, trazabilidad,
