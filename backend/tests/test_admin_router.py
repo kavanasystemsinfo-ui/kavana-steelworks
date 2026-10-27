@@ -318,6 +318,37 @@ def test_patch_workstation_y_delete_soft(db_session, tenant, admin_user):
     assert r.json()["is_active"] is False
 
 
+def test_ritmo_nominal_del_puesto(db_session, tenant, admin_user):
+    creado = _do(
+        db_session,
+        admin_user,
+        "post",
+        "/api/v1/admin/workstations",
+        json={"code": "LINEA-8", "name": "Línea 8", "piezas_hora_nominal": 120},
+    )
+    assert creado.status_code == 201, creado.text
+    assert creado.json()["piezas_hora_nominal"] == 120
+
+    r = _do(
+        db_session,
+        admin_user,
+        "patch",
+        f"/api/v1/admin/workstations/{creado.json()['id']}",
+        json={"piezas_hora_nominal": 95.5},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["piezas_hora_nominal"] == 95.5
+
+    r = _do(
+        db_session,
+        admin_user,
+        "patch",
+        f"/api/v1/admin/workstations/{creado.json()['id']}",
+        json={"piezas_hora_nominal": 0},
+    )
+    assert r.status_code == 422, r.text
+
+
 def test_workstation_con_grupo_invalido_400(db_session, tenant, admin_user):
     r = _do(
         db_session,

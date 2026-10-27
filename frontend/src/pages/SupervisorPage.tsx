@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { PuestosMonitor } from '../components/PuestosMonitor'
 import { InformeTurno } from '../components/InformeTurno'
 import { VistaCostes } from '../components/VistaCostes'
+import { PanelLayout } from '../panel/PanelLayout'
+import { Seccion } from '../panel/ui'
+import { vistaDeUrl, type Vista } from '../panel/vistas'
 import type {
   AlertasData,
   CosteOrden,
@@ -175,6 +179,11 @@ export function SupervisorPage() {
     return () => window.removeEventListener('keydown', salir)
   }, [andon])
 
+  // Pestaña activa en la URL (?vista=...): se puede enlazar y sobrevive a recargar
+  const [params, setParams] = useSearchParams()
+  const vista = vistaDeUrl(params.get('vista'))
+  const irAVista = (v: Vista) => setParams({ vista: v })
+
   const irA = (id: string) => {
     setMenuRapido(false)
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -225,10 +234,7 @@ export function SupervisorPage() {
         ? 'text-kavana-danger'
         : 'text-kavana-ok'
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-4">
-      {/* Andon: el mismo monitor de puestos a pantalla completa para una TV */}
-      {andon && (
+  const andonOverlay = andon && (
         <div
           role="dialog"
           aria-label="Andon de planta"
@@ -246,8 +252,27 @@ export function SupervisorPage() {
           </div>
           <PuestosMonitor andon />
         </div>
-      )}
+  )
 
+  return (
+    <>
+      {/* Andon: el mismo monitor de puestos a pantalla completa para una TV */}
+      {andonOverlay}
+      <PanelLayout vista={vista} onVista={irAVista} onModoTv={() => setAndon(true)}>
+        {vista === 'costes' && <VistaCostes />}
+        {vista === 'planta' && (
+          <Seccion
+            titulo="¿Cómo va la planta?"
+            subtitulo="Eficiencia, causas de parada, puesto que frena y entregas en riesgo."
+          >
+            <p className="m-0 text-sm text-p-texto2">Disponible en la siguiente fase.</p>
+          </Seccion>
+        )}
+        {vista === 'turno' && (
+    <div className="bg-kavana-dark text-kavana-text font-display rounded-[14px] p-4 space-y-4">
+      <p className="text-xs text-kavana-text-dim">
+        Vista actual del turno · se rediseña en la siguiente fase
+      </p>
       {/* Acción rápida: llegar a lo importante sin recorrer el panel */}
       <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
         {menuRapido && (
@@ -257,9 +282,6 @@ export function SupervisorPage() {
             </button>
             <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('incidencias')}>
               Incidencias
-            </button>
-            <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('costes')}>
-              Costes del periodo
             </button>
             <button type="button" className="text-left px-3 py-2 hover:bg-kavana-surface" onClick={() => irA('puestos')}>
               Puestos
@@ -371,15 +393,6 @@ export function SupervisorPage() {
             {fmtEur(kpis?.cost_variance)}
           </span>
         </Tarjeta>
-      </div>
-
-      {/* Vista Costes del periodo natural de planta (fase 3 del panel de mando) */}
-      <div id="costes" className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="label-industrial text-xs text-kavana-text-dim">Costes del periodo</p>
-          <span className="text-[10px] text-kavana-text-dim">ventana de planta</span>
-        </div>
-        <VistaCostes />
       </div>
 
       {/* Coste por orden: la misma fuente que las tarjetas, siempre cuadran */}
@@ -677,6 +690,9 @@ export function SupervisorPage() {
         )}
       </div>
     </div>
+        )}
+      </PanelLayout>
+    </>
   )
 }
 

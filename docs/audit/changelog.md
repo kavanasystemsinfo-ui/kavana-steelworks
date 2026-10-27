@@ -4,6 +4,35 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-27 — Panel de mando: base común e interfaz nueva (fase 0)
+
+- **Problema:** el panel del supervisor ganaba funciones (costes, monitor,
+  informe de turno) pero seguía siendo una página larga con el estilo antiguo:
+  un jefe de turno o un CTO necesitaba que le explicaran qué mirar. La vista de
+  Costes se había encajado como una sección más porque la base visual de la
+  maqueta (pestañas, componentes, colores) nunca se construyó.
+- **Solución:** marco del panel con pestañas Turno / Planta / Costes en la URL
+  (`?vista=`), turno y hora de planta siempre visibles y botón Modo TV. Tema
+  claro propio del panel (`--color-p-*`, Inter, cifras tabulares) sin tocar el
+  resto de la aplicación. Componentes comunes en `frontend/src/panel/`
+  (`Seccion` con el título como pregunta, `KpiCard` siempre con su referencia,
+  `EstadoBanner`, `Pastilla`, `Selector`, `GraficoLinea` en SVG sin librerías).
+  La vista Costes se rehace con ellos y gana una frase de estado que compara con
+  el periodo anterior. Backend: ritmo nominal por puesto
+  (`workstations.piezas_hora_nominal`, base del plan del turno) y objetivos de
+  planta por empresa en `tenant.finances["objetivos"]`
+  (`GET/PUT /supervisor/objetivos`, PUT solo admin).
+- **Transitorio:** la pestaña Turno muestra el contenido anterior hasta la fase
+  1; Planta queda como «Disponible en la siguiente fase».
+- **Archivos:** `backend/alembic/versions/e3b7c1d9f4a2_workstations_piezas_hora_nominal.py`,
+  `backend/app/models/admin.py`, `backend/app/routers/{admin,supervisor}.py`,
+  `backend/app/services/{objetivos,seed_estanterias}.py`, tests de objetivos,
+  admin y seed; `frontend/src/panel/*`, `frontend/src/components/VistaCostes.tsx`,
+  `frontend/src/pages/SupervisorPage.tsx`, `frontend/src/index.css`,
+  `frontend/src/lib/api.ts`, tests del panel, de Costes y del supervisor.
+- **Verificación:** backend 430 passed + 1 skipped, migración válida en modo
+  offline; frontend 136 tests, oxlint y build limpios.
+
 ## 2026-10-27 — Panel de costes: coste por familia de material (fase 7)
 
 - **Problema:** con el €/kg ya partido en material y transformación, seguía sin
