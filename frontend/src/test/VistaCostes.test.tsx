@@ -107,7 +107,7 @@ afterEach(() => {
 })
 
 const tarjeta = (titulo: string) => {
-  const el = screen.getByText(titulo).closest('div')
+  const el = screen.getByText(titulo).closest('article')
   if (!el) throw new Error(`tarjeta no encontrada: ${titulo}`)
   return el
 }
@@ -118,13 +118,13 @@ describe('Vista Costes (panel de mando)', () => {
 
     render(<VistaCostes />)
 
-    await screen.findByText('€/kg del periodo')
-    expect(tarjeta('€/kg del periodo')).toHaveTextContent('3,20')
-    expect(tarjeta('€/kg del periodo')).toHaveTextContent('Periodo anterior 3,50 €/kg')
-    expect(tarjeta('Coste total')).toHaveTextContent('640,00 €')
-    expect(tarjeta('Coste total')).toHaveTextContent('192,5 kg valorados')
-    expect(tarjeta('Coste total')).toHaveTextContent('2 órdenes completadas')
-    expect(tarjeta('Coste total')).toHaveTextContent('2 líneas en metros fuera del €/kg')
+    await screen.findByText('Coste por kilo')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('3,20')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('Periodo anterior 3,50 €/kg')
+    expect(tarjeta('Coste producido')).toHaveTextContent('640,00 €')
+    expect(tarjeta('Coste producido')).toHaveTextContent('192,5 kg valorados')
+    expect(tarjeta('Coste producido')).toHaveTextContent('2 órdenes completadas')
+    expect(tarjeta('Coste producido')).toHaveTextContent('2 líneas en metros fuera del €/kg')
   })
 
   it('sin objetivo configurado lo dice en vez de inventar una cifra', async () => {
@@ -140,9 +140,9 @@ describe('Vista Costes (panel de mando)', () => {
 
     render(<VistaCostes />)
 
-    await screen.findByText('€/kg del periodo')
-    expect(tarjeta('€/kg del periodo')).toHaveTextContent('Material 2,40 €/kg')
-    expect(tarjeta('€/kg del periodo')).toHaveTextContent('Transformación 0,80 €/kg')
+    await screen.findByText('Coste por kilo')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('Material 2,40 €/kg')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('Transformación 0,80 €/kg')
   })
 
   it('muestra el coste por familia tal como lo manda el backend', async () => {
@@ -150,7 +150,7 @@ describe('Vista Costes (panel de mando)', () => {
 
     render(<VistaCostes />)
 
-    await screen.findByText('Coste por familia de material')
+    await screen.findByText('¿Cuánto cuesta cada material?')
     const galva = screen.getByText('Galvanizado').closest('tr')
     expect(galva).toHaveTextContent('120')
     expect(galva).toHaveTextContent('1,42')
@@ -233,7 +233,7 @@ describe('Vista Costes (panel de mando)', () => {
     const user = userEvent.setup()
 
     render(<VistaCostes />)
-    await screen.findByText('€/kg del periodo')
+    await screen.findByText('Coste por kilo')
 
     await user.click(screen.getByRole('button', { name: 'Trimestre' }))
 
@@ -248,15 +248,67 @@ describe('Vista Costes (panel de mando)', () => {
     const user = userEvent.setup()
 
     render(<VistaCostes />)
-    await screen.findByText('€/kg del periodo')
+    await screen.findByText('Coste por kilo')
 
-    await user.click(screen.getByRole('button', { name: 'Descargar CSV de costes' }))
+    await user.click(screen.getByRole('button', { name: 'Exportar informe' }))
 
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map(([url]) => String(url))
       expect(urls.some((u) => u.includes('formato=csv'))).toBe(true)
     })
     expect(URL.createObjectURL).toHaveBeenCalled()
+  })
+
+  it('resume el periodo en una frase comparando con el anterior', async () => {
+    stubFetch()
+
+    render(<VistaCostes />)
+
+    const estado = await screen.findByRole('region', { name: 'Estado' })
+    expect(estado).toHaveTextContent(
+      'Producir cuesta 3,20 €/kg este mes, menos que el mes anterior (3,50 €/kg)',
+    )
+    expect(estado).toHaveTextContent('Gastamos 40,00 € más de lo estimado.')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('Baja')
+  })
+
+  it('si el €/kg sube lo dice y lo marca como aviso', async () => {
+    stubFetch({ ...panelBody, coste_kg: { ...panelBody.coste_kg, valor: 3.8 } })
+
+    render(<VistaCostes />)
+
+    const estado = await screen.findByRole('region', { name: 'Estado' })
+    expect(estado).toHaveTextContent('más que el mes anterior (3,50 €/kg)')
+    expect(tarjeta('Coste por kilo')).toHaveTextContent('Sube')
+  })
+
+  it('sin órdenes completadas no compara costes', async () => {
+    stubFetch({ ...panelBody, ordenes: [], ordenes_completadas: 0, kg_total: 0 })
+
+    render(<VistaCostes />)
+
+    expect(
+      await screen.findByRole('region', { name: 'Estado' }),
+    ).toHaveTextContent('Sin órdenes completadas este mes')
+  })
+
+  it('marca en rojo la desviación por encima del 3 % y en verde el ahorro', async () => {
+    stubFetch({
+      ...panelBody,
+      ordenes: [
+        { ...panelBody.ordenes[0], order_id: 'a', numero: 'OP-A', desv_pct: 20.0 },
+        { ...panelBody.ordenes[0], order_id: 'b', numero: 'OP-B', desv_euros: -5, desv_pct: -2.5 },
+        { ...panelBody.ordenes[0], order_id: 'c', numero: 'OP-C', desv_euros: 2, desv_pct: 1.0 },
+      ],
+    })
+
+    render(<VistaCostes />)
+
+    const pastilla = async (numero: string) =>
+      (await screen.findByText(numero)).closest('tr')!.querySelector('span')!
+    expect((await pastilla('OP-A')).className).toContain('text-p-mal')
+    expect((await pastilla('OP-B')).className).toContain('text-p-ok')
+    expect((await pastilla('OP-C')).className).toContain('text-p-gris')
   })
 
   it('muestra el error real si el endpoint falla', async () => {

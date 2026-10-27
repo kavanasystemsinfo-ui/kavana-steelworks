@@ -222,6 +222,24 @@ def test_orden_historica_tiene_coste_en_sus_lineas(db_session):
     assert fila["mano_obra"] > 0
 
 
+def test_puestos_de_la_demo_tienen_ritmo_nominal_sin_pisar_el_configurado(db_session):
+    from app.services.seed_estanterias import RITMOS_DEMO
+
+    _sembrar(db_session)
+    puestos = db_session.scalars(select(Workstation)).all()
+    for puesto in puestos:
+        if puesto.code in RITMOS_DEMO:
+            assert float(puesto.piezas_hora_nominal) == float(RITMOS_DEMO[puesto.code])
+
+    # Un ritmo cambiado desde Admin sobrevive a la siguiente siembra
+    punz = next(p for p in puestos if p.code == "PUNZ-1")
+    punz.piezas_hora_nominal = 55
+    db_session.commit()
+    seed_estanterias(db_session)
+    db_session.refresh(punz)
+    assert float(punz.piezas_hora_nominal) == 55
+
+
 def test_reparar_costes_demo_corrige_siembras_antiguas_y_es_idempotente(db_session):
     from app.services.seed_estanterias import reparar_costes_demo
 

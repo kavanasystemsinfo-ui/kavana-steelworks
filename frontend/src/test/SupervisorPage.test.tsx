@@ -232,15 +232,47 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('incluye la vista de costes del periodo con el €/kg del backend', async () => {
+  it('la vista de costes vive en su pestaña, con el €/kg del backend', async () => {
     stubApi()
+    const user = userEvent.setup()
 
     renderPage()
 
-    const titulo = await screen.findByText('€/kg del periodo')
-    expect(screen.getByText('Costes del periodo')).toBeInTheDocument()
-    expect(titulo.closest('div')).toHaveTextContent('3,20')
-    expect(screen.getByRole('button', { name: 'Descargar CSV de costes' })).toBeInTheDocument()
+    // En la pestaña Turno no aparece la vista de costes
+    expect(screen.getByRole('link', { name: 'Turno' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByText('Cuánto cuesta producir')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Costes' }))
+
+    expect(screen.getByRole('link', { name: 'Costes' })).toHaveAttribute('aria-current', 'page')
+    const titulo = await screen.findByText('Coste por kilo')
+    expect(titulo.closest('article')).toHaveTextContent('3,20')
+    expect(screen.getByRole('button', { name: 'Exportar informe' })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('abre la vista pedida en la URL', async () => {
+    stubApi()
+
+    render(
+      <MemoryRouter initialEntries={['/supervisor?vista=planta']}>
+        <SupervisorPage />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Planta' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Disponible en la siguiente fase.')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('el botón Modo TV abre el Andon', async () => {
+    stubApi()
+    const user = userEvent.setup()
+
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Modo TV' }))
+
+    expect(screen.getByRole('dialog', { name: 'Andon de planta' })).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 

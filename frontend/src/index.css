@@ -29,6 +29,31 @@
 
   --font-display: 'Montserrat', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Panel de mando del supervisor (maqueta 2026-10-26): claro, legible a
+     distancia; el color solo comunica estado y siempre va con texto.
+     Espejo en src/panel/tokens.ts para los SVG. */
+  --color-p-fondo: #f4f5f7;
+  --color-p-tarjeta: #ffffff;
+  --color-p-borde: #e3e6ea;
+  --color-p-linea: #eef0f3;
+  --color-p-texto: #14181f;
+  --color-p-texto2: #4a5361;
+  --color-p-etiqueta: #5f6876;
+  --color-p-plan: #2456c9;
+  --color-p-ok: #157f3d;
+  --color-p-ok-bg: #e7f4ec;
+  --color-p-ok-borde: #bfe3cc;
+  --color-p-aviso: #a15c07;
+  --color-p-aviso-bg: #fdf1df;
+  --color-p-aviso-borde: #f3d19c;
+  --color-p-mal: #b42318;
+  --color-p-mal-bg: #fdecea;
+  --color-p-mal-borde: #f2b8b2;
+  --color-p-gris: #4a5361;
+  --color-p-gris-bg: #eef0f3;
+  --color-p-gris-borde: #e3e6ea;
+  --font-panel: 'Inter', system-ui, sans-serif;
 }
 
 /* Regla de oro: todo número físico en monoespacio */

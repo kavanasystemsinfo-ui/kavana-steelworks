@@ -143,6 +143,8 @@ class Workstation(UUIDMixin, TimestampMixin, Base):
     hourly_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0")
     )
+    # Ritmo nominal (piezas/hora): base del plan del turno en el panel de mando.
+    piezas_hora_nominal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     registration_method: Mapped[str] = mapped_column(
         String(10), nullable=False, default="quantity"
     )

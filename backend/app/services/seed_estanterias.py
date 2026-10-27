@@ -72,6 +72,21 @@ PUESTOS = [
     ("MONT-2", "Montaje y embalaje", "Montaje", "#16a085", "34", "quantity"),
 ]
 
+# Ritmo nominal (piezas/hora) de los puestos de la demo: base del plan del turno.
+# Incluye las líneas de perfilado que crea seed_demo.
+RITMOS_DEMO = {
+    "CORTE-1": "60",
+    "PUNZ-1": "40",
+    "DOBL-1": "30",
+    "LINEA-1": "150",
+    "LINEA-2": "120",
+    "LINEA-3": "120",
+    "SOL-1": "25",
+    "GALV-1": "90",
+    "MONT-1": "8",
+    "MONT-2": "8",
+}
+
 # Materia prima de perfilado: flejes slit de bobina madre. Los anchos son
 # el perímetro desarrollado de la sección plegada (web + 2 alas + 2 labios
 # menos retracción de doblez, ~1,7 mm/doblez 90°). Travesaños: ala 30,
@@ -357,6 +372,7 @@ def seed_estanterias(db: Session) -> dict:
                 "no se pudo reparar el histórico de la demo; se deja como está"
             )
         reparar_costes_demo(db, tenant.id)
+        asegurar_ritmos_demo(db, tenant.id)
         db.commit()
         return {"created": False, "tenant": str(tenant.id)}
 
@@ -370,9 +386,27 @@ def seed_estanterias(db: Session) -> dict:
     productos = _asegurar_productos(db, tenant.id, piezas, materiales)
     ordenes = _crear_ordenes(db, tenant.id, productos, piezas, materiales, operario)
     _historico(db, tenant.id, ordenes, piezas, materiales, operario, materiales_user)
+    asegurar_ritmos_demo(db, tenant.id)
 
     db.commit()
     return {"created": True, "tenant": str(tenant.id)}
+
+
+def asegurar_ritmos_demo(db: Session, tenant_id) -> None:
+    """Asigna el ritmo nominal a los puestos de la demo que aún no lo tienen.
+
+    Idempotente: nunca pisa un ritmo ya configurado (p. ej. desde Admin).
+    """
+    puestos = db.scalars(
+        select(Workstation).where(
+            Workstation.tenant_id == tenant_id,
+            Workstation.code.in_(RITMOS_DEMO),
+            Workstation.piezas_hora_nominal.is_(None),
+        )
+    )
+    for puesto in puestos:
+        puesto.piezas_hora_nominal = Decimal(RITMOS_DEMO[puesto.code])
+    db.flush()
 
 
 def _objetivo_material(mat: Material, total: Decimal, metros) -> Decimal | None:

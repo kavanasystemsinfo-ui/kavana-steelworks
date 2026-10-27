@@ -154,6 +154,7 @@ class WorkstationOut(BaseModel):
     name: str
     color: str
     hourly_cost: float
+    piezas_hora_nominal: float | None = None
     registration_method: str
     maintenance_interval_hours: int
     maintenance_pre_warning_hours: int
@@ -167,6 +168,7 @@ class WorkstationCreate(BaseModel):
     name: str
     color: str = "#3498db"
     hourly_cost: float = 0
+    piezas_hora_nominal: float | None = Field(default=None, gt=0)
     registration_method: str = "quantity"
     group_id: uuid.UUID | None = None
     maintenance_interval_hours: int = 0
@@ -177,6 +179,7 @@ class WorkstationUpdate(BaseModel):
     name: str | None = None
     color: str | None = None
     hourly_cost: float | None = None
+    piezas_hora_nominal: float | None = Field(default=None, gt=0)
     registration_method: str | None = None
     group_id: uuid.UUID | None = None
     maintenance_interval_hours: int | None = None
@@ -422,6 +425,11 @@ def create_workstation(body: WorkstationCreate, db: DbDep, current_user: AdminDe
         name=body.name.strip(),
         color=body.color,
         hourly_cost=Decimal(str(body.hourly_cost)),
+        piezas_hora_nominal=(
+            Decimal(str(body.piezas_hora_nominal))
+            if body.piezas_hora_nominal is not None
+            else None
+        ),
         registration_method=body.registration_method,
         maintenance_interval_hours=body.maintenance_interval_hours,
         maintenance_pre_warning_hours=body.maintenance_pre_warning_hours,
@@ -450,6 +458,8 @@ def update_workstation(
         ws.color = body.color
     if body.hourly_cost is not None:
         ws.hourly_cost = Decimal(str(body.hourly_cost))
+    if body.piezas_hora_nominal is not None:
+        ws.piezas_hora_nominal = Decimal(str(body.piezas_hora_nominal))
     if body.registration_method is not None:
         if body.registration_method not in ("timer", "quantity", "manual"):
             raise HTTPException(

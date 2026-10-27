@@ -4,11 +4,12 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.security import autenticar, require_roles
-from app.models import User
+from app.models import Tenant, User
 
 router = APIRouter(prefix="/api/v1/supervisor", tags=["supervisor"])
 
@@ -133,6 +134,51 @@ def get_informe_turno(
             headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
         )
     return informe
+
+
+class ObjetivosIn(BaseModel):
+    """Objetivos a cambiar; los que no se envían conservan su valor."""
+
+    oee: float | None = None
+    disponibilidad: float | None = None
+    rendimiento: float | None = None
+    calidad: float | None = None
+    chatarra_max_pct: float | None = None
+
+
+@router.get("/objetivos")
+def get_objetivos(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Objetivos de planta de la empresa (los no configurados, con su valor por defecto)."""
+    from app.services.objetivos import objetivos_tenant
+
+    return objetivos_tenant(db.get(Tenant, current_user.tenant_id))
+
+
+@router.put("/objetivos")
+def put_objetivos(
+    body: ObjetivosIn,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "admin")),
+    ] = None,
+):
+    """Cambia los objetivos de planta. Solo administración."""
+    from app.services.objetivos import guardar_objetivos
+
+    tenant = db.get(Tenant, current_user.tenant_id)
+    try:
+        objetivos = guardar_objetivos(tenant, body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return objetivos
 
 
 @router.get("/panel/costes")

@@ -427,12 +427,23 @@ export interface WorkstationOut {
   name: string
   color: string
   hourly_cost: number
+  /** Ritmo nominal (piezas/hora): base del plan del turno. null = sin configurar. */
+  piezas_hora_nominal?: number | null
   registration_method: string
   maintenance_interval_hours: number
   maintenance_pre_warning_hours: number
   last_maintenance_reset: string | null
   accumulated_hours: number
   is_active: boolean
+}
+
+/** Objetivos de planta de la empresa (los no configurados llegan con su valor por defecto). */
+export interface Objetivos {
+  oee: number
+  disponibilidad: number
+  rendimiento: number
+  calidad: number
+  chatarra_max_pct: number
 }
 
 export interface WorkstationGroupOut {
@@ -543,6 +554,15 @@ export const api = {
 
   getPuestos(): Promise<PuestoEstado[]> {
     return request('/supervisor/puestos')
+  },
+
+  getObjetivos(): Promise<Objetivos> {
+    return request('/supervisor/objetivos')
+  },
+
+  /** Solo administración; los objetivos no enviados conservan su valor. */
+  putObjetivos(cambios: Partial<Objetivos>): Promise<Objetivos> {
+    return request('/supervisor/objetivos', { method: 'PUT', body: JSON.stringify(cambios) })
   },
 
   getAlertas(): Promise<AlertasData> {
