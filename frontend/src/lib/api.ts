@@ -134,6 +134,28 @@ export interface InformeTurnoOperario {
   chatarra_pct: number | null
 }
 
+/** Datos clave de la orden para el panel de operario (GET /production/ficha). */
+export interface FichaOrden {
+  numero: string
+  cliente: string | null
+  fecha_entrega: string | null
+  plazo: 'a_tiempo' | 'en_riesgo' | 'retraso' | 'sin_plazo'
+  modelo: string | null
+  modelo_nombre: string | null
+  material: string | null
+  material_nombre: string | null
+  ancho_mm: number | null
+  espesor_mm: number | null
+  largo_mm: number | null
+  ritmo: number | null
+  total: number
+  hechas: number
+  faltan: number
+  bobina: { id: string; codigo: string; kg: number; kg_inicial: number; piezas_estimadas: number | null } | null
+  /** Desde cuándo cuentan las horas del próximo registro (se apuntan solas). */
+  tramo_desde: string | null
+}
+
 /** Bobina montada que el operario debe medir antes de cerrar su turno. */
 export interface MedicionPendiente {
   stock_item_id: string
@@ -827,6 +849,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  getFicha(orderId: string, lineId: string): Promise<FichaOrden> {
+    return request(`/production/ficha?order_id=${encodeURIComponent(orderId)}&line_id=${encodeURIComponent(lineId)}`)
   },
 
   /** Bobinas que el operario puede vincular sin saberse el código. */

@@ -104,6 +104,11 @@ body {
   --color-kavana-warn: var(--color-p-aviso);
   --color-kavana-danger: var(--color-p-mal);
 }
+/* Panel de operario (maqueta aprobada 28-10): tema claro del panel, pero la
+   acción principal conserva el naranja de Kavana. */
+.tema-operario {
+  --color-kavana-orange: #c4521a;
+}
 .tema-panel .label-industrial {
   font-family: var(--font-panel);
   font-weight: 600;

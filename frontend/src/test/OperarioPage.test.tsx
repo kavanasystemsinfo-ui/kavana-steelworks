@@ -183,7 +183,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
       screen.getByRole('button', { name: /retirar pico a inventario/i }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: /registrar piezas/i }),
+      screen.getByRole('button', { name: /registrar (\d+ )?piezas/i }),
     ).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
@@ -278,7 +278,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
 
       const piezas = await screen.findByPlaceholderText(/piezas/i)
       await user.type(piezas, '5')
-      await user.click(screen.getByRole('button', { name: /registrar piezas/i }))
+      await user.click(screen.getByRole('button', { name: /registrar (\d+ )?piezas/i }))
 
       const llamadas = fetchMock.mock.calls.map((c) => c[0])
       expect(llamadas).toContain('/api/v1/production/record')
@@ -381,7 +381,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
     await user.click(screen.getByRole('button', { name: '5' }))
     expect(piezas).toHaveValue(75)
 
-    await user.click(screen.getByRole('button', { name: /registrar piezas/i }))
+    await user.click(screen.getByRole('button', { name: /registrar (\d+ )?piezas/i }))
     const recordCall = fetchMock.mock.calls.find(([u]) =>
       String(u).includes('/production/record'),
     )
@@ -1109,7 +1109,7 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     const llamada = fetchMock.mock.calls.find(([u]) => String(u).includes('/stock-items/unlink'))
     expect(llamada?.[1]?.method).toBe('POST')
     expect(await screen.findByPlaceholderText(/escanea la etiqueta/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /registrar piezas/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /registrar (\d+ )?piezas/i })).not.toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
@@ -1271,7 +1271,9 @@ describe('Fase 2 pulido: puesto -> cola de ordenes -> panel', () => {
     expect(await screen.findByText('Vincular bobina')).toBeInTheDocument()
     expect(window.location.search).toContain('ws=LINEA-1')
     expect(window.location.search).toContain('order=OPA')
-    expect(screen.getByText(/LINEA-1 · OP-F2-001/)).toBeInTheDocument()
+    // El puesto y el número de orden siguen a la vista (cabecera y ficha de la orden)
+    expect(screen.getAllByText('LINEA-1').length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: 'OP-F2-001' })).toBeInTheDocument()
   })
 
   it('availableOrders se llama con el puesto seleccionado', async () => {

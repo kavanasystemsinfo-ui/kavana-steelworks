@@ -15,7 +15,7 @@ export interface NumpadProps {
 }
 
 const claveCls =
-  'min-h-[64px] mono-data bg-kavana-surface border border-kavana-border rounded-sm ' +
+  'min-h-[64px] mono-data bg-kavana-surface border border-kavana-border rounded-xl ' +
   'text-xl font-bold text-kavana-text transition-colors ' +
   'hover:border-kavana-orange hover:text-kavana-orange active:bg-kavana-orange active:text-black ' +
   'disabled:opacity-30 disabled:hover:border-kavana-border disabled:hover:text-kavana-text ' +
