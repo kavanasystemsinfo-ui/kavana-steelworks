@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type WorkstationItem } from '../lib/api'
+import { api, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
@@ -9,6 +9,7 @@ import { BobinasDisponibles } from '../components/BobinasDisponibles'
 import { MedirCierre } from '../components/MedirCierre'
 import { FichaOrden } from '../components/FichaOrden'
 import { CalculadoraBotones, type Unidad } from '../components/CalculadoraBotones'
+import { MotivosParada, PantallaParada } from '../components/ParadaMaquina'
 
 interface CoilScan {
   id: string
@@ -187,6 +188,15 @@ export function OperarioPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenDetalle?.id, ordenDetalle?.line_id, fichaVersion])
+
+  // Parada con un toque: al volver al panel, la parada abierta sigue en pantalla
+  const [parada, setParada] = useState<Parada | null>(null)
+  useEffect(() => {
+    api
+      .paradaAbierta()
+      .then((p) => setParada(p && typeof p.id === 'string' && typeof p.inicio === 'string' ? p : null))
+      .catch(() => {})
+  }, [])
 
   // El tiempo desde el último registro se ve correr (las horas se apuntan solas)
   useEffect(() => {
@@ -823,7 +833,7 @@ export function OperarioPage() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div>
           <p className="text-xs text-p-texto2">Paso actual</p>
-          <p className="text-lg font-bold">{vinculada ? 'Producir piezas' : 'Vincular bobina'}</p>
+          <p className="text-lg font-bold">{parada ? 'Máquina parada' : vinculada ? 'Producir piezas' : 'Vincular bobina'}</p>
         </div>
         <span className="flex-1" />
         <span className="text-sm text-p-texto2">{wsSel ?? 'puesto por defecto'}</span>
@@ -843,6 +853,19 @@ export function OperarioPage() {
         </button>
       </div>
 
+      {parada ? (
+        <PantallaParada
+          parada={parada}
+          orden={ficha?.numero ?? ordenNumero}
+          onCambio={setParada}
+          onFin={() => {
+            setParada(null)
+            showToast('success', 'Parada cerrada. ¡A producir!')
+          }}
+          onError={(m) => showToast('error', m)}
+        />
+      ) : (
+      <>
       <FichaOrden ficha={ficha} numero={ordenNumero} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] items-start">
@@ -989,7 +1012,7 @@ export function OperarioPage() {
           )}
         </div>
 
-        {/* Derecha: bobina montada, autocontrol, incidencias y jornada */}
+        {/* Derecha: bobina montada, paradas, autocontrol, incidencias y jornada */}
         <div className="space-y-4">
           {vinculada && (
             <section aria-label="Bobina montada" className="bg-p-tarjeta border border-p-borde rounded-2xl p-5 space-y-3">
@@ -1061,6 +1084,16 @@ export function OperarioPage() {
                 Desvincular bobina
               </button>
             </section>
+          )}
+
+          {(wsSel || ordenDetalle?.workstation_id) && (
+            <MotivosParada
+              puesto={(wsSel ?? ordenDetalle?.workstation_id) as string}
+              orderId={ordenDetalle?.id}
+              lineId={ordenDetalle?.line_id}
+              onParada={setParada}
+              onError={(m) => showToast('error', m)}
+            />
           )}
 
           {vinculada && puedeAutocontrol && (
@@ -1225,6 +1258,8 @@ export function OperarioPage() {
 
         </div>
       </div>
+      </>
+      )}
 
       {incModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">

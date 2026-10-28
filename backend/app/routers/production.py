@@ -199,3 +199,97 @@ def crear_calculadora(
     db.commit()
     db.refresh(calc)
     return _calculadora_dict(calc)
+
+
+class ParadaIn(BaseModel):
+    puesto: str = Field(min_length=1, max_length=100)
+    motivo: str
+    order_id: uuid.UUID | None = None
+    line_id: uuid.UUID | None = None
+
+
+class ParadaCambio(BaseModel):
+    motivo: str | None = None
+    nota: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/paradas/abierta")
+def parada_en_curso(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """La parada abierta del operario (al volver al panel sigue en pantalla)."""
+    from app.services.paradas import parada_abierta, parada_dict
+
+    p = parada_abierta(db, current_user.id)
+    return parada_dict(p) if p else None
+
+
+@router.post("/paradas", status_code=201)
+def parar(
+    body: ParadaIn,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Parada con un toque: el operario elige el motivo y el tiempo cuenta solo."""
+    from app.services.paradas import iniciar_parada, parada_dict
+
+    try:
+        return parada_dict(
+            iniciar_parada(
+                db, current_user.tenant_id, current_user.id,
+                puesto=body.puesto, motivo=body.motivo,
+                order_id=body.order_id, line_id=body.line_id,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/paradas/{parada_id}")
+def cambiar_parada(
+    parada_id: uuid.UUID,
+    body: ParadaCambio,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Cambiar el motivo o añadir la nota de una parada propia."""
+    from app.services.paradas import cambiar_parada as cambiar
+    from app.services.paradas import parada_dict
+
+    try:
+        return parada_dict(
+            cambiar(db, current_user.id, parada_id, motivo=body.motivo, nota=body.nota)
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/paradas/{parada_id}/fin")
+def volver_a_producir(
+    parada_id: uuid.UUID,
+    body: ParadaCambio,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Volver a producir: cierra la parada con su duración."""
+    from app.services.paradas import parada_dict, terminar_parada
+
+    try:
+        return parada_dict(terminar_parada(db, current_user.id, parada_id, nota=body.nota))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

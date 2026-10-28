@@ -31,8 +31,10 @@ from app.models import (
     Workstation,
     WorkstationGroup,
 )
+from app.models.parada import MOTIVOS_PARADA
 from app.services.alertas import alertas
 from app.services.objetivos import objetivos_tenant
+from app.services.paradas import paradas_abiertas_por_puesto, paradas_en
 from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA, estado_puestos
 from app.services.shifts import TZ_PLANTA
 
@@ -163,6 +165,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         )
     }
 
+    paradas_operario = paradas_abiertas_por_puesto(db, tenant_id)
+
     puestos = []
     plan_hora = 0.0
     for p in monitor:
@@ -178,7 +182,13 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         }[p["estado"]]
         motivo = None
         minutos = None
-        if p["estado"] == "incidencia":
+        parada = paradas_operario.get(p["code"])
+        if parada is not None and p["estado"] != "incidencia":
+            # El operario ha parado la máquina con un toque (avería, limpieza...)
+            estado = "parado"
+            motivo = MOTIVOS_PARADA[parada.motivo].capitalize()
+            minutos = round(_minutos(parada.inicio, ahora))
+        elif p["estado"] == "incidencia":
             inc = incidencias_abiertas.get(p["code"])
             if inc is not None:
                 motivo = TIPOS_INCIDENCIA.get(inc.tipo, "incidencia").capitalize()
@@ -231,32 +241,16 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
     )
 
     # --- Paradas ---------------------------------------------------------------
-    paradas = []
-    for inc in db.scalars(
-        select(Incidencia).where(
-            Incidencia.tenant_id == tenant_id,
-            Incidencia.created_at <= ahora,
-        )
-    ):
-        creada = _utc(inc.created_at)
-        abierta = inc.estado in ESTADOS_INCIDENCIA_ABIERTA
-        if abierta:
-            minutos = _minutos(max(creada, inicio), ahora)
-        elif creada >= inicio:
-            minutos = float(inc.tiempo_parada_min or 0)
-        else:
-            continue
-        if minutos <= 0:
-            continue
-        paradas.append(
-            {
-                "puesto": inc.puesto,
-                "motivo": TIPOS_INCIDENCIA.get(inc.tipo, "incidencia"),
-                "descripcion": inc.descripcion,
-                "minutos": round(minutos),
-                "abierta": abierta,
-            }
-        )
+    paradas = [
+        {
+            "puesto": x["puesto"],
+            "motivo": x["motivo"],
+            "descripcion": x["descripcion"],
+            "minutos": round(x["minutos"]),
+            "abierta": x["abierta"],
+        }
+        for x in paradas_en(db, tenant_id, inicio, ahora)
+    ]
     paradas.sort(key=lambda x: x["minutos"], reverse=True)
     minutos_parado = sum(x["minutos"] for x in paradas)
 
