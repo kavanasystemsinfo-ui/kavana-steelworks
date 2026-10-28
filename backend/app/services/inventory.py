@@ -306,7 +306,11 @@ def find_coil(
     bobina = db.scalar(stmt)
     if bobina is None:
         return None
+    return ficha_bobina(bobina)
 
+
+def ficha_bobina(bobina) -> dict:
+    """Datos de una bobina para el panel de operario (escaneo o lista)."""
     return {
         "id": str(bobina.id),
         "lote": bobina.lote,
@@ -632,6 +636,18 @@ def link_coil(
             OrderLine.active_coil_id == bobina.id, OrderLine.id != linea.id
         )
     )
+    if otra is not None and linea.workstation_id and otra.workstation_id == linea.workstation_id:
+        # Misma máquina: el operario cambia de orden y sigue con la bobina
+        # montada (Jorge 28-10, sin medir si el material es el mismo). Se
+        # desvincula de la orden anterior (reembolso de lo no consumido) y se
+        # vincula aquí; la chatarra se reconcilia en la siguiente medición.
+        validar_material_compatible(db, bobina, linea)
+        unlink_coil(
+            db, tenant_id, user_id,
+            stock_item_id=bobina.id, order_id=otra.order_id, line_id=otra.id,
+        )
+        db.refresh(bobina)
+        otra = None
     if otra is not None:
         otra_orden = db.get(Order, otra.order_id)
         raise ValueError(
