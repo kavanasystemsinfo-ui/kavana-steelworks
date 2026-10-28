@@ -309,6 +309,101 @@ def fin_bobina(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class MedirBobinaRequest(BaseModel):
+    stock_item_id: uuid.UUID
+    order_id: uuid.UUID
+    line_id: uuid.UUID
+    radio_mm: float = Field(ge=0)
+
+
+@router.get("/mediciones-pendientes")
+def mediciones_pendientes(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Bobinas montadas que el operario debe medir antes de cerrar su turno."""
+    from app.services.medicion import mediciones_pendientes as pendientes
+
+    return pendientes(db, current_user.tenant_id, current_user.id)
+
+
+@router.post("/medir")
+def medir(
+    body: MedirBobinaRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Cierre de turno: mide el radio, apunta la chatarra y deja la bobina montada."""
+    from app.services.medicion import medir_bobina
+
+    try:
+        return medir_bobina(
+            db,
+            current_user.tenant_id,
+            current_user.id,
+            stock_item_id=body.stock_item_id,
+            radio_mm=body.radio_mm,
+            order_id=body.order_id,
+            line_id=body.line_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class AltaManualRequest(BaseModel):
+    material_id: uuid.UUID
+    peso_kg: Decimal = Field(gt=0)
+    lote: str = Field(min_length=1, max_length=100)
+    coil_id: str | None = Field(default=None, max_length=100)
+    width_mm: Decimal | None = Field(default=None, gt=0)
+    thickness_mm: Decimal | None = Field(default=None, gt=0)
+    puesto: str | None = None
+
+
+@router.post("/alta-manual")
+def alta_manual(
+    body: AltaManualRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Modo manual del operario: da de alta una bobina con los datos de la
+    etiqueta del proveedor (el peso de la etiqueta es el que se carga a la
+    línea al vincularla). Pasa por la misma recepción que Materias Primas."""
+    from datetime import UTC, datetime
+
+    from app.services.inventory import find_coil
+    from app.services.receiving import receive_coil
+
+    material = db.get(Material, body.material_id)
+    if material is None or material.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Material no encontrado")
+    codigo = body.coil_id or f"MAN-{datetime.now(UTC).strftime('%y%m%d%H%M%S')}"
+    try:
+        bobina = receive_coil(
+            db, current_user.tenant_id, current_user.id,
+            material_id=material.id,
+            lote=body.lote,
+            coil_id=codigo,
+            peso=body.peso_kg,
+            width_mm=body.width_mm,
+            thickness_mm=body.thickness_mm,
+            coste_real=material.cost_per_unit,
+            ubicacion=body.puesto,
+        )
+        return find_coil(db, current_user.tenant_id, coil_id=bobina.coil_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class RetirarPicoRequest(BaseModel):
     stock_item_id: uuid.UUID
     order_id: uuid.UUID | None = None

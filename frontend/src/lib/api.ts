@@ -122,6 +122,27 @@ export interface InformeTurnoPuesto {
   parada_min: number
 }
 
+/** Balance de kilos del turno por operario, orden y material. */
+export interface InformeTurnoOperario {
+  operario: string
+  orden: string
+  material: string
+  piezas: number
+  consumo_kg: number
+  piezas_kg: number
+  chatarra_kg: number
+  chatarra_pct: number | null
+}
+
+/** Bobina montada que el operario debe medir antes de cerrar su turno. */
+export interface MedicionPendiente {
+  stock_item_id: string
+  coil_code: string | null
+  order_id: string
+  line_id: string
+  puesto: string | null
+}
+
 /** Informe de un turno A/B/C (GET /supervisor/informe-turno). */
 export interface InformeTurno {
   fecha: string
@@ -130,6 +151,7 @@ export interface InformeTurno {
   fin: string
   puestos: InformeTurnoPuesto[]
   totales: Omit<InformeTurnoPuesto, 'puesto' | 'ordenes'>
+  por_operario: InformeTurnoOperario[]
 }
 
 /** Estado de un puesto en planta (GET /supervisor/puestos). */
@@ -556,6 +578,15 @@ export interface RoleOut {
 
 const BASE = '/api/v1'
 
+/** Error de la API con su código HTTP (409: falta medir la bobina, etc.). */
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = sessionStorage.getItem('kavana_token')
   const authHeader: Record<string, string> = token
@@ -571,7 +602,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? `Error ${res.status}`)
+    throw new ApiError(body.detail ?? `Error ${res.status}`, res.status)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -585,10 +616,14 @@ export const api = {
     })
   },
 
-  logout(): Promise<void> {
-    return request<void>('/auth/logout', { method: 'POST', body: JSON.stringify({}) }).finally(
-      () => sessionStorage.removeItem('kavana_token'),
-    )
+  /** Cierra la sesión. Con bobinas sin medir (409) la sesión sigue abierta. */
+  async logout(): Promise<void> {
+    try {
+      await request<void>('/auth/logout', { method: 'POST', body: JSON.stringify({}) })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) throw err
+    }
+    sessionStorage.removeItem('kavana_token')
   },
 
   listStock(): Promise<StockItemOut[]> {
@@ -792,6 +827,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  getMedicionesPendientes(): Promise<MedicionPendiente[]> {
+    return request('/stock-items/mediciones-pendientes')
+  },
+
+  /** Cierre de turno: mide el radio y deja la bobina montada para el relevo. */
+  medirBobina(data: { stock_item_id: string; order_id: string; line_id: string; radio_mm: number }): Promise<{ msg: string; chatarra_kg: number; chatarra_coste: number; peso_restante_kg: number }> {
+    return request('/stock-items/medir', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  /** Modo manual: alta de bobina con los datos de la etiqueta del proveedor. */
+  altaManualBobina(data: { material_id: string; peso_kg: number; lote: string; coil_id?: string; width_mm?: number; thickness_mm?: number; puesto?: string }): Promise<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string }> {
+    return request('/stock-items/alta-manual', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
   retirarPico(data: { stock_item_id: string }): Promise<{ msg: string }> {

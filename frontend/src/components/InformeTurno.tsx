@@ -125,6 +125,43 @@ export function InformeTurno() {
           </table>
         </div>
       )}
+      {informe && (informe.por_operario ?? []).length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="label-industrial text-xs text-kavana-text-dim mt-4 mb-1">
+            Chatarra por operario · kilos consumidos frente a piezas buenas
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-kavana-text-dim text-xs">
+                <th className="py-1 pr-2">Operario</th>
+                <th className="py-1 pr-2">Orden</th>
+                <th className="py-1 pr-2">Material</th>
+                <th className="py-1 pr-2 text-right">Piezas</th>
+                <th className="py-1 pr-2 text-right">Consumido</th>
+                <th className="py-1 text-right">Chatarra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {informe.por_operario.map((o) => (
+                <tr key={`${o.operario}-${o.orden}-${o.material}`} className="border-t border-kavana-border">
+                  <td className="py-1 pr-2 font-semibold">{o.operario}</td>
+                  <td className="py-1 pr-2">{o.orden}</td>
+                  <td className="py-1 pr-2">{o.material}</td>
+                  <td className="py-1 pr-2 text-right mono-data">{fmt(o.piezas)}</td>
+                  <td className="py-1 pr-2 text-right mono-data">{fmt(o.consumo_kg, 1)} kg</td>
+                  <td className="py-1 text-right mono-data">
+                    {fmt(o.chatarra_kg, 1)} kg
+                    {o.chatarra_pct !== null ? ` · ${fmt(o.chatarra_pct, 1)} %` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-kavana-text-dim mt-1">
+            La chatarra aparece cuando el operario mide la bobina (cierre de turno o fin de bobina).
+          </p>
+        </div>
+      )}
     </div>
   )
 }

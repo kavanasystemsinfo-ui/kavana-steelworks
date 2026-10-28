@@ -5,7 +5,9 @@ incidencias abiertas en la ventana del turno, así que es un informe REAL del
 turno pedido (fecha + A/B/C en horario de planta), no un acumulado.
 
 Por puesto: piezas, material consumido, merma (kg y €), autocontroles
-(total y no conformes) e incidencias con su tiempo de parada. Sin datos en
+(total y no conformes) e incidencias con su tiempo de parada. Por operario,
+orden y material: el balance de kilos del turno (consumido en piezas y
+chatarra medida al cerrar el turno o la bobina). Sin datos en
 la ventana, el informe sale vacío: nunca se rellena.
 """
 
@@ -18,7 +20,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Incidencia, OrderLine, ProductionLog
+from app.models import Incidencia, Material, Order, OrderLine, ProductionLog, User
 from app.services.shifts import TZ_PLANTA
 
 TURNOS = {"A": (6, 8), "B": (14, 8), "C": (22, 8)}  # hora de inicio, duración (h)
@@ -58,8 +60,9 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
     desde, hasta = inicio.astimezone(UTC), fin.astimezone(UTC)
     filas: dict[str, dict] = {}
 
+    balance: dict[tuple, dict] = {}
     eventos = db.execute(
-        select(ProductionLog, OrderLine.workstation_id)
+        select(ProductionLog, OrderLine.workstation_id, OrderLine.material_id)
         .join(OrderLine, OrderLine.id == ProductionLog.line_id)
         .where(
             ProductionLog.tenant_id == tenant_id,
@@ -67,10 +70,22 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
             ProductionLog.timestamp < hasta,
         )
     ).all()
-    for log, puesto in eventos:
+    for log, puesto, material_id in eventos:
         meta = log.metadata_ or {}
         puesto = puesto or meta.get("workstationId") or "sin puesto"
         fila = filas.setdefault(puesto, _fila_vacia(puesto))
+        if log.action in ("produce", "scrap"):
+            clave = (log.operator_id, log.order_id, material_id)
+            b = balance.setdefault(
+                clave,
+                {"piezas": Decimal("0"), "consumo_kg": Decimal("0"), "chatarra_kg": Decimal("0")},
+            )
+            if log.action == "produce":
+                b["piezas"] += Decimal(str(log.quantity or 0))
+                if meta.get("consumedMaterial") == "kg":
+                    b["consumo_kg"] += Decimal(str(meta.get("consumedAmount") or 0))
+            else:
+                b["chatarra_kg"] += Decimal(str(log.quantity or 0))
         if log.action == "produce":
             fila["piezas"] += Decimal(str(log.quantity or 0))
             fila["ordenes"].add(str(log.order_id))
@@ -130,7 +145,31 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
         "fin": fin.isoformat(),
         "puestos": puestos,
         "totales": totales,
+        "por_operario": _por_operario(db, balance),
     }
+
+
+def _por_operario(db: Session, balance: dict[tuple, dict]) -> list[dict]:
+    """Balance de kilos por operario, orden y material, con su % de chatarra."""
+    filas = []
+    for (operario_id, orden_id, material_id), b in balance.items():
+        operario = db.get(User, operario_id) if operario_id else None
+        orden = db.get(Order, orden_id) if orden_id else None
+        material = db.get(Material, material_id) if material_id else None
+        total = b["consumo_kg"] + b["chatarra_kg"]
+        filas.append(
+            {
+                "operario": operario.name if operario else "—",
+                "orden": orden.numero if orden else "—",
+                "material": material.code if material else "—",
+                "piezas": float(b["piezas"]),
+                "consumo_kg": round(float(total), 2),
+                "piezas_kg": round(float(b["consumo_kg"]), 2),
+                "chatarra_kg": round(float(b["chatarra_kg"]), 2),
+                "chatarra_pct": round(float(b["chatarra_kg"] / total * 100), 1) if total else None,
+            }
+        )
+    return sorted(filas, key=lambda f: (f["operario"], f["orden"], f["material"]))
 
 
 COLUMNAS_CSV = [

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, getJwtPayload } from '../../lib/api'
 import { navForRole, type Role } from '../../lib/roles'
@@ -16,13 +17,16 @@ export function Layout() {
   const role = currentRole()
   const navItems = navForRole(role)
 
+  const [aviso, setAviso] = useState('')
+
   const handleLogout = async () => {
     try {
       await api.logout()
-    } catch {
-      // el token se limpia igual aunque el servidor no responda
+    } catch (err) {
+      // 409: el operario tiene una bobina sin medir; la sesión sigue abierta
+      setAviso(err instanceof Error ? err.message : 'No se pudo cerrar la sesión')
+      return
     }
-    sessionStorage.removeItem('kavana_token')
     navigate('/login', { replace: true })
   }
 
@@ -73,6 +77,17 @@ export function Layout() {
           </div>
         </nav>
       </header>
+      {aviso && (
+        <div
+          role="alert"
+          className="border-b border-kavana-warn bg-kavana-surface px-4 py-2 text-sm text-kavana-warn flex items-center justify-between gap-3"
+        >
+          <span>{aviso} Hazlo en «Cerrar jornada» del panel de operario.</span>
+          <button type="button" className="underline" onClick={() => setAviso('')}>
+            Entendido
+          </button>
+        </div>
+      )}
       <main className="p-4">
         <Outlet />
       </main>

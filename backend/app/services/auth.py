@@ -102,6 +102,9 @@ def logout(db: Session, token: str) -> None:
         return
     if is_revoked(db, token):
         return  # ya revocado: evita IntegrityError por unique(token)
+    from app.services.medicion import exigir_mediciones
+
+    exigir_mediciones(db, uuid.UUID(payload["sub"]))  # MedicionPendiente si falta medir
     exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
     db.add(
         RevokedToken(
@@ -136,6 +139,9 @@ def close_shift(db: Session, token: str) -> dict:
     )
     if turno is None:
         raise LookupError("No hay turno activo para cerrar")
+    from app.services.medicion import exigir_mediciones
+
+    exigir_mediciones(db, user_id)  # MedicionPendiente si falta medir
     ahora = datetime.now(UTC)
     turno.logout_time = ahora
     turno.status = "completed"

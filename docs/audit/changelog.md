@@ -4,6 +4,31 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Balance de material por operario y cierre de turno medido
+
+- **Problema:** la chatarra solo aparecía en el fin de bobina, quedaba a nombre
+  de la línea y no del operario, y el informe de turno iba por puesto. El
+  operario no podía dar de alta una bobina que Materias Primas aún no había
+  registrado.
+- **Solución (modelo de Jorge):** la línea carga el peso de la etiqueta al
+  vincular y las piezas descuentan sus kilos teóricos. Al cerrar el turno, el
+  operario mide el radio: lo que el sistema creía que quedaba menos lo medido
+  es su chatarra, y la bobina sigue montada para el relevo
+  (`services/medicion.py`, `POST /stock-items/medir`). La medición es
+  obligatoria: con una bobina usada y sin medir, `close-shift` y `logout`
+  devuelven 409 (la producción del simulador no cuenta). Cambiar de orden con
+  el mismo material no obliga a medir. Alta manual de bobina por el operario
+  con los datos de la etiqueta (`POST /stock-items/alta-manual`). El informe
+  de turno añade el balance por operario, orden y material. El simulador
+  desperdicia un 2-6 % por bobina que solo aparece al medir, y mide al
+  cambiar de turno.
+- **Archivos:** `services/medicion.py`, `services/simulador.py`,
+  `services/informe_turno.py`, `services/auth.py`, routers `stock` y `auth`;
+  `components/MedirCierre.tsx`, `components/AltaManualBobina.tsx`,
+  `OperarioPage.tsx`, `InformeTurno.tsx`, `Layout.tsx`, `lib/api.ts`; tests.
+- **Verificación:** pytest 449 ok, vitest 134 ok, ruff y oxlint limpios;
+  chatarra del simulador 3,1 % en 150 ticks.
+
 ## 2026-10-27 — Chatarra realista en la demo
 
 - **Problema:** la chatarra de la demo salía alta (5,8 % en 150 ticks). Cuando
