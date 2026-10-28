@@ -8,9 +8,12 @@ type BobinaAlta = Awaited<ReturnType<typeof api.altaManualBobina>>
  *  proveedor. El peso de la etiqueta es el que carga la línea al vincular. */
 export function AltaManualBobina({
   puesto,
+  materialId: materialOrden = null,
   onAlta,
 }: {
   puesto: string | null
+  /** Material de la línea: el formulario lo trae elegido (como el legacy). */
+  materialId?: string | null
   onAlta: (bobina: BobinaAlta) => void
 }) {
   const [abierto, setAbierto] = useState(false)
@@ -22,17 +25,24 @@ export function AltaManualBobina({
   const [espesor, setEspesor] = useState('')
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (!abierto || materiales.length) return
-    api.listMaterials().then(setMateriales).catch(() => setError('No se pudieron cargar los materiales'))
-  }, [abierto, materiales.length])
-
-  const elegir = (id: string) => {
+  const elegir = (id: string, lista: MaterialOut[] = materiales) => {
     setMaterialId(id)
-    const m = materiales.find((x) => x.id === id)
+    const m = lista.find((x) => x.id === id)
     if (m?.dimension_ancho_mm) setAncho(String(m.dimension_ancho_mm))
     if (m?.dimension_espesor_mm) setEspesor(String(m.dimension_espesor_mm))
   }
+
+  useEffect(() => {
+    if (!abierto || materiales.length) return
+    api
+      .listMaterials()
+      .then((lista) => {
+        setMateriales(lista)
+        if (materialOrden && lista.some((m) => m.id === materialOrden)) elegir(materialOrden, lista)
+      })
+      .catch(() => setError('No se pudieron cargar los materiales'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto, materiales.length, materialOrden])
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault()

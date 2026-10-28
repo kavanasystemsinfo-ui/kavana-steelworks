@@ -309,6 +309,61 @@ def fin_bobina(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/disponibles")
+def bobinas_disponibles(
+    line_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Bobinas que el operario puede vincular sin saberse el código (legacy
+    MaterialScanner). Si la orden pide un material, solo ese material (el
+    sistema no deja vincular otro); si no, las que están en su puesto.
+    Primero lo que ya está en la máquina (también montada en otra orden de
+    este puesto: se pasa a esta sin medir), luego picos y después FIFO. Fuera
+    las montadas en otra máquina."""
+    from sqlalchemy import select
+
+    from app.models import Order, OrderLine, StockItem
+    from app.services.inventory import ficha_bobina
+
+    linea = db.get(OrderLine, line_id)
+    orden = db.get(Order, linea.order_id) if linea else None
+    if linea is None or orden is None or orden.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+
+    puesto = linea.workstation_id
+    montadas_fuera = select(OrderLine.active_coil_id).where(
+        OrderLine.active_coil_id.is_not(None),
+        OrderLine.id != linea.id,
+        OrderLine.workstation_id.is_distinct_from(puesto),
+    )
+    consulta = select(StockItem).where(
+        StockItem.tenant_id == current_user.tenant_id,
+        StockItem.estado.in_(("activo", "pico")),
+        StockItem.cantidad_disponible > 0,
+        StockItem.id.not_in(montadas_fuera),
+    )
+    if linea.material_id is not None:
+        consulta = consulta.where(StockItem.material_id == linea.material_id)
+    else:
+        consulta = consulta.where(StockItem.ubicacion == puesto)
+    bobinas = db.scalars(consulta).all()
+
+    def en_puesto(b) -> bool:
+        return b.ubicacion == puesto or b.id == linea.active_coil_id
+
+    def prioridad(b):
+        return (not en_puesto(b), b.estado != "pico", b.fecha_entrada)
+
+    return [
+        {**ficha_bobina(b), "en_puesto": en_puesto(b)}
+        for b in sorted(bobinas, key=prioridad)[:8]
+    ]
+
+
 class MedirBobinaRequest(BaseModel):
     stock_item_id: uuid.UUID
     order_id: uuid.UUID

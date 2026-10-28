@@ -162,3 +162,78 @@ def test_informe_de_turno_da_la_chatarra_por_operario(db_session, tenant, user):
     assert fila["chatarra_kg"] == chatarra
     assert fila["consumo_kg"] == round(700 + chatarra, 2)
     assert fila["chatarra_pct"] == round(chatarra / (700 + chatarra) * 100, 1)
+
+
+def test_bobinas_disponibles_sin_saber_el_codigo(db_session, tenant, user):
+    """Lista para tocar y vincular (legacy MaterialScanner): primero lo que
+    está en el puesto, luego picos y después la más antigua; nunca una
+    bobina montada en otra línea ni otro material de otro sitio."""
+    from datetime import timedelta
+
+    material = make_material(db_session, tenant, code="FLEJE-108")
+    otro = make_material(db_session, tenant, code="FLEJE-200")
+    hace = datetime.now(UTC)
+    vieja = make_stock_item(
+        db_session, tenant, material, lote="VIEJA", ubicacion="ALMACEN",
+        fecha_entrada=hace - timedelta(days=9),
+    )
+    nueva = make_stock_item(
+        db_session, tenant, material, lote="NUEVA", ubicacion="ALMACEN",
+        fecha_entrada=hace - timedelta(days=1),
+    )
+    pico = make_stock_item(
+        db_session, tenant, material, lote="PICO", ubicacion="Retales", estado="pico",
+        fecha_entrada=hace - timedelta(days=3),
+    )
+    en_puesto = make_stock_item(db_session, tenant, otro, lote="EN-PUESTO", ubicacion="LINEA-1")
+    make_stock_item(db_session, tenant, otro, lote="OTRO-MAT", ubicacion="ALMACEN")
+    montada = make_stock_item(db_session, tenant, material, lote="MONTADA", ubicacion="ALMACEN")
+    orden = make_order(db_session, tenant, numero="OP-DISP")
+    linea = make_order_line(db_session, orden, material=material)
+    ajena = make_order_line(db_session, orden, workstation="LINEA-2", linea_numero=2)
+    link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=montada.id, order_id=orden.id, line_id=ajena.id,
+    )
+
+    cliente = _cliente(db_session, user)
+    r = cliente.get("/api/v1/stock-items/disponibles", params={"line_id": str(linea.id)})
+    assert r.status_code == 200, r.text
+    lotes = [b["lote"] for b in r.json()]
+    # Solo el material de la orden (otro material, aunque esté en el puesto, no)
+    assert lotes == [pico.lote, vieja.lote, nueva.lote]
+    assert en_puesto.lote not in lotes
+
+
+def test_cambio_de_orden_en_la_misma_maquina_sigue_con_la_bobina(db_session, tenant, user):
+    """Jorge 28-10: misma máquina y mismo material, el operario sigue con la
+    bobina montada sin medir. Pasa de una orden a otra (reembolso de lo no
+    consumido); una bobina montada en otra máquina no se puede coger."""
+    material = make_material(db_session, tenant, code="FLEJE-108")
+    bobina = make_stock_item(db_session, tenant, material, cantidad=1200, lote="MONTADA")
+    anterior = make_order(db_session, tenant, numero="OP-ANT")
+    linea_ant = make_order_line(db_session, anterior, material=material)
+    link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=bobina.id, order_id=anterior.id, line_id=linea_ant.id,
+    )
+    nueva = make_order(db_session, tenant, numero="OP-NUEVA")
+    linea_nueva = make_order_line(db_session, nueva, material=material)
+    otra_maquina = make_order(db_session, tenant, numero="OP-OTRA")
+    linea_otra = make_order_line(db_session, otra_maquina, workstation="LINEA-9", material=material)
+
+    cliente = _cliente(db_session, user)
+    disp = cliente.get("/api/v1/stock-items/disponibles", params={"line_id": str(linea_nueva.id)})
+    assert [(b["lote"], b["en_puesto"]) for b in disp.json()] == [("MONTADA", True)]
+    lejos = cliente.get("/api/v1/stock-items/disponibles", params={"line_id": str(linea_otra.id)})
+    assert lejos.json() == []
+
+    link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=bobina.id, order_id=nueva.id, line_id=linea_nueva.id,
+    )
+    db_session.refresh(linea_ant)
+    db_session.refresh(linea_nueva)
+    assert linea_ant.active_coil_id is None
+    assert linea_nueva.active_coil_id == bobina.id
+    assert float(linea_ant.real_material_qty) == 0  # se le devolvió lo no consumido

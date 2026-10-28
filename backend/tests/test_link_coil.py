@@ -211,15 +211,22 @@ def test_bobina_activa_en_otra_maquina_se_rechaza(db_session, tenant, user):
     assert float(linea_b.real_material_cost) == 0  # no se cobra dos veces
 
 
-def test_bobina_activa_en_otra_linea_de_la_misma_maquina_tambien(db_session, tenant, user):
-    """El doble cobro es el mismo aunque sea el mismo puesto."""
+def test_en_la_misma_maquina_la_bobina_pasa_a_la_orden_nueva(db_session, tenant, user):
+    """Jorge 28-10: en la misma máquina el operario cambia de orden y sigue con
+    la bobina montada. Pasa de una línea a otra sin cobrarse dos veces: la
+    anterior recibe el reembolso de lo no consumido."""
     bobina, (orden_a, linea_a), (orden_b, linea_b) = _dos_lineas(
         db_session, tenant, puesto_b="LINEA-1"
     )
     _vincular(db_session, tenant, user, bobina, orden_a, linea_a)
 
-    with pytest.raises(ValueError, match="Desvincúlala allí"):
-        _vincular(db_session, tenant, user, bobina, orden_b, linea_b)
+    _vincular(db_session, tenant, user, bobina, orden_b, linea_b)
+
+    db_session.refresh(linea_a)
+    db_session.refresh(linea_b)
+    assert linea_a.active_coil_id is None
+    assert linea_b.active_coil_id == bobina.id
+    assert float(linea_a.real_material_cost) == 0  # no se cobra dos veces
 
 
 def test_tras_desvincular_se_puede_vincular_en_otra_maquina(db_session, tenant, user):

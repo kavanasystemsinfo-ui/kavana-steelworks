@@ -4,6 +4,26 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Vincular bobina sin saberse el código
+
+- **Problema:** Jorge no podía vincular ni registrar bobina. Un puesto sin
+  órdenes dejaba el panel en el paso 1 sin avisar, el operario tenía que
+  saberse el código de la bobina, y una bobina montada en la misma máquina
+  para otra orden no se podía usar en la orden nueva. El panel vinculaba
+  siempre a la primera línea de la orden, no a la de su puesto.
+- **Solución:** lista de bobinas para tocar y vincular (legacy
+  MaterialScanner, `GET /stock-items/disponibles`): solo el material que pide
+  la orden, primero lo que ya está en la máquina, luego picos y después
+  FIFO. En la misma máquina y con el mismo material, la bobina pasa de orden
+  sin medir (desvincula con reembolso y vincula); montada en otra máquina,
+  se sigue rechazando. El alta manual trae elegido el material de la orden.
+  Un puesto sin órdenes lo dice. El panel usa la línea del puesto elegido.
+- **Archivos:** `routers/stock.py`, `services/inventory.py`;
+  `components/BobinasDisponibles.tsx`, `AltaManualBobina.tsx`,
+  `OperarioPage.tsx`, `lib/api.ts`; tests.
+- **Verificación:** pytest y vitest en verde; flujo probado en local en el
+  navegador (lista → vincular → producir, alta manual, puesto sin órdenes).
+
 ## 2026-10-28 — Balance de material por operario y cierre de turno medido
 
 - **Problema:** la chatarra solo aparecía en el fin de bobina, quedaba a nombre

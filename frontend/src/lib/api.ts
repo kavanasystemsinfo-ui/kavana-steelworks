@@ -829,6 +829,11 @@ export const api = {
     });
   },
 
+  /** Bobinas que el operario puede vincular sin saberse el código. */
+  bobinasDisponibles(lineId: string): Promise<Array<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string; en_puesto: boolean }>> {
+    return request(`/stock-items/disponibles?line_id=${encodeURIComponent(lineId)}`)
+  },
+
   getMedicionesPendientes(): Promise<MedicionPendiente[]> {
     return request('/stock-items/mediciones-pendientes')
   },

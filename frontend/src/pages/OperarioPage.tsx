@@ -5,6 +5,7 @@ import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
 import { AltaManualBobina } from '../components/AltaManualBobina'
+import { BobinasDisponibles } from '../components/BobinasDisponibles'
 import { MedirCierre } from '../components/MedirCierre'
 
 interface CoilScan {
@@ -44,6 +45,7 @@ interface OrdenDetalle {
   id: string
   line_id: string
   workstation_id: string | null
+  material_id?: string | null
 }
 
 /** Traducción del estado evaluado del autocontrol (spec 04). */
@@ -285,7 +287,9 @@ export function OperarioPage() {
           setVista('cola')
           return
         }
-        if (lista.length > 1) {
+        // Un puesto sin órdenes también va a la cola: dice que no hay y deja
+        // cambiar de puesto (antes se quedaba en la selección sin avisar)
+        if (lista.length > 1 || (ws && lista.length === 0)) {
           setVista('cola')
           return
         }
@@ -312,11 +316,16 @@ export function OperarioPage() {
           Array.isArray(orderDetail.lines) &&
           orderDetail.lines.length > 0
         ) {
-          const line = orderDetail.lines[0]
+          // La línea de este puesto (una orden pasa por varios puestos)
+          const ws = ordenWsRef.current
+          const line =
+            orderDetail.lines.find((l: { workstation_id?: string | null }) => ws && l.workstation_id === ws) ??
+            orderDetail.lines[0]
           setOrdenDetalle({
             id: orderDetail.id ?? ordenSelId,
             line_id: line.id,
             workstation_id: line.workstation_id ?? ordenWsRef.current,
+            material_id: line.material_id ?? null,
           })
         } else {
           setOrdenDetalle({
@@ -813,9 +822,19 @@ export function OperarioPage() {
             </button>
           )}
         </form>
+        {!scan && ordenDetalle?.line_id && (
+          <BobinasDisponibles
+            lineId={ordenDetalle.line_id}
+            onElegir={(bobina) => {
+              setScan(bobina)
+              setCoilId(bobina.coil_id ?? '')
+            }}
+          />
+        )}
         {!scan && (
           <AltaManualBobina
             puesto={wsSel}
+            materialId={ordenDetalle?.material_id ?? null}
             onAlta={(bobina) => {
               setScan(bobina)
               setCoilId(bobina.coil_id ?? '')
