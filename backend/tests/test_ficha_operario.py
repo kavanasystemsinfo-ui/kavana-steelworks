@@ -83,3 +83,40 @@ def test_las_horas_se_cuentan_solas_desde_el_inicio_de_sesion(db_session, tenant
     log = db_session.scalar(select(ProductionLog).where(ProductionLog.action == "produce"))
     # 10 piezas en ≈ 2 h → eficiencia ≈ 5 piezas/h (antes, sin horas, no había)
     assert 4.5 < log.metadata_["efficiency"] < 5.5
+
+
+def test_calculadoras_del_puesto(db_session, tenant, user):
+    """El operario crea calculadoras en su puesto y las ve cualquiera de él."""
+    cliente = _cliente(db_session, user)
+    datos = {
+        "puesto": "LINEA-1", "nombre": "Palet celda M10",
+        "piezas_paquete": 5, "paquetes_fila": 2, "filas_palet": 4,
+    }
+    r = cliente.post("/api/v1/production/calculadoras", json=datos)
+    assert r.status_code == 201, r.text
+    assert (r.json()["piezas_fila"], r.json()["piezas_palet"]) == (10, 40)
+    assert cliente.post("/api/v1/production/calculadoras", json=datos).status_code == 409
+
+    lista = cliente.get("/api/v1/production/calculadoras", params={"puesto": "LINEA-1"}).json()
+    assert [c["nombre"] for c in lista] == ["Palet celda M10"]
+    otro = cliente.get("/api/v1/production/calculadoras", params={"puesto": "LINEA-2"}).json()
+    assert otro == []
+
+
+def test_el_registro_guarda_el_desglose_de_la_calculadora(db_session, tenant, user):
+    orden, linea, _ = _escenario(db_session, tenant, user)
+    cliente = _cliente(db_session, user)
+    desglose = {
+        "calculadora": "Palet celda M10", "palets": 1, "filas": 0, "paquetes": 2, "piezas": 0,
+    }
+
+    r = cliente.post(
+        "/api/v1/production/record",
+        json={
+            "order_id": str(orden.id), "line_id": str(linea.id),
+            "incremental_quantity": 50, "desglose": desglose,
+        },
+    )
+    assert r.status_code == 200, r.text
+    log = db_session.scalar(select(ProductionLog).where(ProductionLog.action == "produce"))
+    assert log.metadata_["desglose"] == desglose

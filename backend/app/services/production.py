@@ -82,6 +82,7 @@ def record_production(
     incremental_quantity: Decimal | float,
     hours_worked: Decimal | float = 0,
     observaciones: str = "",
+    desglose: dict | None = None,
 ) -> dict[str, Any]:
     """Registra producción incremental en una línea con auto-consumo FIFO."""
     qty = Decimal(str(incremental_quantity))
@@ -295,6 +296,8 @@ def record_production(
         quantity=float(qty),
         metadata={
             "observaciones": observaciones or None,
+            # Palets, filas y paquetes de la calculadora del puesto (fase 2)
+            "desglose": desglose or None,
             "consumedMaterial": consumption_unit,
             "consumedAmount": float(consumed_amount),
             "incrementalCost": float(incremental_material_cost + incremental_labor_cost),

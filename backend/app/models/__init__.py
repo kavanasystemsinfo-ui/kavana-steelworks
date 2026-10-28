@@ -7,6 +7,7 @@ from app.models.admin import (  # noqa: F401
     Workstation,
     WorkstationGroup,
 )
+from app.models.calculadora import CalculadoraPuesto  # noqa: F401
 from app.models.coil_link import CoilLink  # noqa: F401
 from app.models.incidencia import Incidencia, IncidenciaHistorial  # noqa: F401
 from app.models.incidencia_upload import IncidenciaUploadSession  # noqa: F401
@@ -28,6 +29,7 @@ from app.models.user_shift import UserShift  # noqa: F401
 
 __all__ = [
     "Base",
+    "CalculadoraPuesto",
     "CoilLink",
     "Incidencia",
     "IncidenciaHistorial",

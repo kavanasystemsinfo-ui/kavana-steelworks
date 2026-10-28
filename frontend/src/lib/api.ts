@@ -156,6 +156,27 @@ export interface FichaOrden {
   tramo_desde: string | null
 }
 
+/** Calculadora de embalaje de un puesto (piezas/paquete × paquetes/fila × filas/palet). */
+export interface Calculadora {
+  id: string
+  puesto: string
+  nombre: string
+  piezas_paquete: number
+  paquetes_fila: number
+  filas_palet: number
+  piezas_fila: number
+  piezas_palet: number
+}
+
+/** Cómo se contaron las piezas de un registro con la calculadora. */
+export interface Desglose {
+  calculadora: string | null
+  palets: number
+  filas: number
+  paquetes: number
+  piezas: number
+}
+
 /** Bobina montada que el operario debe medir antes de cerrar su turno. */
 export interface MedicionPendiente {
   stock_item_id: string
@@ -837,7 +858,7 @@ export const api = {
     return request(`/stock-items/scan?coil_id=${coil_id ?? ''}&lote=${lote ?? ''}`)
   },
 
-  recordProduction(data: { order_id: string; line_id: string; incremental_quantity: number; hours_worked?: number; observaciones?: string }): Promise<{ incremental_quantity: number; consumed_amount: number; consumption_unit: string; calculation_method: string }> {
+  recordProduction(data: { order_id: string; line_id: string; incremental_quantity: number; hours_worked?: number; observaciones?: string; desglose?: Desglose | null }): Promise<{ incremental_quantity: number; consumed_amount: number; consumption_unit: string; calculation_method: string }> {
     return request('/production/record', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -849,6 +870,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  listCalculadoras(puesto: string): Promise<Calculadora[]> {
+    return request(`/production/calculadoras?puesto=${encodeURIComponent(puesto)}`)
+  },
+
+  crearCalculadora(data: { puesto: string; nombre: string; piezas_paquete: number; paquetes_fila: number; filas_palet: number }): Promise<Calculadora> {
+    return request('/production/calculadoras', { method: 'POST', body: JSON.stringify(data) })
   },
 
   getFicha(orderId: string, lineId: string): Promise<FichaOrden> {
