@@ -31,7 +31,7 @@ export function BobinasDisponibles({
   }
 
   return (
-    <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
+    <div className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
       <p className="label-industrial text-xs text-kavana-text-dim">
         Bobinas disponibles para esta orden · toca una para vincularla
       </p>
@@ -45,7 +45,7 @@ export function BobinasDisponibles({
           key={b.id}
           type="button"
           onClick={() => onElegir(b)}
-          className={`w-full flex items-center gap-3 p-3 rounded-sm text-left border min-h-[64px] transition-colors hover:border-kavana-orange ${
+          className={`w-full flex items-center gap-3 p-3 rounded-xl text-left border min-h-[64px] transition-colors hover:border-kavana-orange ${
             b.en_puesto
               ? 'border-kavana-ok bg-kavana-dark'
               : b.estado === 'pico'

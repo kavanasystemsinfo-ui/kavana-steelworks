@@ -4,6 +4,28 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Panel de operario rediseñado (fase 1)
+
+- **Problema:** el panel de operario no enseñaba los datos clave de la orden
+  (modelo, material, medidas, cantidad), pedía escribir las horas y tenía un
+  estilo industrial oscuro pensado para tablet. Los PCs de planta son de
+  15-17".
+- **Solución (maqueta aprobada por Jorge):** tema claro del panel de mando con
+  el naranja de Kavana para la acción principal; ficha de la orden siempre
+  arriba (`GET /production/ficha`: número, cliente, entrega y plazo, modelo,
+  material con medidas, largo, ritmo, hechas/faltan y la bobina montada con
+  sus kilos y para cuántas piezas dan); registrar a la izquierda y bobina,
+  autocontrol y jornada a la derecha. Las horas se apuntan solas: sin
+  `hours_worked`, `/production/record` cuenta desde el último registro del
+  operario en la línea o desde el inicio de sesión. Al volver al panel con
+  una bobina montada se sigue con ella. Arreglados: errores que salían en
+  verde, avisos vacíos y la línea equivocada al entrar por la URL.
+- **Archivos:** `services/ficha_operario.py`, `routers/production.py`;
+  `components/FichaOrden.tsx`, `OperarioPage.tsx`, `index.css`, `lib/api.ts`;
+  tests.
+- **Verificación:** pytest 453 ok, vitest 138 ok; probado en local a
+  1366×768 (ficha, registrar con horas automáticas, bobina recuperada).
+
 ## 2026-10-28 — Vincular bobina sin saberse el código
 
 - **Problema:** Jorge no podía vincular ni registrar bobina. Un puesto sin

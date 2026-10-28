@@ -52,7 +52,7 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
   return (
     <div className="space-y-2">
       {(pendientes ?? []).map((p) => (
-        <div key={p.stock_item_id} className="bg-kavana-dark border border-kavana-warn rounded-sm p-3 space-y-2">
+        <div key={p.stock_item_id} className="bg-kavana-dark border border-kavana-warn rounded-xl p-3 space-y-2">
           <p className="text-sm">
             Mide el radio de la bobina <span className="mono-data">{p.coil_code}</span>
             {p.puesto ? ` en ${p.puesto}` : ''}. Seguirá montada para el relevo.
@@ -66,13 +66,13 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
               placeholder="Radio (mm)"
               value={radios[p.stock_item_id] ?? ''}
               onChange={(e) => setRadios((r) => ({ ...r, [p.stock_item_id]: e.target.value }))}
-              className="mono-data flex-1 bg-kavana-dark border border-kavana-border rounded-sm px-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+              className="mono-data flex-1 bg-kavana-dark border border-kavana-border rounded-xl px-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
             />
             <button
               type="button"
               onClick={() => medir(p)}
               disabled={radios[p.stock_item_id] === undefined || radios[p.stock_item_id] === ''}
-              className="min-h-[52px] px-4 bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40"
+              className="min-h-[52px] px-4 bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40"
             >
               Medir
             </button>

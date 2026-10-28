@@ -37,6 +37,8 @@ class RecordProductionRequest(BaseModel):
     order_id: uuid.UUID
     line_id: uuid.UUID
     incremental_quantity: Decimal = Field(ge=0)
+    # Sin horas (0), se cuentan solas desde el último registro del operario en
+    # la línea o desde que inició sesión (rediseño del panel, 28-10)
     hours_worked: Decimal = Field(default=0, ge=0)
     observaciones: str | None = Field(default=None, max_length=2000)
 
@@ -56,8 +58,12 @@ def record_production(
     vinculación priorizando la bobina activa; el fallo bloquea. Modo simple
     (sin bobina): FIFO global y el fallo no bloquea (nunca consumos fantasma).
     """
+    from app.services.ficha_operario import horas_automaticas
     from app.services.production import record_production as record_service
 
+    horas = body.hours_worked
+    if horas == 0 and body.incremental_quantity > 0:
+        horas = horas_automaticas(db, current_user.id, body.line_id)
     try:
         return record_service(
             db,
@@ -66,8 +72,29 @@ def record_production(
             order_id=body.order_id,
             line_id=body.line_id,
             incremental_quantity=body.incremental_quantity,
-            hours_worked=body.hours_worked,
+            hours_worked=horas,
             observaciones=body.observaciones or "",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/ficha")
+def ficha(
+    order_id: uuid.UUID,
+    line_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Datos clave de la orden para el panel de operario: orden, cliente,
+    entrega, modelo, material con medidas, largo, ritmo, lo hecho y la bobina
+    montada (kilos y para cuántas piezas dan)."""
+    from app.services.ficha_operario import ficha_orden
+
+    try:
+        return ficha_orden(db, current_user.tenant_id, current_user.id, order_id, line_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

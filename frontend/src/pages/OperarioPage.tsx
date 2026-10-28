@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getTenantId, type EventData, type OrderItem, type WorkstationItem } from '../lib/api'
+import { api, getTenantId, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
 import { AltaManualBobina } from '../components/AltaManualBobina'
 import { BobinasDisponibles } from '../components/BobinasDisponibles'
 import { MedirCierre } from '../components/MedirCierre'
+import { FichaOrden } from '../components/FichaOrden'
 
 interface CoilScan {
   id: string
@@ -56,9 +57,11 @@ function estadoCalidad(estado: string): string {
   return estado
 }
 
-/** Panel de Operario (tablet): una acción principal a la vez.
- *  Directriz Jorge: no abrumar, guía de acción visible, sin perder
- *  funcionalidad. El escaneo/vinculación de bobina es el paso central.
+/** Panel de Operario (PC de 15-17" junto a la máquina): una acción principal
+ *  a la vez. Directriz Jorge: no abrumar, guía de acción visible, sin perder
+ *  funcionalidad. Rediseño 28-10 (maqueta aprobada): tema claro, la ficha de
+ *  la orden siempre arriba, registrar a la izquierda y la bobina, el
+ *  autocontrol y la jornada a la derecha; las horas se apuntan solas.
  */
 export function OperarioPage() {
   const [coilId, setCoilId] = useState('')
@@ -67,6 +70,7 @@ export function OperarioPage() {
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenDetalle | null>(null)
   const [toasts, setToasts] = useState<Array<{id: string; type: "success" | "error"; message: string}>>([]);
   const showToast = (type: "success" | "error", message: string) => {
+    if (!message) return // las llamadas con '' solo limpiaban el antiguo aviso
     const id = Math.random().toString(36).substr(2, 9);
     setToasts(prev => [...prev, {id, type, message}]);
     setTimeout(() => {
@@ -137,6 +141,61 @@ export function OperarioPage() {
     }
   }
 
+  // Ficha de la orden (datos clave + bobina montada), refrescada tras cada acción
+  const [ficha, setFicha] = useState<FichaOrdenData | null>(null)
+  const [fichaVersion, setFichaVersion] = useState(0)
+  const refrescarFicha = () => setFichaVersion((v) => v + 1)
+  const [ahora, setAhora] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!ordenDetalle?.id || !ordenDetalle.line_id) {
+      setFicha(null)
+      return
+    }
+    let vivo = true
+    api
+      .getFicha(ordenDetalle.id, ordenDetalle.line_id)
+      .then((d) => {
+        if (!vivo) return
+        const valida = d && typeof d.numero === 'string' && typeof d.total === 'number'
+        setFicha(valida ? d : null)
+        // Al volver al panel con una bobina ya montada, se sigue produciendo con ella
+        if (valida && d.bobina) {
+          const montada = d.bobina
+          setScan((actual) =>
+            actual ?? {
+              id: montada.id,
+              lote: montada.codigo,
+              coil_id: montada.codigo,
+              peso_kg: montada.kg,
+              ancho_mm: d.ancho_mm,
+              espesor_mm: d.espesor_mm,
+              material_code: d.material,
+              material_name: d.material_nombre,
+              estado: 'activo',
+              ubicacion: wsSel,
+              modo: 'auto',
+            },
+          )
+          setVinculada(true)
+        }
+      })
+      .catch(() => vivo && setFicha(null))
+    return () => {
+      vivo = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenDetalle?.id, ordenDetalle?.line_id, fichaVersion])
+
+  // El tiempo desde el último registro se ve correr (las horas se apuntan solas)
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+  const minutosTramo = ficha?.tramo_desde
+    ? Math.max(0, Math.round((ahora - new Date(ficha.tramo_desde).getTime()) / 60000))
+    : null
+
   const handleLink = async () => {
     showToast("error", '')
     if (!scan) return
@@ -151,6 +210,7 @@ export function OperarioPage() {
         line_id: ordenDetalle.line_id,
       })
       setVinculada(true)
+      refrescarFicha()
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : 'Error al vincular')
     }
@@ -169,6 +229,7 @@ export function OperarioPage() {
       setScan(null)
       setCoilId('')
       showToast("success", 'Bobina desvinculada. Se reembolsó lo no consumido.')
+      refrescarFicha()
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : 'Error al desvincular')
     }
@@ -200,9 +261,6 @@ export function OperarioPage() {
 
   const [radioMm, setRadioMm] = useState('')
   const [piezas, setPiezas] = useState('')
-  const [horas, setHoras] = useState('')
-  // Campo que edita el numpad táctil (foco del último input numérico)
-  const [campoActivo, setCampoActivo] = useState<'piezas' | 'horas'>('piezas')
 
   // Autocontrol de calidad (spec 04): plantilla + orden de la demo
   const [models, setModels] = useState<QualityModel[]>([])
@@ -316,8 +374,9 @@ export function OperarioPage() {
           Array.isArray(orderDetail.lines) &&
           orderDetail.lines.length > 0
         ) {
-          // La línea de este puesto (una orden pasa por varios puestos)
-          const ws = ordenWsRef.current
+          // La línea de este puesto (una orden pasa por varios puestos). Al
+          // entrar por la URL aún no se conoce la orden de la cola: manda ?ws=
+          const ws = ordenWsRef.current ?? new URLSearchParams(window.location.search).get('ws')
           const line =
             orderDetail.lines.find((l: { workstation_id?: string | null }) => ws && l.workstation_id === ws) ??
             orderDetail.lines[0]
@@ -548,7 +607,7 @@ export function OperarioPage() {
     showToast("success", '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
-      showToast("success", 'No se pudo obtener la orden activa')
+      showToast("error", 'No se pudo obtener la orden activa')
       return
     }
     try {
@@ -556,16 +615,16 @@ export function OperarioPage() {
         order_id: ordenDetalle.id,
         line_id: ordenDetalle.line_id,
         incremental_quantity: Number(piezas),
-        hours_worked: Number(horas || 0),
+        // Sin horas: el servidor cuenta el tiempo desde el último registro
         observaciones: '',
       })
       showToast("success", 
-        `${res.incremental_quantity ?? 0} piezas registradas · ${res.consumed_amount ?? 0} ${res.consumption_unit ?? ''} consumidos (${res.calculation_method ?? ''})`,
+        `${res.incremental_quantity ?? 0} piezas registradas · ${Number(res.consumed_amount ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${res.consumption_unit ?? ''} consumidos`,
       )
       setPiezas('')
-      setHoras('')
+      refrescarFicha()
     } catch (err) {
-      showToast("success", 
+      showToast("error", 
         err instanceof Error ? err.message : 'Error al registrar producción',
       )
     }
@@ -576,7 +635,7 @@ export function OperarioPage() {
     showToast("success", '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
-      showToast("success", 'No se pudo obtener la orden activa')
+      showToast("error", 'No se pudo obtener la orden activa')
       return
     }
     try {
@@ -589,11 +648,12 @@ export function OperarioPage() {
       showToast("success", 
         `${res.msg}: quedan ${res.peso_restante_kg} kg, ${res.merma_kg} kg de merma (${res.merma_cost} €)`,
       )
+      refrescarFicha()
       setVinculada(false)
       setScan(null)
       setCoilId('')
     } catch (err) {
-      showToast("success", 
+      showToast("error", 
         err instanceof Error ? err.message : 'Error al cerrar bobina',
       )
     }
@@ -603,7 +663,7 @@ export function OperarioPage() {
     showToast("success", '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
-      showToast("success", 'No se pudo obtener la orden activa')
+      showToast("error", 'No se pudo obtener la orden activa')
       return
     }
     try {
@@ -613,7 +673,7 @@ export function OperarioPage() {
       setScan(null)
       setCoilId('')
     } catch (err) {
-      showToast("success", 
+      showToast("error", 
         err instanceof Error ? err.message : 'Error al retirar pico',
       )
     }
@@ -635,7 +695,7 @@ export function OperarioPage() {
               key={w.id}
               type="button"
               onClick={() => elegirPuesto(w.code)}
-              className="bg-kavana-surface border-2 border-kavana-border rounded-sm p-5 text-left hover:border-kavana-orange transition-colors"
+              className="bg-kavana-surface border-2 border-kavana-border rounded-xl p-5 text-left hover:border-kavana-orange transition-colors"
             >
               <span className="label-industrial text-[10px] text-kavana-text-dim">
                 Puesto
@@ -646,7 +706,7 @@ export function OperarioPage() {
           ))}
         </div>
         {activos.length === 0 && (
-          <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-sm p-8 text-center text-kavana-text-dim">
+          <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-xl p-8 text-center text-kavana-text-dim">
             Sin puestos de trabajo configurados.
           </div>
         )}
@@ -671,7 +731,7 @@ export function OperarioPage() {
               key={o.id}
               type="button"
               onClick={() => elegirOrden(o)}
-              className="bg-kavana-surface border-2 border-kavana-border rounded-sm p-5 text-left hover:border-kavana-orange transition-colors"
+              className="bg-kavana-surface border-2 border-kavana-border rounded-xl p-5 text-left hover:border-kavana-orange transition-colors"
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-2xl font-black uppercase">#{o.numero}</p>
@@ -685,7 +745,7 @@ export function OperarioPage() {
             </button>
           ))}
           {cola.length === 0 && (
-            <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-sm p-8 text-center text-kavana-text-dim">
+            <div className="bg-kavana-surface border border-dashed border-kavana-border rounded-xl p-8 text-center text-kavana-text-dim">
               Sin órdenes para este puesto. Esperando planificación.
             </div>
           )}
@@ -693,7 +753,7 @@ export function OperarioPage() {
         <button
           type="button"
           onClick={cambiarPuesto}
-          className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange transition-colors"
+          className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange transition-colors"
         >
           ← Cambiar puesto
         </button>
@@ -702,16 +762,18 @@ export function OperarioPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="tema-panel tema-operario -m-4 min-h-[calc(100vh-3.5rem)] bg-p-fondo text-p-texto font-panel tabular-nums">
+    <div className="max-w-[1400px] mx-auto px-4 py-4 lg:px-6 space-y-4">
       {/* Toast container for success/error */}
       <div className="top-6 right-6 fixed z-[90]">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`mb-3 px-4 py-2 rounded-sm border 
-            ${toast.type === "success" 
-              ? "border-kavana-ok/60 bg-kavana-ok/20 text-kavana-ok"
-              : "border-kavana-danger/60 bg-kavana-danger/20 text-kavana-danger"}`}
+            role={toast.type === 'error' ? 'alert' : 'status'}
+            className={`mb-3 max-w-md px-4 py-3 rounded-xl border shadow-lg text-sm font-semibold
+            ${toast.type === "success"
+              ? "border-p-ok-borde bg-p-ok-bg text-p-ok"
+              : "border-p-mal-borde bg-p-mal-bg text-p-mal"}`}
           >
             {toast.message}
           </div>
@@ -729,42 +791,39 @@ export function OperarioPage() {
       )}
 
       {/* Guía de acción: el siguiente paso siempre identificable */}
-      <div className="step-guide">
-        <p className="label-industrial text-xs text-kavana-text-dim">
-          Paso actual
-        </p>
-        <p className="text-lg font-bold">
-          {vinculada ? 'Producir piezas' : 'Vincular bobina'}
-        </p>
-        <div className="flex items-center justify-between gap-2 mt-2">
-          <p className="mono-data text-[11px] text-kavana-text-dim truncate">
-            {wsSel ?? 'puesto por defecto'} · {ordenNumero ?? ordenDetalle?.id ?? 'sin orden'}
-          </p>
-          <div className="flex gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={cambiarOrden}
-              className="label-industrial text-[10px] uppercase border border-kavana-border rounded-sm px-2 py-1 hover:border-kavana-orange"
-            >
-              Cambiar orden
-            </button>
-            <button
-              type="button"
-              onClick={cambiarPuesto}
-              className="label-industrial text-[10px] uppercase border border-kavana-border rounded-sm px-2 py-1 hover:border-kavana-orange"
-            >
-              Cambiar puesto
-            </button>
-          </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div>
+          <p className="text-xs text-p-texto2">Paso actual</p>
+          <p className="text-lg font-bold">{vinculada ? 'Producir piezas' : 'Vincular bobina'}</p>
         </div>
+        <span className="flex-1" />
+        <span className="text-sm text-p-texto2">{wsSel ?? 'puesto por defecto'}</span>
+        <button
+          type="button"
+          onClick={cambiarOrden}
+          className="min-h-[40px] rounded-lg border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+        >
+          Cambiar orden
+        </button>
+        <button
+          type="button"
+          onClick={cambiarPuesto}
+          className="min-h-[40px] rounded-lg border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+        >
+          Cambiar puesto
+        </button>
       </div>
 
-      {/* Acción principal: escaneo de bobina (botón grande táctil) */}
-      {!vinculada ? (
-        <>
+      <FichaOrden ficha={ficha} numero={ordenNumero} />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] items-start">
+        {/* Izquierda: la acción principal (vincular o registrar) */}
+        <div className="space-y-4">
+          {!vinculada ? (
+            <>
         <form
           onSubmit={handleScan}
-          className="bg-kavana-surface border border-kavana-border rounded-sm p-6 space-y-4"
+          className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
         >
           <label className="block">
             <span className="label-industrial text-xs text-kavana-text-dim">
@@ -774,7 +833,7 @@ export function OperarioPage() {
               value={coilId}
               onChange={(e) => setCoilId(e.target.value)}
               placeholder="Escanea la etiqueta o escribe el ID"
-              className="mono-data mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+              className="mono-data mt-1 w-full bg-kavana-dark border border-kavana-border rounded-xl px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
               autoFocus
             />
           </label>
@@ -783,7 +842,7 @@ export function OperarioPage() {
 
           {/* Ficha de la bobina escaneada (modo automático) */}
           {scan && (
-            <div className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-2">
+            <div className="bg-kavana-dark border border-kavana-border rounded-xl p-4 space-y-2">
               <p className="mono-data text-xl text-kavana-ok">
                 {scan.coil_id ?? scan.lote}
               </p>
@@ -805,9 +864,9 @@ export function OperarioPage() {
               <button
                 type="button"
                 onClick={handleLink}
-                className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+                className="w-full min-h-[64px] bg-kavana-orange text-black font-bold rounded-xl hover:opacity-90 transition-opacity"
               >
-                🔗 Vincular a mi orden
+                Vincular a mi orden
               </button>
             </div>
           )}
@@ -816,9 +875,9 @@ export function OperarioPage() {
             <button
               type="submit"
               disabled={!coilId.trim()}
-              className="w-full min-h-[64px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
+              className="w-full min-h-[64px] bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40 hover:opacity-90 transition-opacity"
             >
-              🔍 Escanear bobina
+              Escanear bobina
             </button>
           )}
         </form>
@@ -842,22 +901,88 @@ export function OperarioPage() {
             }}
           />
         )}
-        </>
-      ) : (
-        <div className="bg-kavana-surface border border-kavana-border rounded-sm p-6 text-center space-y-4">
-          <p className="mono-data text-2xl text-kavana-ok">
-            {scan?.coil_id ?? `COIL-${coilId}`}
-          </p>
-          <p className="text-kavana-text-dim">
-            Bobina vinculada a la orden. Registra producción para consumir kg.
-          </p>
+            </>
+          ) : (
+            /* Registrar producción: piezas buenas (auto-consumo FIFO) */
+            <form
+              onSubmit={handleRecordProduction}
+              aria-label="Registrar piezas"
+              className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
+            >
+              <h2 className="text-xl font-bold">Registrar producción</h2>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start">
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="text-sm text-p-texto2">Piezas buenas</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={piezas}
+                      onChange={(e) => setPiezas(e.target.value)}
+                      placeholder="Piezas"
+                      className="mono-data mt-1 w-full bg-p-tarjeta border border-p-borde rounded-xl px-4 min-h-[64px] text-3xl font-extrabold focus:border-kavana-orange outline-none"
+                      required
+                    />
+                  </label>
+                  <div className="rounded-xl bg-p-fondo px-4 py-3">
+                    <p className="text-sm text-p-texto2">Tiempo desde el último registro</p>
+                    <p className="text-xl font-bold">
+                      {minutosTramo === null
+                        ? '—'
+                        : minutosTramo >= 60
+                          ? `${Math.floor(minutosTramo / 60)} h ${String(minutosTramo % 60).padStart(2, '0')} min`
+                          : `${minutosTramo} min`}
+                    </p>
+                    <p className="text-xs text-p-texto2">Se apunta solo, no hace falta escribirlo</p>
+                  </div>
+                </div>
+                <Numpad value={piezas} onChange={setPiezas} step={1} allowDecimals={false} min={1} />
+              </div>
+              <button
+                type="submit"
+                className="w-full min-h-[60px] rounded-xl bg-kavana-orange text-white text-lg font-extrabold hover:opacity-90 transition-opacity"
+              >
+                {piezas ? `Registrar ${piezas} piezas` : 'Registrar piezas'}
+              </button>
+            </form>
+          )}
+        </div>
 
-
-
+        {/* Derecha: bobina montada, autocontrol, incidencias y jornada */}
+        <div className="space-y-4">
+          {vinculada && (
+            <section aria-label="Bobina montada" className="bg-p-tarjeta border border-p-borde rounded-2xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold">Bobina montada</h2>
+                <span className="flex-1" />
+                <span className="mono-data text-sm text-p-texto2">{scan?.coil_id ?? `COIL-${coilId}`}</span>
+              </div>
+              {ficha?.bobina && (
+                <>
+                  <p className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="text-3xl font-extrabold">≈ {Math.round(ficha.bobina.kg).toLocaleString('es-ES')} kg</span>
+                    {ficha.bobina.piezas_estimadas !== null && (
+                      <span className="text-base text-p-texto2">
+                        dan para ≈ {ficha.bobina.piezas_estimadas.toLocaleString('es-ES')} piezas
+                      </span>
+                    )}
+                  </p>
+                  <div className="h-2.5 rounded-full bg-p-linea">
+                    <div
+                      className="h-2.5 rounded-full bg-p-plan"
+                      style={{ width: `${Math.min(100, Math.max(0, (ficha.bobina.kg / (ficha.bobina.kg_inicial || 1)) * 100))}%` }}
+                    />
+                  </div>
+                </>
+              )}
+              <details className="rounded-xl border border-p-borde px-4 py-3">
+                <summary className="cursor-pointer text-sm font-semibold">Fin de bobina o retirar pico</summary>
+                <div className="mt-3 space-y-3">
           {/* Fin de bobina: medir los milímetros de radio restantes (visión Jorge) */}
           <form
             onSubmit={handleFinBobina}
-            className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
+            className="bg-kavana-dark border border-kavana-border rounded-xl p-4 space-y-3 text-left"
           >
             <p className="label-industrial text-xs text-kavana-text-dim">
               Fin de bobina: mide el radio con el metro
@@ -869,80 +994,42 @@ export function OperarioPage() {
               value={radioMm}
               onChange={(e) => setRadioMm(e.target.value)}
               placeholder="Radio restante (mm)"
-              className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
+              className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-xl px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
               required
             />
             <button
               type="submit"
-              className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+              className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold rounded-xl hover:bg-kavana-orange hover:text-black transition-colors"
             >
-              🏁 Cerrar bobina (merma real)
+              Cerrar bobina (merma real)
             </button>
             <button
               type="button"
               onClick={handleRetirarPico}
-              className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+              className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
             >
-              📦 Retirar pico a inventario
+              Retirar pico a inventario
             </button>
           </form>
 
-          {/* Registrar producción: piezas buenas (auto-consumo FIFO) */}
-          <form
-            onSubmit={handleRecordProduction}
-            className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
-          >
-            <p className="label-industrial text-xs text-kavana-text-dim">
-              Registrar producción
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                step="1"
-                min="1"
-                value={piezas}
-                onChange={(e) => setPiezas(e.target.value)}
-                onFocus={() => setCampoActivo('piezas')}
-                placeholder="Piezas"
-                className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
-                required
-              />
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                value={horas}
-                onChange={(e) => setHoras(e.target.value)}
-                onFocus={() => setCampoActivo('horas')}
-                placeholder="Horas"
-                className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
-              />
-            </div>
-            <p className="label-industrial text-[10px] text-kavana-text-dim">
-              Numpad → {campoActivo === 'piezas' ? 'Piezas' : 'Horas'}
-            </p>
-            <Numpad
-              value={campoActivo === 'piezas' ? piezas : horas}
-              onChange={(v) =>
-                campoActivo === 'piezas' ? setPiezas(v) : setHoras(v)
-              }
-              step={campoActivo === 'horas' ? 0.5 : 1}
-              allowDecimals={campoActivo === 'horas'}
-              min={campoActivo === 'horas' ? 0 : 1}
-            />
-            <button
-              type="submit"
-              className="w-full min-h-[56px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
-            >
-              ➕ Registrar piezas
-            </button>
-          </form>
+                </div>
+              </details>
+              <button
+                onClick={handleUnlink}
+                className="w-full min-h-[48px] rounded-xl border border-p-borde text-sm font-semibold hover:border-p-plan"
+              >
+                Desvincular bobina
+              </button>
+            </section>
+          )}
 
+          {vinculada && puedeAutocontrol && (
+            <div className="bg-p-tarjeta border border-p-borde rounded-2xl p-5">
           {/* Autocontrol de calidad (spec 04): no bloquea, solo informa */}
           {puedeAutocontrol && (
             <form
               onSubmit={handleQualityCheck}
-              className="bg-kavana-dark border border-kavana-border rounded-sm p-4 space-y-3 text-left"
+              className="bg-kavana-dark border border-kavana-border rounded-xl p-4 space-y-3 text-left"
             >
               <p className="label-industrial text-xs text-kavana-text-dim">
                 Autocontrol de calidad
@@ -994,7 +1081,7 @@ export function OperarioPage() {
                           ? `Nominal ${check.nominal_value} ±${check.tolerance_plus ?? 0}/${check.tolerance_minus ?? 0}`
                           : 'Valor'
                       }
-                      className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                      className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-xl px-3 py-2 text-base focus:border-kavana-orange outline-none"
                     />
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
@@ -1002,7 +1089,7 @@ export function OperarioPage() {
                         type="button"
                         aria-label={`Aprobar ${check.name}`}
                         onClick={() => setMedicion(check.name, true)}
-                        className={`min-h-[44px] border rounded-sm font-bold uppercase tracking-widest transition-colors ${
+                        className={`min-h-[44px] border rounded-xl font-bold transition-colors ${
                           mediciones[check.name] === true
                             ? 'bg-kavana-ok text-black border-kavana-ok'
                             : 'border-kavana-border text-kavana-text-dim hover:border-kavana-ok hover:text-kavana-ok'
@@ -1014,7 +1101,7 @@ export function OperarioPage() {
                         type="button"
                         aria-label={`Rechazar ${check.name}`}
                         onClick={() => setMedicion(check.name, false)}
-                        className={`min-h-[44px] border rounded-sm font-bold uppercase tracking-widest transition-colors ${
+                        className={`min-h-[44px] border rounded-xl font-bold transition-colors ${
                           mediciones[check.name] === false
                             ? 'bg-kavana-danger text-white border-kavana-danger'
                             : 'border-kavana-border text-kavana-text-dim hover:border-kavana-danger hover:text-kavana-danger'
@@ -1029,30 +1116,24 @@ export function OperarioPage() {
 
               <button
                 type="submit"
-                className="w-full min-h-[52px] border border-kavana-orange text-kavana-orange font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-black transition-colors"
+                className="w-full min-h-[52px] border border-kavana-orange text-kavana-orange font-bold rounded-xl hover:bg-kavana-orange hover:text-black transition-colors"
               >
-                📋 Registrar autocontrol
+                Registrar autocontrol
               </button>
             </form>
           )}
 
-          <button
-            onClick={handleUnlink}
-            className="w-full min-h-[56px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
-          >
-            🔄 Desvincular bobina
-          </button>
-        </div>
-      )}
+            </div>
+          )}
 
       {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
       {ordenDetalle?.workstation_id && (
         <div className="space-y-3">
           <button
             onClick={abrirModalIncidencia}
-            className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-danger hover:text-white transition-colors"
+            className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold rounded-xl hover:bg-kavana-danger hover:text-white transition-colors"
           >
-            ⚠️ Reportar incidencia
+            Reportar incidencia
           </button>
 
         </div>
@@ -1061,14 +1142,14 @@ export function OperarioPage() {
       {/* Cierre de jornada (Fase 1): total_hours + turno A/B/C (spec 02 3.11) */}
       <div className="space-y-3">
         {jornadaCerrada ? (
-          <div className="bg-kavana-surface border border-kavana-ok rounded-sm p-4 text-center space-y-1">
+          <div className="bg-kavana-surface border border-kavana-ok rounded-xl p-4 text-center space-y-1">
             <p className="label-industrial text-xs text-kavana-text-dim">Jornada cerrada</p>
             <p className="font-display font-black text-3xl text-kavana-ok">
               {`${jornadaCerrada.total_hours.toLocaleString('es-ES')} h \u00b7 Turno ${jornadaCerrada.turno}`}
             </p>
           </div>
         ) : confirmarCierre ? (
-          <div className="bg-kavana-surface border border-kavana-orange/50 rounded-sm p-4 space-y-3">
+          <div className="bg-kavana-surface border border-kavana-orange/50 rounded-xl p-4 space-y-3">
             <p className="text-sm text-kavana-text-dim">
               ¿Cerrar turno? Se registrará la hora de salida y las horas trabajadas.
             </p>
@@ -1077,7 +1158,7 @@ export function OperarioPage() {
               <button
                 type="button"
                 onClick={() => setConfirmarCierre(false)}
-                className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+                className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
               >
                 Cancelar
               </button>
@@ -1085,7 +1166,7 @@ export function OperarioPage() {
                 type="button"
                 onClick={handleCerrarJornada}
                 disabled={cerrandoJornada || sinMedir !== 0}
-                className="min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="min-h-[52px] bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40 hover:opacity-90 transition-opacity"
               >
                 {cerrandoJornada ? 'Cerrando…' : 'Sí, cerrar'}
               </button>
@@ -1095,18 +1176,21 @@ export function OperarioPage() {
           <button
             type="button"
             onClick={() => setConfirmarCierre(true)}
-            className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+            className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
           >
-            🕐 Cerrar jornada
+            Cerrar jornada
           </button>
         )}
       </div>
 
+        </div>
+      </div>
+
       {incModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-kavana-surface border border-kavana-orange/50 rounded-sm p-6 space-y-4">
+          <div className="w-full max-w-lg bg-kavana-surface border border-kavana-orange/50 rounded-xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-kavana-border pb-3">
-              <h2 className="text-lg font-bold uppercase tracking-widest">
+              <h2 className="text-lg font-bold">
                 Reportar incidencia
               </h2>
               <button
@@ -1122,7 +1206,7 @@ export function OperarioPage() {
 
             {/* Datos auto-importados (formulario clásico): el sistema conoce
                 operario, puesto, modelo y fecha; el operario solo observa. */}
-            <div className="grid grid-cols-2 gap-2 text-xs border border-kavana-border rounded-sm p-3">
+            <div className="grid grid-cols-2 gap-2 text-xs border border-kavana-border rounded-xl p-3">
               <div>
                 <span className="label-industrial text-kavana-text-dim">Operario</span>
                 <p className="font-semibold">Operario Demo</p>
@@ -1146,7 +1230,7 @@ export function OperarioPage() {
             {incStatus === 'creating' && (
               <div className="flex flex-col items-center gap-4 py-10 text-kavana-text-dim">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-kavana-orange border-t-transparent" />
-                <p className="text-sm font-bold uppercase tracking-wider">
+                <p className="text-sm font-bold">
                   Creando sesión…
                 </p>
               </div>
@@ -1156,7 +1240,7 @@ export function OperarioPage() {
               <button
                 type="button"
                 onClick={adjuntarFoto}
-                className="w-full min-h-[48px] border border-dashed border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+                className="w-full min-h-[48px] border border-dashed border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
               >
                 📷 Adjuntar foto (opcional)
               </button>
@@ -1172,28 +1256,28 @@ export function OperarioPage() {
                       <img
                         src={incPhotoUrl}
                         alt="Evidencia"
-                        className="mx-auto max-h-56 w-full rounded-sm object-cover"
+                        className="mx-auto max-h-56 w-full rounded-xl object-cover"
                       />
-                      <span className="absolute right-2 top-2 rounded-sm bg-kavana-ok/90 px-3 py-1 text-xs font-bold uppercase text-black">
+                      <span className="absolute right-2 top-2 rounded-xl bg-kavana-ok/90 px-3 py-1 text-xs font-bold uppercase text-black">
                         Foto recibida
                       </span>
                       <button
                         onClick={quitarFoto}
-                        className="absolute bottom-2 right-2 rounded-sm bg-kavana-danger px-3 py-1.5 text-xs font-bold text-white"
+                        className="absolute bottom-2 right-2 rounded-xl bg-kavana-danger px-3 py-1.5 text-xs font-bold text-white"
                       >
                         Quitar foto
                       </button>
                     </div>
                   ) : (
                     <>
-                      <div className="mx-auto w-fit rounded-sm bg-white p-3">
+                      <div className="mx-auto w-fit rounded-xl bg-white p-3">
                         <QRCodeSVG
                           value={`${window.location.origin}/mobile-upload/${incSession.sessionId}`}
                           size={150}
                           title="QR de subida de foto"
                         />
                       </div>
-                      <p className="text-sm font-bold uppercase tracking-wider">
+                      <p className="text-sm font-bold">
                         Escanea con tu móvil
                       </p>
                       <p className="text-xs text-kavana-text-dim">
@@ -1219,7 +1303,7 @@ export function OperarioPage() {
                 <select
                   value={incTipo}
                   onChange={(e) => setIncTipo(e.target.value)}
-                  className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                  className="w-full bg-kavana-dark border border-kavana-border rounded-xl px-3 py-2 text-base focus:border-kavana-orange outline-none"
                 >
                   <option value="maquina">Máquina</option>
                   <option value="material">Material</option>
@@ -1237,7 +1321,7 @@ export function OperarioPage() {
                   onChange={(e) => setIncDescripcion(e.target.value)}
                   placeholder="Detalla la incidencia"
                   rows={3}
-                  className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 text-base focus:border-kavana-orange outline-none"
+                  className="w-full bg-kavana-dark border border-kavana-border rounded-xl px-3 py-2 text-base focus:border-kavana-orange outline-none"
                 />
               </label>
 
@@ -1245,7 +1329,7 @@ export function OperarioPage() {
                 type="button"
                 onClick={enviarIncidencia}
                 disabled={incStatus === 'submitting' || incStatus === 'creating'}
-                className="w-full min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full min-h-[52px] bg-kavana-orange text-black font-bold rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {incStatus === 'submitting' ? 'Enviando…' : 'Enviar incidencia'}
               </button>
@@ -1255,7 +1339,7 @@ export function OperarioPage() {
       )}
 
       {/* Datos de apoyo colapsados: solo si el operario los necesita */}
-      <details className="bg-kavana-surface border border-kavana-border rounded-sm p-4">
+      <details className="bg-kavana-surface border border-kavana-border rounded-xl p-4">
         <summary className="label-industrial text-xs text-kavana-text-dim cursor-pointer">
           Detalles de la orden
         </summary>
@@ -1269,7 +1353,7 @@ export function OperarioPage() {
       </details>
 
       {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}
-      <div className="bg-kavana-surface border border-kavana-border rounded-sm p-4 space-y-2">
+      <div className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <p className="label-industrial text-xs text-kavana-text-dim">
             Alertas de almacén
@@ -1293,6 +1377,7 @@ export function OperarioPage() {
         )}
       </div>
     </div>
+    </div>
   )
 }
 
@@ -1314,7 +1399,7 @@ function ConexionBadge({ estado }: { estado: ConexionEstado }) {
         : 'border-kavana-border bg-kavana-text-dim/10 text-kavana-text-dim'
   return (
     <span
-      className={`label-industrial text-[10px] uppercase tracking-wider rounded-sm border px-2 py-0.5 ${clase}`}
+      className={`label-industrial text-[10px] rounded-xl border px-2 py-0.5 ${clase}`}
     >
       {texto}
     </span>

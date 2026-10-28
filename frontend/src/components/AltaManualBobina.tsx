@@ -64,22 +64,22 @@ export function AltaManualBobina({
   }
 
   const campo =
-    'mono-data mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 min-h-[52px] focus:border-kavana-orange outline-none'
+    'mono-data mt-1 w-full bg-kavana-dark border border-kavana-border rounded-xl px-3 min-h-[52px] focus:border-kavana-orange outline-none'
 
   if (!abierto) {
     return (
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm hover:border-kavana-orange hover:text-kavana-orange transition-colors"
+        className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
       >
-        ✍️ Registrar bobina a mano
+        Registrar bobina a mano
       </button>
     )
   }
 
   return (
-    <form onSubmit={enviar} className="bg-kavana-surface border border-kavana-border rounded-sm p-6 space-y-3">
+    <form onSubmit={enviar} className="bg-kavana-surface border border-kavana-border rounded-xl p-6 space-y-3">
       <p className="label-industrial text-xs text-kavana-text-dim">
         Modo manual: copia los datos de la etiqueta del proveedor
       </p>
@@ -117,14 +117,14 @@ export function AltaManualBobina({
         <button
           type="button"
           onClick={() => setAbierto(false)}
-          className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold uppercase tracking-widest rounded-sm"
+          className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={!materialId || !peso || !lote.trim()}
-          className="min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40"
+          className="min-h-[52px] bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40"
         >
           Registrar
         </button>
