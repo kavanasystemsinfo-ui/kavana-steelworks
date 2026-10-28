@@ -80,6 +80,10 @@ def test_la_demo_no_se_agota_en_muchos_ticks(db_session):
     for _ in range(150):
         acciones += simular_tick(db_session, rng)["acciones"]
 
+    # Una orden puede terminar en el último tick: la repone el tick siguiente
+    from app.services.simulador import _reponer_ordenes
+
+    _reponer_ordenes(db_session, tenant.id, rng)
     activas = db_session.scalars(
         select(Order).where(Order.tenant_id == tenant.id, Order.estado == "active")
     ).all()
@@ -117,6 +121,20 @@ def test_el_backend_arranca_y_para_el_bucle_del_simulador(monkeypatch):
         assert client.get("/health").status_code == 200
 
 
+def _siguiente_turno():
+    """Primer tick del turno siguiente (06:00 o 14:00 en planta)."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.shifts import TZ_PLANTA
+
+    local = datetime.now(UTC).astimezone(TZ_PLANTA)
+    if local.hour < 6:
+        return local.replace(hour=6, minute=1)
+    if local.hour < 14:
+        return local.replace(hour=14, minute=1)
+    return (local + timedelta(days=1)).replace(hour=6, minute=1)
+
+
 def _balance(db, tenant, desde):
     logs = db.scalars(
         select(ProductionLog).where(
@@ -143,6 +161,7 @@ def test_la_chatarra_del_simulador_es_realista(db_session):
     rng = random.Random(11)
     for _ in range(150):
         simular_tick(db_session, rng)
+    simular_tick(db_session, rng, ahora=_siguiente_turno())  # cierre de turno: se mide
 
     material, chatarra = _balance(db_session, tenant, inicio)
     assert material > 0
@@ -150,25 +169,14 @@ def test_la_chatarra_del_simulador_es_realista(db_session):
 
 
 def test_el_cambio_de_turno_mide_la_bobina_y_la_deja_montada(db_session):
-    from datetime import UTC, datetime, timedelta
-
     from app.models import OrderLine, StockItem
-    from app.services.shifts import TZ_PLANTA
 
     _demo(db_session)
     rng = random.Random(5)
     for _ in range(3):
         simular_tick(db_session, rng)
 
-    # Primer tick del turno siguiente (06:00 o 14:00 en planta)
-    local = datetime.now(UTC).astimezone(TZ_PLANTA)
-    if local.hour < 6:
-        siguiente = local.replace(hour=6, minute=1)
-    elif local.hour < 14:
-        siguiente = local.replace(hour=14, minute=1)
-    else:
-        siguiente = (local + timedelta(days=1)).replace(hour=6, minute=1)
-    acciones = simular_tick(db_session, rng, ahora=siguiente)["acciones"]
+    acciones = simular_tick(db_session, rng, ahora=_siguiente_turno())["acciones"]
 
     medidas = [a.split()[4] for a in acciones if a.startswith("cierre de turno")]
     assert medidas, acciones
