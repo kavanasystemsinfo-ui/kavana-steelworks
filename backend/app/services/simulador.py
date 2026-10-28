@@ -12,9 +12,14 @@ Solo actúa sobre el tenant demo (buscar_tenant_demo). Un tick:
    completada (número de la secuencia real); si un material no tiene bobina
    libre, recibe una nueva igual a la última (receive_coil, con su kardex).
 1. Si un puesto no tiene línea en curso, arranca la siguiente pendiente.
+   Cierre de turno: la bobina usada en el turno anterior se mide (radio) y
+   sigue montada; la chatarra queda en ese turno.
 2. A cada línea en curso sin bobina le vincula la bobina FIFO de su material.
 3. Registra piezas: si el puesto tiene ritmo nominal, entre el 60 % y el 100 %
    de su ritmo en el intervalo del tick; si no, unas pocas (1-4).
+Desperdicio (balance de masa, Jorge 28-10): como en planta, no todo lo que
+sale de la bobina acaba en piezas registradas; el simulador pierde un 2-6 %
+por bobina que el sistema solo ve al medir (cierre de turno o fin de bobina).
 Lo que el sistema rechace (guardia de kilos, WIP) se salta y se informa: el
 simulador nunca fuerza datos.
 
@@ -34,7 +39,7 @@ from decimal import ROUND_DOWN, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Order, OrderLine, StockItem, User, Workstation
+from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
 
 MINUTOS_POR_PIEZA = Decimal("3")
 ORDENES_ACTIVAS_MIN = 2
@@ -137,8 +142,35 @@ def _bloqueo_kilos(exc: Exception) -> bool:
     return "BLOQUEO DE SEGURIDAD" in str(exc)
 
 
-def _radio_medido(bobina: StockItem) -> int | None:
-    """Radio (mm enteros, como lo mide el operario) del material que queda.
+def _desperdicio(db: Session, bobina: StockItem) -> Decimal:
+    """Kilos que el operario ha desperdiciado y el sistema aún no sabe.
+
+    En planta no todo lo que sale de la bobina acaba en piezas buenas
+    registradas (arranques, rechazos, piezas sin apuntar). El simulador lo
+    modela con un 2-6 % fijo por bobina (estable entre ticks) sobre los kilos
+    consumidos en piezas, menos la chatarra que ya se midió.
+    """
+    from sqlalchemy import func
+
+    from app.models import MaterialConsumo
+
+    medida = Decimal(
+        str(
+            db.scalar(
+                select(func.coalesce(func.sum(MaterialConsumo.consumed_quantity), 0)).where(
+                    MaterialConsumo.stock_item_id == bobina.id,
+                    MaterialConsumo.tipo == "merma_puntas",
+                )
+            )
+        )
+    )
+    en_piezas = bobina.cantidad_inicial - bobina.cantidad_disponible - medida
+    tasa = Decimal(str(round(random.Random(str(bobina.id)).uniform(0.02, 0.06), 3)))
+    return max(en_piezas * tasa - medida, Decimal("0"))
+
+
+def _radio_para(bobina: StockItem, kg: Decimal) -> int | None:
+    """Radio (mm enteros, como lo mide el operario) para los kilos que quedan.
 
     Inversa de peso_desde_radio_mm; al redondear hacia abajo el milímetro
     queda una merma pequeña, como en planta. None si la bobina no tiene ancho.
@@ -147,16 +179,32 @@ def _radio_medido(bobina: StockItem) -> int | None:
 
     from app.services.coil_math import DIAMETRO_INTERIOR_MM_DEFAULT
 
-    if not bobina.width_mm or bobina.cantidad_disponible <= 0:
+    if not bobina.width_mm:
         return None
+    if kg <= 0:
+        return 0
     material = bobina.material
     densidad = float(
         material.density_calibrada if material and material.density_calibrada else 7.7807
     )
     r_int = DIAMETRO_INTERIOR_MM_DEFAULT / 2000
-    area = float(bobina.cantidad_disponible) / (densidad * 1000 * float(bobina.width_mm) / 1000)
+    area = float(kg) / (densidad * 1000 * float(bobina.width_mm) / 1000)
     r_ext = math.sqrt(area / math.pi + r_int**2)
     return max(int((r_ext - r_int) * 1000), 0)
+
+
+def _real_restante(db: Session, bobina: StockItem) -> Decimal:
+    """Lo que queda de verdad en la bobina (lo que mediría el operario)."""
+    return bobina.cantidad_disponible - _desperdicio(db, bobina)
+
+
+def _inicio_turno(ahora: datetime) -> datetime:
+    """Inicio (UTC) del turno en curso en horario de planta: A 06:00, B 14:00."""
+    from app.services.shifts import TZ_PLANTA
+
+    local = ahora.astimezone(TZ_PLANTA)
+    hora = 14 if local.hour >= 14 else 6
+    return local.replace(hour=hora, minute=0, second=0, microsecond=0).astimezone(UTC)
 
 
 def _operario_demo(db: Session, tenant_id) -> User | None:
@@ -189,10 +237,14 @@ def _bobina_fifo(db: Session, tenant_id, material_id) -> StockItem | None:
 
 
 def simular_tick(
-    db: Session, rng: random.Random | None = None, minutos_tick: int = 5
+    db: Session,
+    rng: random.Random | None = None,
+    minutos_tick: int = 5,
+    ahora: datetime | None = None,
 ) -> dict:
     """Un paso de simulación sobre el tenant demo. Devuelve qué hizo."""
     from app.services.inventory import create_retal, link_coil, unlink_coil
+    from app.services.medicion import _ultima_medicion, _utc, medir_bobina
     from app.services.production import record_production
     from app.services.seed_demo import buscar_tenant_demo
 
@@ -262,10 +314,63 @@ def simular_tick(
             )
     db.commit()
 
+    # 1b. Cierre de turno: la bobina que se usó en el turno anterior se mide
+    # (la chatarra queda en ese turno, justo después de su última pieza) y
+    # sigue montada para el relevo
+    inicio_turno = _inicio_turno(_utc(ahora or datetime.now(UTC)))
+    for linea, orden in lineas:
+        if linea.active_coil_id is None:
+            continue
+        ultima = db.scalar(
+            select(ProductionLog)
+            .where(ProductionLog.line_id == linea.id, ProductionLog.action == "produce")
+            .order_by(ProductionLog.timestamp.desc())
+        )
+        coil = str(linea.active_coil_id)
+        if ultima is None or (ultima.metadata_ or {}).get("activeCoilId") != coil:
+            continue
+        momento = _utc(ultima.timestamp)
+        medida = _ultima_medicion(db, tenant.id, coil)
+        if momento >= inicio_turno or (medida is not None and _utc(medida) >= momento):
+            continue
+        bobina = db.get(StockItem, linea.active_coil_id)
+        radio = _radio_para(bobina, _real_restante(db, bobina))
+        if radio is None:
+            continue
+        try:
+            medir_bobina(
+                db, tenant.id, operario.id,
+                stock_item_id=bobina.id, radio_mm=radio,
+                order_id=orden.id, line_id=linea.id,
+                momento=momento + timedelta(seconds=1),
+            )
+            acciones.append(f"cierre de turno: mide {bobina.coil_id} en {linea.workstation_id}")
+        except ValueError as exc:
+            db.rollback()
+            saltos.append(f"{orden.numero} L{linea.linea_numero}: {exc}")
+
     for linea, orden in lineas:
         if linea.estado != "in_progress":
             continue
         etiqueta = f"{orden.numero} L{linea.linea_numero}"
+
+        # La bobina se acabó de verdad antes de lo que cree el sistema (el
+        # desperdicio no se ve hasta medir): fin de bobina con radio 0
+        if linea.active_coil_id is not None:
+            montada = db.get(StockItem, linea.active_coil_id)
+            if montada.width_mm and _real_restante(db, montada) <= 0:
+                codigo = montada.coil_id
+                try:
+                    create_retal(
+                        db, tenant.id, operario.id,
+                        stock_item_id=montada.id, radio_mm=0,
+                        order_id=orden.id, line_id=linea.id,
+                    )
+                    acciones.append(f"fin de bobina {codigo} en {etiqueta}")
+                except ValueError as exc:
+                    db.rollback()
+                    saltos.append(f"{etiqueta}: {exc}")
+                db.refresh(linea)
 
         # 2. Vincular bobina FIFO del material de la línea
         if linea.active_coil_id is None and linea.material_id is not None:
@@ -367,7 +472,7 @@ def simular_tick(
                 # El siguiente tick vincula otra bobina y la línea sigue.
                 codigo = linea.active_coil_code
                 bobina = db.get(StockItem, linea.active_coil_id)
-                radio = _radio_medido(bobina)
+                radio = _radio_para(bobina, _real_restante(db, bobina))
                 try:
                     if radio is None:
                         raise ValueError("sin ancho")

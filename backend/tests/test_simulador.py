@@ -117,21 +117,10 @@ def test_el_backend_arranca_y_para_el_bucle_del_simulador(monkeypatch):
         assert client.get("/health").status_code == 200
 
 
-def test_la_chatarra_del_simulador_es_solo_puntas(db_session):
-    """El fin de bobina no tira a chatarra cientos de kilos: el simulador
-    agota la bobina con menos piezas y, si salta la guardia de kilos, deja
-    el sobrante como pico. La chatarra queda por debajo del 2 % del material."""
-    from datetime import UTC, datetime
-
-    tenant = _demo(db_session)
-    inicio = datetime.now(UTC)
-    rng = random.Random(11)
-    for _ in range(150):
-        simular_tick(db_session, rng)
-
-    logs = db_session.scalars(
+def _balance(db, tenant, desde):
+    logs = db.scalars(
         select(ProductionLog).where(
-            ProductionLog.tenant_id == tenant.id, ProductionLog.timestamp >= inicio
+            ProductionLog.tenant_id == tenant.id, ProductionLog.timestamp >= desde
         )
     ).all()
     material = sum(
@@ -140,5 +129,61 @@ def test_la_chatarra_del_simulador_es_solo_puntas(db_session):
         if log.action == "produce" and log.metadata_.get("consumedMaterial") == "kg"
     )
     chatarra = sum(float(log.quantity or 0) for log in logs if log.action == "scrap")
+    return material, chatarra
+
+
+def test_la_chatarra_del_simulador_es_realista(db_session):
+    """Balance de masa: el simulador desperdicia un 2-6 % por bobina, que solo
+    aparece al medir. Sin restos de cientos de kilos tirados al cambiar de
+    bobina (antes, 5,8 %) ni una planta perfecta (0,2 %)."""
+    from datetime import UTC, datetime
+
+    tenant = _demo(db_session)
+    inicio = datetime.now(UTC)
+    rng = random.Random(11)
+    for _ in range(150):
+        simular_tick(db_session, rng)
+
+    material, chatarra = _balance(db_session, tenant, inicio)
     assert material > 0
-    assert chatarra / (material + chatarra) < 0.02
+    assert 0.01 < chatarra / (material + chatarra) < 0.07
+
+
+def test_el_cambio_de_turno_mide_la_bobina_y_la_deja_montada(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import OrderLine, StockItem
+    from app.services.shifts import TZ_PLANTA
+
+    _demo(db_session)
+    rng = random.Random(5)
+    for _ in range(3):
+        simular_tick(db_session, rng)
+
+    # Primer tick del turno siguiente (06:00 o 14:00 en planta)
+    local = datetime.now(UTC).astimezone(TZ_PLANTA)
+    if local.hour < 6:
+        siguiente = local.replace(hour=6, minute=1)
+    elif local.hour < 14:
+        siguiente = local.replace(hour=14, minute=1)
+    else:
+        siguiente = (local + timedelta(days=1)).replace(hour=6, minute=1)
+    acciones = simular_tick(db_session, rng, ahora=siguiente)["acciones"]
+
+    medidas = [a.split()[4] for a in acciones if a.startswith("cierre de turno")]
+    assert medidas, acciones
+    sigue = {
+        si.coil_id
+        for si in db_session.scalars(
+            select(StockItem).where(
+                StockItem.id.in_(
+                    select(OrderLine.active_coil_id).where(OrderLine.active_coil_id.is_not(None))
+                )
+            )
+        )
+    }
+    for codigo in medidas:  # el relevo encuentra la bobina cargada (salvo que se acabe)
+        acabada = any(
+            codigo in a and a.startswith(("fin de bobina", "desvincula")) for a in acciones
+        )
+        assert codigo in sigue or acabada, (codigo, acciones)

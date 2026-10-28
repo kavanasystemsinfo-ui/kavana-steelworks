@@ -995,7 +995,7 @@ describe('Alertas de almacén por WebSocket (ADR-014)', () => {
 })
 
 describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina)', () => {
-  function stubFase1() {
+  function stubFase1(pendientes: unknown[] = []) {
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
       if (u.includes('/scan')) {
@@ -1075,6 +1075,12 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
           json: async () => ({ success: true, status: 'completed', total_hours: 3.5, turno: 'B', logout_time: '2026-10-16T20:00:00+00:00' }),
         })
       }
+      if (u.includes('/stock-items/mediciones-pendientes')) {
+        return Promise.resolve({ ok: true, json: async () => pendientes })
+      }
+      if (u.includes('/stock-items/medir')) {
+        return Promise.resolve({ ok: true, json: async () => ({ msg: 'ok', chatarra_kg: 12.5, chatarra_coste: 10, peso_restante_kg: 410 }) })
+      }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -1107,6 +1113,27 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     vi.unstubAllGlobals()
   })
 
+  it('con una bobina sin medir no deja cerrar la jornada hasta medir el radio', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubFase1([
+      { stock_item_id: 'SI1', coil_code: 'COIL-108', order_id: 'OP1', line_id: 'L1', puesto: 'LINEA-1' },
+    ])
+    renderPage()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    await user.click(screen.getByRole('button', { name: /cerrar jornada/i }))
+    const cerrar = screen.getByRole('button', { name: /sí, cerrar/i })
+    await user.type(await screen.findByLabelText(/radio de COIL-108/i), '210')
+    expect(cerrar).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /^medir$/i }))
+    const medida = fetchMock.mock.calls.find(([u]) => String(u).includes('/stock-items/medir'))
+    expect(JSON.parse(String(medida?.[1]?.body))).toMatchObject({ stock_item_id: 'SI1', radio_mm: 210 })
+    expect(await screen.findByText(/quedan 410 kg montados/i)).toBeInTheDocument()
+    await waitFor(() => expect(cerrar).toBeEnabled())
+    vi.unstubAllGlobals()
+  })
+
   it('cerrar jornada pide confirmación, llama a /auth/close-shift y muestra horas y turno', async () => {
     const user = userEvent.setup()
     const fetchMock = stubFase1()
@@ -1116,7 +1143,9 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     await user.click(screen.getByRole('button', { name: /cerrar jornada/i }))
     expect(screen.getByText(/se registrará la hora de salida/i)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /sí, cerrar/i }))
+    const cerrar = screen.getByRole('button', { name: /sí, cerrar/i })
+    await waitFor(() => expect(cerrar).toBeEnabled())
+    await user.click(cerrar)
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/auth/close-shift'))).toBe(true)
     })

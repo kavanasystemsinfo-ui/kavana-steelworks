@@ -4,6 +4,8 @@ import { api, getTenantId, type EventData, type OrderItem, type WorkstationItem 
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
+import { AltaManualBobina } from '../components/AltaManualBobina'
+import { MedirCierre } from '../components/MedirCierre'
 
 interface CoilScan {
   id: string
@@ -174,6 +176,8 @@ export function OperarioPage() {
   const [confirmarCierre, setConfirmarCierre] = useState(false)
   const [jornadaCerrada, setJornadaCerrada] = useState<{ total_hours: number; turno: string } | null>(null)
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
+  // Bobinas montadas sin medir: con alguna, no se puede cerrar (Jorge, 28-10)
+  const [sinMedir, setSinMedir] = useState<number | null>(null)
 
   const handleCerrarJornada = async () => {
     setCerrandoJornada(true)
@@ -748,6 +752,7 @@ export function OperarioPage() {
 
       {/* Acción principal: escaneo de bobina (botón grande táctil) */}
       {!vinculada ? (
+        <>
         <form
           onSubmit={handleScan}
           className="bg-kavana-surface border border-kavana-border rounded-sm p-6 space-y-4"
@@ -808,6 +813,17 @@ export function OperarioPage() {
             </button>
           )}
         </form>
+        {!scan && (
+          <AltaManualBobina
+            puesto={wsSel}
+            onAlta={(bobina) => {
+              setScan(bobina)
+              setCoilId(bobina.coil_id ?? '')
+              showToast('success', `Bobina ${bobina.coil_id} registrada con ${bobina.peso_kg} kg de etiqueta`)
+            }}
+          />
+        )}
+        </>
       ) : (
         <div className="bg-kavana-surface border border-kavana-border rounded-sm p-6 text-center space-y-4">
           <p className="mono-data text-2xl text-kavana-ok">
@@ -1037,6 +1053,7 @@ export function OperarioPage() {
             <p className="text-sm text-kavana-text-dim">
               ¿Cerrar turno? Se registrará la hora de salida y las horas trabajadas.
             </p>
+            <MedirCierre onPendientes={setSinMedir} />
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1048,7 +1065,7 @@ export function OperarioPage() {
               <button
                 type="button"
                 onClick={handleCerrarJornada}
-                disabled={cerrandoJornada}
+                disabled={cerrandoJornada || sinMedir !== 0}
                 className="min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
               >
                 {cerrandoJornada ? 'Cerrando…' : 'Sí, cerrar'}

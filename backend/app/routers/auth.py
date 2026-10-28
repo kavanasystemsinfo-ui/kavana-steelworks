@@ -72,7 +72,12 @@ def logout(authorization: Annotated[str | None, Header()] = None, db: DbDep = No
     token = _extraer_bearer(authorization)
     if token is None:
         raise HTTPException(status_code=401, detail="Token requerido")
-    auth_service.logout(db, token)
+    from app.services.medicion import MedicionPendiente
+
+    try:
+        auth_service.logout(db, token)
+    except MedicionPendiente as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return None
 
 
@@ -82,8 +87,12 @@ def close_shift(authorization: Annotated[str | None, Header()] = None, db: DbDep
     token = _extraer_bearer(authorization)
     if token is None:
         raise HTTPException(status_code=401, detail="Token requerido")
+    from app.services.medicion import MedicionPendiente
+
     try:
         return auth_service.close_shift(db, token)
+    except MedicionPendiente as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
