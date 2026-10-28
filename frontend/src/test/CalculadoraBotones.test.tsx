@@ -29,7 +29,7 @@ describe('Calculadoras del puesto', () => {
   })
 
   it('crea una calculadora nueva con el total del palet a la vista', async () => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
       Promise.resolve({
         ok: true,
         json: async () => (init?.method === 'POST' ? { ...palet, id: 'c2', nombre: 'Caja' } : []),
