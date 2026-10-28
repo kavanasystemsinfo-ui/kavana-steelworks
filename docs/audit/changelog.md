@@ -4,6 +4,24 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Panel de operario: calculadoras por puesto (fase 2)
+
+- **Problema:** el operario contaba las piezas a mano; el legacy tenía
+  calculadoras de embalaje por puesto (CalculatorPreset) con +palet, +fila y
+  +paquete.
+- **Solución:** tabla `calculadoras_puesto` (migración `a8c3e5f1b2d4`, solo
+  añade una tabla) y `GET/POST /production/calculadoras`: el operario crea
+  plantillas piezas/paquete × paquetes/fila × filas/palet en su puesto y las
+  ve cualquiera de él (Jorge, 28-10). En el panel, +1 palet, +1 fila,
+  +1 paquete y +1 pieza suman las piezas y muestran el desglose («1 palet +
+  2 paquetes»); escribir la cantidad a mano lo borra. El registro guarda el
+  desglose en el evento `produce` (`metadata.desglose`).
+- **Archivos:** `models/calculadora.py`, la migración, `routers/production.py`,
+  `services/production.py`; `components/CalculadoraBotones.tsx`,
+  `OperarioPage.tsx`, `lib/api.ts`; tests.
+- **Verificación:** migración arriba/abajo/arriba en Postgres local; pytest y
+  vitest en verde; probado en local (crear calculadora y sumar).
+
 ## 2026-10-28 — Panel de operario rediseñado (fase 1)
 
 - **Problema:** el panel de operario no enseñaba los datos clave de la orden

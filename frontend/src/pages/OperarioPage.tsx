@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getTenantId, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type WorkstationItem } from '../lib/api'
+import { api, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
@@ -8,6 +8,7 @@ import { AltaManualBobina } from '../components/AltaManualBobina'
 import { BobinasDisponibles } from '../components/BobinasDisponibles'
 import { MedirCierre } from '../components/MedirCierre'
 import { FichaOrden } from '../components/FichaOrden'
+import { CalculadoraBotones, type Unidad } from '../components/CalculadoraBotones'
 
 interface CoilScan {
   id: string
@@ -261,6 +262,32 @@ export function OperarioPage() {
 
   const [radioMm, setRadioMm] = useState('')
   const [piezas, setPiezas] = useState('')
+  // Cómo se contaron con la calculadora (null si se escribió la cantidad a mano)
+  const [desglose, setDesglose] = useState<Desglose | null>(null)
+  const escribirPiezas = (v: string) => {
+    setPiezas(v)
+    setDesglose(null)
+  }
+  const sumar = (unidad: Unidad, n: number, calculadora: string | null) => {
+    setPiezas((p) => String((Number(p) || 0) + n))
+    setDesglose((d) => {
+      const base = d ?? { calculadora, palets: 0, filas: 0, paquetes: 0, piezas: 0 }
+      return { ...base, calculadora: calculadora ?? base.calculadora, [unidad]: base[unidad] + 1 }
+    })
+  }
+  const textoDesglose = desglose
+    ? (
+        [
+          [desglose.palets, 'palet', 'palets'],
+          [desglose.filas, 'fila', 'filas'],
+          [desglose.paquetes, 'paquete', 'paquetes'],
+          [desglose.piezas, 'pieza', 'piezas'],
+        ] as const
+      )
+        .filter(([n]) => n > 0)
+        .map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`)
+        .join(' + ')
+    : ''
 
   // Autocontrol de calidad (spec 04): plantilla + orden de la demo
   const [models, setModels] = useState<QualityModel[]>([])
@@ -617,11 +644,13 @@ export function OperarioPage() {
         incremental_quantity: Number(piezas),
         // Sin horas: el servidor cuenta el tiempo desde el último registro
         observaciones: '',
+        desglose,
       })
       showToast("success", 
         `${res.incremental_quantity ?? 0} piezas registradas · ${Number(res.consumed_amount ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${res.consumption_unit ?? ''} consumidos`,
       )
       setPiezas('')
+      setDesglose(null)
       refrescarFicha()
     } catch (err) {
       showToast("error", 
@@ -910,6 +939,7 @@ export function OperarioPage() {
               className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
             >
               <h2 className="text-xl font-bold">Registrar producción</h2>
+              <CalculadoraBotones puesto={wsSel ?? ordenDetalle?.workstation_id ?? null} onSumar={sumar} />
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start">
                 <div className="space-y-3">
                   <label className="block">
@@ -919,12 +949,13 @@ export function OperarioPage() {
                       step="1"
                       min="1"
                       value={piezas}
-                      onChange={(e) => setPiezas(e.target.value)}
+                      onChange={(e) => escribirPiezas(e.target.value)}
                       placeholder="Piezas"
                       className="mono-data mt-1 w-full bg-p-tarjeta border border-p-borde rounded-xl px-4 min-h-[64px] text-3xl font-extrabold focus:border-kavana-orange outline-none"
                       required
                     />
                   </label>
+                  {textoDesglose && <p className="text-base text-p-texto2">{textoDesglose}</p>}
                   <div className="rounded-xl bg-p-fondo px-4 py-3">
                     <p className="text-sm text-p-texto2">Tiempo desde el último registro</p>
                     <p className="text-xl font-bold">
@@ -937,14 +968,23 @@ export function OperarioPage() {
                     <p className="text-xs text-p-texto2">Se apunta solo, no hace falta escribirlo</p>
                   </div>
                 </div>
-                <Numpad value={piezas} onChange={setPiezas} step={1} allowDecimals={false} min={1} />
+                <Numpad value={piezas} onChange={escribirPiezas} step={1} allowDecimals={false} min={1} />
               </div>
-              <button
-                type="submit"
-                className="w-full min-h-[60px] rounded-xl bg-kavana-orange text-white text-lg font-extrabold hover:opacity-90 transition-opacity"
-              >
-                {piezas ? `Registrar ${piezas} piezas` : 'Registrar piezas'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => escribirPiezas('')}
+                  className="min-h-[60px] rounded-xl border border-p-borde bg-p-tarjeta px-6 font-semibold"
+                >
+                  Borrar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 min-h-[60px] rounded-xl bg-kavana-orange text-white text-lg font-extrabold hover:opacity-90 transition-opacity"
+                >
+                  {piezas ? `Registrar ${piezas} piezas` : 'Registrar piezas'}
+                </button>
+              </div>
             </form>
           )}
         </div>
