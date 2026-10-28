@@ -52,6 +52,9 @@ class ManufacturingModel(UUIDMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     material_code: Mapped[str | None] = mapped_column(String(64))
+    # Opcional: peso real de la pieza terminada (ERP o báscula). Con él, la
+    # chatarra de proceso (rebaba y punzonado) sale exacta por pieza.
+    peso_pieza_terminada_kg: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     quality_plan: Mapped[list["QualityPlanCheck"]] = relationship(

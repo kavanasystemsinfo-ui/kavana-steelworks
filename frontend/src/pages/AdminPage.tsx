@@ -1045,6 +1045,80 @@ function ProductosTab() {
   )
 }
 
+/** Peso de la pieza terminada por modelo (opcional): con él, la chatarra de
+ *  proceso (rebaba y punzonado) sale exacta en el informe de turno. */
+function PesoPiezaModelos() {
+  const [models, setModels] = useState<QualityModel[]>([])
+  const [valores, setValores] = useState<Record<string, string>>({})
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api
+      .getQualityModels()
+      .then((ms) => {
+        setModels(ms)
+        setValores(
+          Object.fromEntries(ms.map((m) => [m.id, m.peso_pieza_terminada_kg != null ? String(m.peso_pieza_terminada_kg) : ''])),
+        )
+      })
+      .catch(() => undefined)
+  }, [])
+
+  const guardar = async (m: QualityModel) => {
+    setMsg('')
+    setErr('')
+    const texto = (valores[m.id] ?? '').replace(',', '.').trim()
+    const kg = texto === '' ? null : Number(texto)
+    if (kg !== null && (!Number.isFinite(kg) || kg <= 0)) {
+      setErr('El peso debe ser un número mayor que 0 (o vacío para quitarlo)')
+      return
+    }
+    try {
+      await api.setPesoPiezaTerminada(m.id, kg)
+      setMsg(kg === null ? `${m.code}: peso quitado` : `${m.code}: ${kg} kg por pieza terminada`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo guardar el peso')
+    }
+  }
+
+  return (
+    <PanelCard title="Peso de la pieza terminada (opcional)">
+      <p className="text-xs text-kavana-text-dim">
+        Del ERP o de pesar una pieza en báscula una sola vez. Con este dato, la chatarra que el modelo genera
+        sí o sí (rebaba entre piezas, punzonados) sale exacta. Sin él, el sistema aprende la chatarra normal
+        del modelo con las bobinas medidas.
+      </p>
+      {msg && <p className="text-sm text-green-400">{msg}</p>}
+      {err && <p className="text-sm text-red-400">{err}</p>}
+      {models.length === 0 && <p className="text-sm text-kavana-text-dim">No hay modelos.</p>}
+      <div className="space-y-2">
+        {models.map((m) => (
+          <div key={m.id} className="flex items-end gap-3">
+            <span className="flex-1 text-sm">
+              {m.code} · {m.name}
+            </span>
+            <label className="w-40">
+              <span className="sr-only">Peso de {m.code} (kg)</span>
+              <input
+                aria-label={`Peso de ${m.code} (kg)`}
+                inputMode="decimal"
+                placeholder="kg"
+                value={valores[m.id] ?? ''}
+                onChange={(e) => setValores((v) => ({ ...v, [m.id]: e.target.value }))}
+                className={inputCls}
+              />
+            </label>
+            <Button type="button" variant="ghost" onClick={() => guardar(m)}>
+              Guardar
+            </Button>
+          </div>
+        ))}
+      </div>
+    </PanelCard>
+  )
+}
+
 /** Panel de Administración (spec 07): solo rol admin (matriz Fase 6). */
 export function AdminPage() {
   const [tab, setTab] = useState<
@@ -1081,7 +1155,12 @@ export function AdminPage() {
       {tab === 'usuarios' && <UsuariosTab />}
       {tab === 'secuencias' && <SecuenciasTab />}
       {tab === 'puestos' && <PuestosTab />}
-      {tab === 'productos' && <ProductosTab />}
+      {tab === 'productos' && (
+        <>
+          <ProductosTab />
+          <PesoPiezaModelos />
+        </>
+      )}
       {tab === 'roles' && <RolesTab />}
     </div>
   )

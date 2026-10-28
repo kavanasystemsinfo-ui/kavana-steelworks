@@ -7,7 +7,8 @@ turno pedido (fecha + A/B/C en horario de planta), no un acumulado.
 Por puesto: piezas, material consumido, merma (kg y €), autocontroles
 (total y no conformes) e incidencias con su tiempo de parada. Por operario,
 orden y material: el balance de kilos del turno (consumido en piezas y
-chatarra medida al cerrar el turno o la bobina). Sin datos en
+chatarra medida al cerrar el turno o la bobina), separando la chatarra
+prevista del modelo de la chatarra de más (chatarra_modelo). Sin datos en
 la ventana, el informe sale vacío: nunca se rellena.
 """
 
@@ -62,7 +63,9 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
 
     balance: dict[tuple, dict] = {}
     eventos = db.execute(
-        select(ProductionLog, OrderLine.workstation_id, OrderLine.material_id)
+        select(
+            ProductionLog, OrderLine.workstation_id, OrderLine.material_id, OrderLine.modelo_id
+        )
         .join(OrderLine, OrderLine.id == ProductionLog.line_id)
         .where(
             ProductionLog.tenant_id == tenant_id,
@@ -70,12 +73,12 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
             ProductionLog.timestamp < hasta,
         )
     ).all()
-    for log, puesto, material_id in eventos:
+    for log, puesto, material_id, modelo_id in eventos:
         meta = log.metadata_ or {}
         puesto = puesto or meta.get("workstationId") or "sin puesto"
         fila = filas.setdefault(puesto, _fila_vacia(puesto))
         if log.action in ("produce", "scrap"):
-            clave = (log.operator_id, log.order_id, material_id)
+            clave = (log.operator_id, log.order_id, material_id, modelo_id)
             b = balance.setdefault(
                 clave,
                 {"piezas": Decimal("0"), "consumo_kg": Decimal("0"), "chatarra_kg": Decimal("0")},
@@ -153,28 +156,53 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
         "fin": fin.isoformat(),
         "puestos": puestos,
         "totales": totales,
-        "por_operario": _por_operario(db, balance),
+        "por_operario": _por_operario(db, tenant_id, balance),
     }
 
 
-def _por_operario(db: Session, balance: dict[tuple, dict]) -> list[dict]:
-    """Balance de kilos por operario, orden y material, con su % de chatarra."""
+def _por_operario(db: Session, tenant_id: uuid.UUID, balance: dict[tuple, dict]) -> list[dict]:
+    """Balance de kilos por operario, orden y material, con su % de chatarra
+    y la parte prevista por el modelo frente a la de más."""
+    from app.models.quality import ManufacturingModel
+    from app.services.chatarra_modelo import desglose_chatarra, referencia_aprendida
+
+    referencias: dict = {}
     filas = []
-    for (operario_id, orden_id, material_id), b in balance.items():
+    for (operario_id, orden_id, material_id, modelo_id), b in balance.items():
         operario = db.get(User, operario_id) if operario_id else None
         orden = db.get(Order, orden_id) if orden_id else None
         material = db.get(Material, material_id) if material_id else None
-        total = b["consumo_kg"] + b["chatarra_kg"]
+        modelo = db.get(ManufacturingModel, modelo_id) if modelo_id else None
+        if modelo_id not in referencias:
+            referencias[modelo_id] = referencia_aprendida(db, tenant_id, modelo_id)
+        d = desglose_chatarra(
+            piezas=b["piezas"],
+            piezas_kg=b["consumo_kg"],
+            chatarra_kg=b["chatarra_kg"],
+            modelo=modelo,
+            referencia=referencias[modelo_id],
+        )
+        total = d["consumo_kg"]
+
+        def kg(v):
+            return round(float(v), 2) if v is not None else None
+
         filas.append(
             {
                 "operario": operario.name if operario else "—",
                 "orden": orden.numero if orden else "—",
                 "material": material.code if material else "—",
+                "modelo": modelo.code if modelo else None,
                 "piezas": float(b["piezas"]),
-                "consumo_kg": round(float(total), 2),
-                "piezas_kg": round(float(b["consumo_kg"]), 2),
-                "chatarra_kg": round(float(b["chatarra_kg"]), 2),
-                "chatarra_pct": round(float(b["chatarra_kg"] / total * 100), 1) if total else None,
+                "consumo_kg": kg(total),
+                "piezas_kg": kg(d["piezas_kg"]),
+                "chatarra_kg": kg(d["chatarra_kg"]),
+                "chatarra_pct": (
+                    round(float(d["chatarra_kg"] / total * 100), 1) if total else None
+                ),
+                "chatarra_prevista_kg": kg(d["prevista_kg"]),
+                "chatarra_de_mas_kg": kg(d["de_mas_kg"]),
+                "referencia": d["referencia"],
             }
         )
     return sorted(filas, key=lambda f: (f["operario"], f["orden"], f["material"]))
