@@ -4,6 +4,32 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Chatarra prevista y chatarra de más por modelo
+
+- **Problema:** el balance de masas daba la chatarra total, pero no separaba
+  la que el modelo genera sí o sí (rebaba entre piezas, punzonados) de la que
+  se podía evitar; calcular la geometría de agujeros por modelo no es viable.
+  Además, el bloqueo de seguridad de `record_production` no sumaba las piezas
+  nuevas cuando la línea ya tenía producción (paréntesis mal puesto).
+- **Solución:** campo opcional `peso_pieza_terminada_kg` en
+  `manufacturing_models` (migración `c9f1a4d7e2b6`, solo añade una columna
+  nula) y `PATCH /api/v1/quality/models/{id}` (supervisor y admin). En
+  `services/chatarra_modelo.py`: con peso de pieza terminada, la chatarra de
+  proceso es piezas × (peso de la tira cortada − peso terminado); sin él, la
+  referencia es la mediana del % de chatarra de las líneas medidas del modelo
+  (mínimo 3; antes, «aprendiendo»). El informe de turno añade por fila
+  `modelo`, `chatarra_prevista_kg`, `chatarra_de_mas_kg` y `referencia`; el
+  consumo de bobina no cambia. Administración → Productos tiene la tarjeta
+  «Peso de la pieza terminada». La densidad de las piezas no se toca
+  (Decisión 92 del legacy) hasta cuadrarla con una orden real del ERP.
+- **Archivos:** `models/quality.py`, la migración, `routers/quality.py`,
+  `services/chatarra_modelo.py`, `services/informe_turno.py`,
+  `services/production.py`, `InformeTurno.tsx`, `AdminPage.tsx`, `api.ts`.
+- **Verificación:** pytest 465 (nuevo `test_chatarra_modelo.py`), vitest 143
+  (nuevo `InformeTurno.test.tsx`), ruff y tsc limpios; en local, VIGA-SIGMA
+  con peso terminado al 97 % de la tira da 22,7 kg previstos y 409,3 kg de
+  más sobre 1.165,6 kg consumidos.
+
 ## 2026-10-28 — Panel de operario: paradas con un toque (fase 3)
 
 - **Problema:** el operario solo podía avisar de una parada abriendo una

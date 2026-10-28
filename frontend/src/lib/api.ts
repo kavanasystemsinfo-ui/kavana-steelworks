@@ -132,6 +132,13 @@ export interface InformeTurnoOperario {
   piezas_kg: number
   chatarra_kg: number
   chatarra_pct: number | null
+  modelo?: string | null
+  /** Chatarra que el modelo genera sí o sí (rebaba, punzonado). */
+  chatarra_prevista_kg?: number | null
+  /** Chatarra por encima de la prevista: la que se podía evitar. */
+  chatarra_de_mas_kg?: number | null
+  /** peso_terminado (exacta), aprendida (mediana del modelo) o null (aprendiendo). */
+  referencia?: 'peso_terminado' | 'aprendida' | null
 }
 
 /** Datos clave de la orden para el panel de operario (GET /production/ficha). */
@@ -337,6 +344,7 @@ export interface QualityModel {
   code: string
   name: string
   material_code: string | null
+  peso_pieza_terminada_kg?: number | null
   quality_plan: PlanCheck[]
 }
 
@@ -839,6 +847,13 @@ export const api = {
 
   getQualityModels(): Promise<QualityModel[]> {
     return request('/quality/models')
+  },
+
+  setPesoPiezaTerminada(modelId: string, kg: number | null): Promise<{ id: string; peso_pieza_terminada_kg: number | null }> {
+    return request(`/quality/models/${modelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ peso_pieza_terminada_kg: kg }),
+    })
   },
 
   createQualityCheck(data: { order_id: string; workstation_id: string; manufacturing_model_id: string; stock_item_id: string; measurements: { check_name: string; value_entered: number | boolean | string }[] }): Promise<{ record: { overall_status: string } }> {

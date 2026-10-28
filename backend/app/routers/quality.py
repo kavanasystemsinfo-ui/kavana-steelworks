@@ -94,7 +94,12 @@ class ModelOut(BaseModel):
     code: str
     name: str
     material_code: str | None
+    peso_pieza_terminada_kg: Decimal | None = None
     quality_plan: list[PlanCheckOut] = []
+
+
+class PesoModeloIn(BaseModel):
+    peso_pieza_terminada_kg: Decimal | None = Field(default=None, gt=0)
 
 
 @router.post("/checks", status_code=201)
@@ -185,6 +190,7 @@ def get_quality_models(
             code=m.code,
             name=m.name,
             material_code=m.material_code,
+            peso_pieza_terminada_kg=m.peso_pieza_terminada_kg,
             quality_plan=[
                 PlanCheckOut(
                     id=c.id,
@@ -201,6 +207,32 @@ def get_quality_models(
         )
         for m in listar_modelos(db, current_user.tenant_id)
     ]
+
+
+@router.patch("/models/{model_id}")
+def set_peso_pieza_terminada(
+    model_id: uuid.UUID,
+    body: PesoModeloIn,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Guarda (o borra con null) el peso de la pieza terminada del modelo."""
+    from app.models.quality import ManufacturingModel
+
+    modelo = db.get(ManufacturingModel, model_id)
+    if modelo is None or modelo.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    modelo.peso_pieza_terminada_kg = body.peso_pieza_terminada_kg
+    db.commit()
+    return {
+        "id": str(modelo.id),
+        "peso_pieza_terminada_kg": (
+            float(modelo.peso_pieza_terminada_kg) if modelo.peso_pieza_terminada_kg else None
+        ),
+    }
 
 
 def _record_out(r) -> dict:

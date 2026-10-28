@@ -179,7 +179,7 @@ def record_production(
             kg_per_unit = kg_por_pieza
             if kg_per_unit == 0 and linea.target_material_qty:
                 kg_per_unit = linea.target_material_qty / (linea.total_quantity or Decimal("1"))
-            theoretical_total = (linea.produced_quantity or Decimal("0") + qty) * kg_per_unit
+            theoretical_total = ((linea.produced_quantity or Decimal("0")) + qty) * kg_per_unit
             real_limit = linea.real_material_qty or Decimal("0")
             tolerance = max(real_limit * Decimal("0.15"), Decimal("150"))
             if theoretical_total > real_limit + tolerance:

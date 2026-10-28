@@ -138,7 +138,9 @@ export function InformeTurno() {
                 <th className="py-1 pr-2">Material</th>
                 <th className="py-1 pr-2 text-right">Piezas</th>
                 <th className="py-1 pr-2 text-right">Consumido</th>
-                <th className="py-1 text-right">Chatarra</th>
+                <th className="py-1 pr-2 text-right">Chatarra</th>
+                <th className="py-1 pr-2 text-right">Prevista</th>
+                <th className="py-1 text-right">De más</th>
               </tr>
             </thead>
             <tbody>
@@ -149,9 +151,19 @@ export function InformeTurno() {
                   <td className="py-1 pr-2">{o.material}</td>
                   <td className="py-1 pr-2 text-right mono-data">{fmt(o.piezas)}</td>
                   <td className="py-1 pr-2 text-right mono-data">{fmt(o.consumo_kg, 1)} kg</td>
-                  <td className="py-1 text-right mono-data">
+                  <td className="py-1 pr-2 text-right mono-data">
                     {fmt(o.chatarra_kg, 1)} kg
                     {o.chatarra_pct !== null ? ` · ${fmt(o.chatarra_pct, 1)} %` : ''}
+                  </td>
+                  <td className="py-1 pr-2 text-right mono-data">
+                    {o.chatarra_prevista_kg != null ? `${fmt(o.chatarra_prevista_kg, 1)} kg` : 'aprendiendo'}
+                  </td>
+                  <td
+                    className={`py-1 text-right mono-data ${
+                      (o.chatarra_de_mas_kg ?? 0) > 0 ? 'text-kavana-orange font-semibold' : ''
+                    }`}
+                  >
+                    {o.chatarra_de_mas_kg != null ? `${fmt(o.chatarra_de_mas_kg, 1)} kg` : '—'}
                   </td>
                 </tr>
               ))}
@@ -159,6 +171,8 @@ export function InformeTurno() {
           </table>
           <p className="text-xs text-kavana-text-dim mt-1">
             La chatarra aparece cuando el operario mide la bobina (cierre de turno o fin de bobina).
+            Prevista: la que el modelo genera sí o sí (exacta si tiene el peso de la pieza terminada;
+            si no, la normal aprendida tras 3 órdenes medidas). De más: la que se podía evitar.
           </p>
         </div>
       )}
