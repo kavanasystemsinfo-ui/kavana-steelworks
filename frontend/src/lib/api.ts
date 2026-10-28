@@ -177,6 +177,17 @@ export interface Desglose {
   piezas: number
 }
 
+/** Parada de máquina con un toque (avería, ajustes, cambio de modelo...). */
+export interface Parada {
+  id: string
+  puesto: string
+  motivo: string
+  motivo_texto: string
+  nota: string | null
+  inicio: string
+  fin: string | null
+}
+
 /** Bobina montada que el operario debe medir antes de cerrar su turno. */
 export interface MedicionPendiente {
   stock_item_id: string
@@ -870,6 +881,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  paradaAbierta(): Promise<Parada | null> {
+    return request('/production/paradas/abierta')
+  },
+
+  parar(data: { puesto: string; motivo: string; order_id?: string | null; line_id?: string | null }): Promise<Parada> {
+    return request('/production/paradas', { method: 'POST', body: JSON.stringify(data) })
+  },
+
+  cambiarParada(id: string, data: { motivo?: string; nota?: string | null }): Promise<Parada> {
+    return request(`/production/paradas/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  },
+
+  finParada(id: string, data: { nota?: string | null }): Promise<Parada> {
+    return request(`/production/paradas/${id}/fin`, { method: 'POST', body: JSON.stringify(data) })
   },
 
   listCalculadoras(puesto: string): Promise<Calculadora[]> {

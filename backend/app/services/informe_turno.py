@@ -113,6 +113,14 @@ def informe_turno(db: Session, tenant_id: uuid.UUID, fecha: date, turno: str) ->
         fila["incidencias"] += 1
         fila["parada_min"] += inc.tiempo_parada_min or Decimal("0")
 
+    # Paradas con un toque del operario (avería, ajustes, limpieza...)
+    from app.services.paradas import paradas_en
+
+    for x in paradas_en(db, tenant_id, desde, hasta):
+        if x["tipo"].startswith("parada_"):
+            fila = filas.setdefault(x["puesto"], _fila_vacia(x["puesto"]))
+            fila["parada_min"] += Decimal(str(round(x["minutos"], 1)))
+
     puestos = []
     for puesto in sorted(filas):
         f = filas[puesto]

@@ -4,6 +4,32 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-10-28 — Panel de operario: paradas con un toque (fase 3)
+
+- **Problema:** el operario solo podía avisar de una parada abriendo una
+  incidencia (formulario, foto), y limpieza, ajustes o un cambio de modelo no
+  son incidencias que el supervisor deba gestionar, pero sí tiempo perdido.
+- **Solución:** tabla `paradas` (migración `b5d2f8a3c6e1`, solo añade una
+  tabla) y rutas del operario `POST /production/paradas`, `GET
+  /production/paradas/abierta`, `PATCH /production/paradas/{id}` y `POST
+  /production/paradas/{id}/fin`. Motivos de planta (Jorge, 28-10): avería,
+  ajustes, cambio de modelo, limpieza, mantenimiento y otros. En el panel, un
+  toque abre la pantalla de máquina parada (motivo en grande, tiempo
+  corriendo, nota opcional, «Volver a producir» y «Cambiar motivo»); al volver
+  al panel la parada abierta sigue en pantalla, y cerrar la jornada o la
+  sesión la cierra. `services/paradas.paradas_en` junta paradas e incidencias
+  recortadas a la ventana: lo usan la vista Turno (puesto «parado» con su
+  motivo y lista de paradas), la vista Planta (disponibilidad y causas) y el
+  informe de turno (minutos de parada por puesto). Las incidencias siguen
+  igual.
+- **Archivos:** `models/parada.py`, la migración, `services/paradas.py`,
+  `panel_turno.py`, `panel_planta.py`, `informe_turno.py`, `auth.py`,
+  `routers/production.py`; `components/ParadaMaquina.tsx`,
+  `OperarioPage.tsx`, `lib/api.ts`; tests.
+- **Verificación:** migración arriba/abajo/arriba en Postgres local; pytest
+  459 ok, vitest 142 ok; probado en local (parar, ver en la vista Turno,
+  volver a producir).
+
 ## 2026-10-28 — Panel de operario: calculadoras por puesto (fase 2)
 
 - **Problema:** el operario contaba las piezas a mano; el legacy tenía

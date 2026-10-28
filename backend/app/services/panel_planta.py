@@ -25,10 +25,10 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Incidencia, Order, OrderLine, ProductionLog, Tenant, Workstation
+from app.models import Order, OrderLine, ProductionLog, Tenant, Workstation
 from app.services.objetivos import objetivos_tenant
-from app.services.panel_turno import TIPOS_INCIDENCIA, _utc, resumen_turno
-from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA
+from app.services.panel_turno import _utc, resumen_turno
+from app.services.paradas import paradas_en
 from app.services.shifts import TZ_PLANTA
 
 PERIODOS = ("hoy", "semana", "8semanas")
@@ -96,23 +96,13 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
             p["horas"] += cantidad / float(eficiencia)
             p["piezas_medidas"] += cantidad
 
+    # Incidencias y paradas del operario (avería, ajustes, limpieza...)
     paradas_causa: dict[str, float] = defaultdict(float)
     numero_paradas = 0
-    for inc in db.scalars(
-        select(Incidencia).where(Incidencia.tenant_id == tenant_id, Incidencia.created_at < hasta)
-    ):
-        creada = _utc(inc.created_at)
-        if inc.estado in ESTADOS_INCIDENCIA_ABIERTA:
-            minutos = (hasta - max(creada, desde)).total_seconds() / 60
-        elif creada >= desde:
-            minutos = float(inc.tiempo_parada_min or 0)
-        else:
-            continue
-        if minutos <= 0:
-            continue
+    for parada in paradas_en(db, tenant_id, desde, hasta):
         numero_paradas += 1
-        paradas_causa[inc.tipo] += minutos
-        por_puesto[inc.puesto]["paradas_min"] += minutos
+        paradas_causa[parada["motivo"]] += parada["minutos"]
+        por_puesto[parada["puesto"]]["paradas_min"] += parada["minutos"]
 
     calidad = 1 - (kg_chatarra / (kg_material + kg_chatarra)) if kg_material + kg_chatarra else 1.0
 
@@ -160,11 +150,11 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
             "por_causa": sorted(
                 (
                     {
-                        "causa": TIPOS_INCIDENCIA.get(tipo, "otra"),
+                        "causa": causa,
                         "minutos": round(m),
                         "pct": _pct(m, minutos_parado),
                     }
-                    for tipo, m in paradas_causa.items()
+                    for causa, m in paradas_causa.items()
                 ),
                 key=lambda x: x["minutos"],
                 reverse=True,

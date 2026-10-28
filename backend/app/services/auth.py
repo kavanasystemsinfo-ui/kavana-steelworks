@@ -105,6 +105,9 @@ def logout(db: Session, token: str) -> None:
     from app.services.medicion import exigir_mediciones
 
     exigir_mediciones(db, uuid.UUID(payload["sub"]))  # MedicionPendiente si falta medir
+    from app.services.paradas import cerrar_paradas_de
+
+    cerrar_paradas_de(db, uuid.UUID(payload["sub"]))
     exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
     db.add(
         RevokedToken(
@@ -142,6 +145,9 @@ def close_shift(db: Session, token: str) -> dict:
     from app.services.medicion import exigir_mediciones
 
     exigir_mediciones(db, user_id)  # MedicionPendiente si falta medir
+    from app.services.paradas import cerrar_paradas_de
+
+    cerrar_paradas_de(db, user_id)
     ahora = datetime.now(UTC)
     turno.logout_time = ahora
     turno.status = "completed"
