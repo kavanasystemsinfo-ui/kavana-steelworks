@@ -28,3 +28,7 @@ fly.toml.local
 .coverage
 .vercel
 .env*
+
+# Salida local de graphify (no se versiona)
+graph.json/
+graphify-out/
