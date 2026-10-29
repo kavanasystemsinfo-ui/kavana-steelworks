@@ -10,7 +10,7 @@ import { MedirCierre } from '../components/MedirCierre'
 import { FichaOrden } from '../components/FichaOrden'
 import { CalculadoraBotones, type Unidad } from '../components/CalculadoraBotones'
 import { MotivosParada, PantallaParada } from '../components/ParadaMaquina'
-import { PrevisionMedida } from '../components/PrevisionMedida'
+import { MedidaBobina } from '../components/MedidaBobina'
 
 interface CoilScan {
   id: string
@@ -271,7 +271,7 @@ export function OperarioPage() {
     }
   }
 
-  const [radioMm, setRadioMm] = useState('')
+  const [finAbierto, setFinAbierto] = useState(false)
   const [piezas, setPiezas] = useState('')
   // Cómo se contaron con la calculadora (null si se escribió la cantidad a mano)
   const [desglose, setDesglose] = useState<Desglose | null>(null)
@@ -670,8 +670,7 @@ export function OperarioPage() {
     }
   }
 
-  const handleFinBobina = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleFinBobina = async (radioMm: number) => {
     showToast("success", '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
@@ -683,11 +682,12 @@ export function OperarioPage() {
         stock_item_id: scan.id,
         order_id: ordenDetalle.id,
         line_id: ordenDetalle.line_id,
-        radio_mm: Number(radioMm),
+        radio_mm: radioMm,
       })
       showToast("success", 
-        `${res.msg}: quedan ${res.peso_restante_kg} kg, ${res.merma_kg} kg de merma (${res.merma_cost} €)`,
+        `${res.msg}: quedan ${res.peso_restante_kg} kg, ${res.merma_kg} kg de merma`,
       )
+      setFinAbierto(false)
       refrescarFicha()
       setVinculada(false)
       setScan(null)
@@ -1043,30 +1043,14 @@ export function OperarioPage() {
               <details className="rounded-xl border border-p-borde px-4 py-3">
                 <summary className="cursor-pointer text-sm font-semibold">Fin de bobina o retirar pico</summary>
                 <div className="mt-3 space-y-3">
-          {/* Fin de bobina: medir los milímetros de radio restantes (visión Jorge) */}
-          <form
-            onSubmit={handleFinBobina}
-            className="bg-kavana-dark border border-kavana-border rounded-xl p-4 space-y-3 text-left"
-          >
-            <p className="label-industrial text-xs text-kavana-text-dim">
-              Fin de bobina: mide con el metro la carne, del mandril al borde
-            </p>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              value={radioMm}
-              onChange={(e) => setRadioMm(e.target.value)}
-              placeholder="Carne restante (mm)"
-              className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-xl px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
-              required
-            />
-            <PrevisionMedida stockItemId={scan?.id} radio={radioMm} />
+          {/* Fin de bobina: medir la carne en su propia ventana (legacy CoilCalculator) */}
+          <div className="space-y-3">
             <button
-              type="submit"
+              type="button"
+              onClick={() => setFinAbierto(true)}
               className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold rounded-xl hover:bg-kavana-orange hover:text-black transition-colors"
             >
-              Cerrar bobina (merma real)
+              Fin de bobina: medir la carne
             </button>
             <button
               type="button"
@@ -1075,7 +1059,30 @@ export function OperarioPage() {
             >
               Retirar pico a inventario
             </button>
-          </form>
+          </div>
+          {finAbierto && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Fin de bobina"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            >
+              <div className="w-full max-w-md space-y-4 rounded-2xl border border-kavana-border bg-kavana-surface p-5">
+                <div>
+                  <p className="font-bold">Fin de bobina</p>
+                  <p className="text-xs text-kavana-text-dim">
+                    Lo que quede se queda en el puesto como pico. La diferencia con el sistema es merma.
+                  </p>
+                </div>
+                <MedidaBobina
+                  stockItemId={scan?.id}
+                  textoConfirmar="Cerrar bobina"
+                  onConfirmar={handleFinBobina}
+                  onCancelar={() => setFinAbierto(false)}
+                />
+              </div>
+            </div>
+          )}
 
                 </div>
               </details>

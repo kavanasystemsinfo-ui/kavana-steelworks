@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type MedicionPendiente } from '../lib/api'
-import { PrevisionMedida } from './PrevisionMedida'
+import { MedidaBobina } from './MedidaBobina'
 
 /** Medición obligatoria del cierre de turno (Jorge, 28-10).
  *
@@ -11,7 +11,6 @@ import { PrevisionMedida } from './PrevisionMedida'
  */
 export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => void }) {
   const [pendientes, setPendientes] = useState<MedicionPendiente[] | null>(null)
-  const [radios, setRadios] = useState<Record<string, string>>({})
   const [hechas, setHechas] = useState<string[]>([])
   const [error, setError] = useState('')
 
@@ -25,14 +24,14 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
       .catch((e) => setError(e instanceof Error ? e.message : 'Error de conexión'))
   }, [onPendientes])
 
-  const medir = async (p: MedicionPendiente) => {
+  const medir = async (p: MedicionPendiente, radioMm: number) => {
     setError('')
     try {
       const res = await api.medirBobina({
         stock_item_id: p.stock_item_id,
         order_id: p.order_id,
         line_id: p.line_id,
-        radio_mm: Number(radios[p.stock_item_id]),
+        radio_mm: radioMm,
       })
       const quedan = (pendientes ?? []).filter((x) => x.stock_item_id !== p.stock_item_id)
       setPendientes(quedan)
@@ -55,30 +54,14 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
       {(pendientes ?? []).map((p) => (
         <div key={p.stock_item_id} className="bg-kavana-dark border border-kavana-warn rounded-xl p-3 space-y-2">
           <p className="text-sm">
-            Mide la carne de la bobina (del mandril al borde) <span className="mono-data">{p.coil_code}</span>
+            Mide la bobina <span className="mono-data">{p.coil_code}</span>
             {p.puesto ? ` en ${p.puesto}` : ''}. Seguirá montada para el relevo.
           </p>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              aria-label={`Carne de ${p.coil_code ?? 'la bobina'} en mm`}
-              placeholder="Carne (mm)"
-              value={radios[p.stock_item_id] ?? ''}
-              onChange={(e) => setRadios((r) => ({ ...r, [p.stock_item_id]: e.target.value }))}
-              className="mono-data flex-1 bg-kavana-dark border border-kavana-border rounded-xl px-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => medir(p)}
-              disabled={radios[p.stock_item_id] === undefined || radios[p.stock_item_id] === ''}
-              className="min-h-[52px] px-4 bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40"
-            >
-              Medir
-            </button>
-          </div>
-          <PrevisionMedida stockItemId={p.stock_item_id} radio={radios[p.stock_item_id] ?? ''} />
+          <MedidaBobina
+            stockItemId={p.stock_item_id}
+            textoConfirmar="Medir y dejar montada"
+            onConfirmar={(mm) => medir(p, mm)}
+          />
         </div>
       ))}
       {hechas.map((h) => (

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
@@ -177,7 +177,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
     // El flujo de demo: vincular muestra el panel de producción
     await user.click(botonVincular)
     expect(
-      await screen.findByPlaceholderText(/carne restante/i),
+      await screen.findByRole('button', { name: /fin de bobina: medir la carne/i }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /retirar pico a inventario/i }),
@@ -998,6 +998,17 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
   function stubFase1(pendientes: unknown[] = []) {
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       const u = String(url)
+      if (u.includes('/prevision-medida')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            radio_mm: 210, peso_restante_kg: 410, sistema_kg: 430, merma_kg: 20, merma_pct: 4.7,
+            kg_por_mm: 3.1, margen_error_kg: 9.3, merma_dentro_del_margen: false,
+            coil_code: 'COIL-108', material_code: 'FLEJE-108', ancho_mm: 108, mandril_mm: 508,
+            densidad_kg_dm3: 7.7807,
+          }),
+        })
+      }
       if (u.includes('/scan')) {
         return Promise.resolve({
           ok: true,
@@ -1123,10 +1134,12 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
 
     await user.click(screen.getByRole('button', { name: /cerrar jornada/i }))
     const cerrar = screen.getByRole('button', { name: /sí, cerrar/i })
-    await user.type(await screen.findByLabelText(/carne de COIL-108/i), '210')
+    await user.type(await screen.findByPlaceholderText(/carne \(mm\)/i), '210')
     expect(cerrar).toBeDisabled()
 
-    await user.click(screen.getByRole('button', { name: /^medir$/i }))
+    const medir = screen.getByRole('button', { name: /medir y dejar montada/i })
+    await waitFor(() => expect(medir).toBeEnabled())
+    await user.click(medir)
     const medida = fetchMock.mock.calls.find(([u]) => String(u).includes('/stock-items/medir'))
     expect(JSON.parse(String(medida?.[1]?.body))).toMatchObject({ stock_item_id: 'SI1', radio_mm: 210 })
     expect(await screen.findByText(/quedan 410 kg montados/i)).toBeInTheDocument()
@@ -1160,9 +1173,12 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     const fetchMock = stubFase1()
     await abrirPanelVinculado(fetchMock)
 
-    const radio = await screen.findByPlaceholderText(/carne restante/i)
-    await user.type(radio, '10')
-    await user.click(screen.getByRole('button', { name: /cerrar bobina/i }))
+    await user.click(await screen.findByRole('button', { name: /fin de bobina: medir la carne/i }))
+    const ventana = screen.getByRole('dialog', { name: /fin de bobina/i })
+    await user.type(within(ventana).getByPlaceholderText(/carne \(mm\)/i), '10')
+    const cerrar = within(ventana).getByRole('button', { name: /^cerrar bobina$/i })
+    await waitFor(() => expect(cerrar).toBeEnabled())
+    await user.click(cerrar)
 
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/stock-items/fin-bobina'))).toBe(true)
