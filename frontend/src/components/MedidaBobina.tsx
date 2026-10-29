@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api, type PrevisionMedida } from '../lib/api'
 
-const kg = (n: number) => n.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+// Si falta un dato (por ejemplo, un servidor aún sin actualizar) se enseña un guion,
+// nunca se rompe la pantalla del operario.
+const kg = (n?: number | null) =>
+  typeof n === 'number' ? n.toLocaleString('es-ES', { maximumFractionDigits: 1 }) : '—'
 
 /** Medir la carne de una bobina y ver el resultado antes de confirmar.
  *
@@ -58,7 +61,7 @@ export function MedidaBobina({
 
   return (
     <div className="space-y-4 text-left">
-      {prevision && (
+      {prevision && prevision.ancho_mm != null && (
         <dl className="grid grid-cols-3 gap-2 rounded-xl border border-kavana-border p-3 text-xs">
           <div>
             <dt className="text-kavana-text-dim">Bobina</dt>
@@ -70,7 +73,7 @@ export function MedidaBobina({
           </div>
           <div>
             <dt className="text-kavana-text-dim">Mandril</dt>
-            <dd className="mono-data">{prevision.mandril_mm} mm</dd>
+            <dd className="mono-data">{kg(prevision.mandril_mm)} mm</dd>
           </div>
         </dl>
       )}
