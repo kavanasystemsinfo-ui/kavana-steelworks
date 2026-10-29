@@ -237,3 +237,47 @@ def test_cambio_de_orden_en_la_misma_maquina_sigue_con_la_bobina(db_session, ten
     assert linea_ant.active_coil_id is None
     assert linea_nueva.active_coil_id == bobina.id
     assert float(linea_ant.real_material_qty) == 0  # se le devolvió lo no consumido
+
+
+def _prever(cliente, bobina, radio):
+    return cliente.get(f"/api/v1/stock-items/{bobina.id}/prevision-medida?radio_mm={radio}")
+
+
+def test_prevision_da_los_kg_y_la_merma_sin_guardar_nada(db_session, tenant, user):
+    bobina, orden, linea = _montada(db_session, tenant, user)
+    cliente = _cliente(db_session, user)
+    esperado = peso_desde_radio_mm(radio_mm=150, width_mm=108)
+
+    r = _prever(cliente, bobina, 150)
+
+    assert r.status_code == 200, r.text
+    datos = r.json()
+    assert datos["peso_restante_kg"] == esperado
+    assert datos["sistema_kg"] == 1200.0
+    assert datos["merma_kg"] == round(1200.0 - esperado, 2)
+    db_session.refresh(bobina)
+    assert bobina.cantidad_disponible == Decimal("1200")
+    # Lo que se previó es lo que se registra al medir
+    medido = _medir(cliente, bobina, orden, linea, 150).json()
+    assert medido["peso_restante_kg"] == datos["peso_restante_kg"]
+
+
+def test_prevision_sin_merma_si_queda_mas_de_lo_que_cree_el_sistema(db_session, tenant, user):
+    bobina, _, _ = _montada(db_session, tenant, user, peso=100.0)
+    datos = _prever(_cliente(db_session, user), bobina, 300).json()
+    assert datos["merma_kg"] == 0.0
+
+
+def test_prevision_errores(db_session, tenant, user):
+    import uuid
+
+    from tests.helpers import make_tenant
+
+    cliente = _cliente(db_session, user)
+    assert _prever(cliente, type("B", (), {"id": uuid.uuid4()}), 100).status_code == 404
+    otro = make_tenant(db_session, name="Otra planta")
+    material_ajeno = make_material(db_session, otro, code="X")
+    ajena = make_stock_item(db_session, otro, material_ajeno, cantidad=10)
+    assert _prever(cliente, ajena, 100).status_code == 404
+    bobina, _, _ = _montada(db_session, tenant, user)
+    assert _prever(cliente, bobina, -1).status_code == 422

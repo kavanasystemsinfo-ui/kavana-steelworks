@@ -196,6 +196,14 @@ export interface Parada {
 }
 
 /** Bobina montada que el operario debe medir antes de cerrar su turno. */
+/** Vista previa de una medición: no guarda nada. */
+export interface PrevisionMedida {
+  radio_mm: number
+  peso_restante_kg: number
+  sistema_kg: number
+  merma_kg: number
+}
+
 export interface MedicionPendiente {
   stock_item_id: string
   coil_code: string | null
@@ -929,6 +937,11 @@ export const api = {
   /** Bobinas que el operario puede vincular sin saberse el código. */
   bobinasDisponibles(lineId: string): Promise<Array<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string; en_puesto: boolean }>> {
     return request(`/stock-items/disponibles?line_id=${encodeURIComponent(lineId)}`)
+  },
+
+  /** Kg que quedan y merma para unos mm de carne, sin guardar nada. */
+  preverMedida(stockItemId: string, radioMm: number): Promise<PrevisionMedida> {
+    return request(`/stock-items/${encodeURIComponent(stockItemId)}/prevision-medida?radio_mm=${radioMm}`)
   },
 
   getMedicionesPendientes(): Promise<MedicionPendiente[]> {

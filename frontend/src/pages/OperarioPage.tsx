@@ -10,6 +10,7 @@ import { MedirCierre } from '../components/MedirCierre'
 import { FichaOrden } from '../components/FichaOrden'
 import { CalculadoraBotones, type Unidad } from '../components/CalculadoraBotones'
 import { MotivosParada, PantallaParada } from '../components/ParadaMaquina'
+import { PrevisionMedida } from '../components/PrevisionMedida'
 
 interface CoilScan {
   id: string
@@ -1048,7 +1049,7 @@ export function OperarioPage() {
             className="bg-kavana-dark border border-kavana-border rounded-xl p-4 space-y-3 text-left"
           >
             <p className="label-industrial text-xs text-kavana-text-dim">
-              Fin de bobina: mide el radio con el metro
+              Fin de bobina: mide con el metro la carne, del mandril al borde
             </p>
             <input
               type="number"
@@ -1056,10 +1057,11 @@ export function OperarioPage() {
               min="0"
               value={radioMm}
               onChange={(e) => setRadioMm(e.target.value)}
-              placeholder="Radio restante (mm)"
+              placeholder="Carne restante (mm)"
               className="mono-data w-full bg-kavana-surface border border-kavana-border rounded-xl px-3 py-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
               required
             />
+            <PrevisionMedida stockItemId={scan?.id} radio={radioMm} />
             <button
               type="submit"
               className="w-full min-h-[56px] border border-kavana-orange text-kavana-orange font-bold rounded-xl hover:bg-kavana-orange hover:text-black transition-colors"

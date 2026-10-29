@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -407,6 +407,30 @@ def medir(
             order_id=body.order_id,
             line_id=body.line_id,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/{stock_item_id}/prevision-medida")
+def prevision_medida(
+    stock_item_id: uuid.UUID,
+    radio_mm: Annotated[float, Query(ge=0)],
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator")),
+    ] = None,
+):
+    """Kg que quedan y merma que se apuntaría para unos mm de carne, sin
+    guardar nada: el operario lo ve mientras teclea, antes de confirmar."""
+    from app.services.medicion import prever_medida
+
+    try:
+        return prever_medida(
+            db, current_user.tenant_id, stock_item_id=stock_item_id, radio_mm=radio_mm
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

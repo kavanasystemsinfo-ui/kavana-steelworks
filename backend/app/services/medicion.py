@@ -155,6 +155,39 @@ def medir_bobina(
     }
 
 
+def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> dict:
+    """Vista previa de una medición: los kg que quedan según los mm de carne
+    y la merma que se apuntaría, sin guardar nada (legacy CoilCalculator).
+
+    Usa la misma fórmula y densidad que medir_bobina y create_retal, para que
+    el operario vea antes de confirmar lo que el sistema va a registrar.
+    """
+    from app.services.coil_math import peso_desde_radio_mm
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None or bobina.tenant_id != tenant_id:
+        raise LookupError("Bobina no encontrada")
+    densidad = (
+        bobina.material.density_calibrada
+        if bobina.material and bobina.material.density_calibrada
+        else 7.7807
+    )
+    real = Decimal(
+        str(
+            peso_desde_radio_mm(
+                radio_mm=radio_mm, width_mm=bobina.width_mm, densidad_kg_dm3=densidad
+            )
+        )
+    )
+    sistema = bobina.cantidad_disponible
+    return {
+        "radio_mm": radio_mm,
+        "peso_restante_kg": float(real),
+        "sistema_kg": float(sistema),
+        "merma_kg": float(max(Decimal("0"), sistema - real)),
+    }
+
+
 def _ultima_medicion(db: Session, tenant_id, coil_id: str) -> datetime | None:
     """Último fin de bobina o cierre de turno de la bobina (evento scrap)."""
     momentos = [
