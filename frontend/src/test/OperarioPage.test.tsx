@@ -177,7 +177,7 @@ describe('Panel de Operario (directriz no abrumar)', () => {
     // El flujo de demo: vincular muestra el panel de producción
     await user.click(botonVincular)
     expect(
-      await screen.findByPlaceholderText(/radio restante/i),
+      await screen.findByPlaceholderText(/carne restante/i),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /retirar pico a inventario/i }),
@@ -1123,7 +1123,7 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
 
     await user.click(screen.getByRole('button', { name: /cerrar jornada/i }))
     const cerrar = screen.getByRole('button', { name: /sí, cerrar/i })
-    await user.type(await screen.findByLabelText(/radio de COIL-108/i), '210')
+    await user.type(await screen.findByLabelText(/carne de COIL-108/i), '210')
     expect(cerrar).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: /^medir$/i }))
@@ -1160,7 +1160,7 @@ describe('Fase 1: ciclo de vida (desvincular, cierre de jornada, rutas de bobina
     const fetchMock = stubFase1()
     await abrirPanelVinculado(fetchMock)
 
-    const radio = await screen.findByPlaceholderText(/radio restante/i)
+    const radio = await screen.findByPlaceholderText(/carne restante/i)
     await user.type(radio, '10')
     await user.click(screen.getByRole('button', { name: /cerrar bobina/i }))
 

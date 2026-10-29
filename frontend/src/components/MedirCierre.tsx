@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type MedicionPendiente } from '../lib/api'
+import { PrevisionMedida } from './PrevisionMedida'
 
 /** Medición obligatoria del cierre de turno (Jorge, 28-10).
  *
@@ -54,7 +55,7 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
       {(pendientes ?? []).map((p) => (
         <div key={p.stock_item_id} className="bg-kavana-dark border border-kavana-warn rounded-xl p-3 space-y-2">
           <p className="text-sm">
-            Mide el radio de la bobina <span className="mono-data">{p.coil_code}</span>
+            Mide la carne de la bobina (del mandril al borde) <span className="mono-data">{p.coil_code}</span>
             {p.puesto ? ` en ${p.puesto}` : ''}. Seguirá montada para el relevo.
           </p>
           <div className="flex gap-2">
@@ -62,8 +63,8 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
               type="number"
               inputMode="decimal"
               min="0"
-              aria-label={`Radio de ${p.coil_code ?? 'la bobina'} en mm`}
-              placeholder="Radio (mm)"
+              aria-label={`Carne de ${p.coil_code ?? 'la bobina'} en mm`}
+              placeholder="Carne (mm)"
               value={radios[p.stock_item_id] ?? ''}
               onChange={(e) => setRadios((r) => ({ ...r, [p.stock_item_id]: e.target.value }))}
               className="mono-data flex-1 bg-kavana-dark border border-kavana-border rounded-xl px-3 min-h-[52px] text-lg focus:border-kavana-orange outline-none"
@@ -77,6 +78,7 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
               Medir
             </button>
           </div>
+          <PrevisionMedida stockItemId={p.stock_item_id} radio={radios[p.stock_item_id] ?? ''} />
         </div>
       ))}
       {hechas.map((h) => (
