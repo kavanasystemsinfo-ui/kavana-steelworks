@@ -155,14 +155,22 @@ def medir_bobina(
     }
 
 
+# Error normal al medir la carne con un metro sobre una bobina montada (Jorge, 29-10).
+# Una merma por debajo de lo que pesan estos milímetros puede ser solo la medida.
+MM_ERROR_METRO = 3
+
+
 def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> dict:
     """Vista previa de una medición: los kg que quedan según los mm de carne
     y la merma que se apuntaría, sin guardar nada (legacy CoilCalculator).
 
     Usa la misma fórmula y densidad que medir_bobina y create_retal, para que
     el operario vea antes de confirmar lo que el sistema va a registrar.
+    Devuelve también la ficha con la que se calcula (ancho, mandril,
+    densidad) y cuántos kg pesa un milímetro de carne a ese tamaño: con eso la
+    pantalla distingue una merma real de un error del metro.
     """
-    from app.services.coil_math import peso_desde_radio_mm
+    from app.services.coil_math import DIAMETRO_INTERIOR_MM_DEFAULT, peso_desde_radio_mm
 
     bobina = db.get(StockItem, stock_item_id)
     if bobina is None or bobina.tenant_id != tenant_id:
@@ -172,19 +180,30 @@ def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> 
         if bobina.material and bobina.material.density_calibrada
         else 7.7807
     )
-    real = Decimal(
-        str(
-            peso_desde_radio_mm(
-                radio_mm=radio_mm, width_mm=bobina.width_mm, densidad_kg_dm3=densidad
-            )
-        )
-    )
+
+    def peso(mm: float) -> Decimal:
+        kg = peso_desde_radio_mm(radio_mm=mm, width_mm=bobina.width_mm, densidad_kg_dm3=densidad)
+        return Decimal(str(kg))
+
+    real = peso(radio_mm)
+    kg_por_mm = peso(radio_mm + 1) - real
     sistema = bobina.cantidad_disponible
+    merma = max(Decimal("0"), sistema - real)
+    margen = kg_por_mm * MM_ERROR_METRO
     return {
         "radio_mm": radio_mm,
         "peso_restante_kg": float(real),
         "sistema_kg": float(sistema),
-        "merma_kg": float(max(Decimal("0"), sistema - real)),
+        "merma_kg": float(merma),
+        "merma_pct": float(round(merma / sistema * 100, 1)) if sistema > 0 else 0.0,
+        "kg_por_mm": float(kg_por_mm),
+        "margen_error_kg": float(margen),
+        "merma_dentro_del_margen": merma <= margen,
+        "coil_code": bobina.coil_id,
+        "material_code": bobina.material.code if bobina.material else None,
+        "ancho_mm": float(bobina.width_mm),
+        "mandril_mm": DIAMETRO_INTERIOR_MM_DEFAULT,
+        "densidad_kg_dm3": float(densidad),
     }
 
 

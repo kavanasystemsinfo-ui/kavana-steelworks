@@ -202,6 +202,17 @@ export interface PrevisionMedida {
   peso_restante_kg: number
   sistema_kg: number
   merma_kg: number
+  merma_pct: number
+  /** Cuántos kg pesa un mm de carne a este tamaño de bobina. */
+  kg_por_mm: number
+  margen_error_kg: number
+  /** La merma cabe en el error normal del metro (3 mm). */
+  merma_dentro_del_margen: boolean
+  coil_code: string | null
+  material_code: string | null
+  ancho_mm: number
+  mandril_mm: number
+  densidad_kg_dm3: number
 }
 
 export interface MedicionPendiente {

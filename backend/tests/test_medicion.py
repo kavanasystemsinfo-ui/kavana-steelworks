@@ -281,3 +281,30 @@ def test_prevision_errores(db_session, tenant, user):
     assert _prever(cliente, ajena, 100).status_code == 404
     bobina, _, _ = _montada(db_session, tenant, user)
     assert _prever(cliente, bobina, -1).status_code == 422
+
+
+def test_prevision_trae_la_ficha_y_el_margen_del_metro(db_session, tenant, user):
+    bobina, _, _ = _montada(db_session, tenant, user, peso=600.0)
+    cliente = _cliente(db_session, user)
+    kg_mm = peso_desde_radio_mm(radio_mm=301, width_mm=108) - peso_desde_radio_mm(
+        radio_mm=300, width_mm=108
+    )
+
+    datos = _prever(cliente, bobina, 300).json()
+
+    assert datos["ancho_mm"] == 108
+    assert datos["mandril_mm"] == 508
+    assert datos["densidad_kg_dm3"] == 7.7807
+    assert datos["coil_code"] == bobina.coil_id
+    assert abs(datos["kg_por_mm"] - kg_mm) < 0.02
+    assert abs(datos["margen_error_kg"] - 3 * datos["kg_por_mm"]) < 0.02
+    # Medir 1 mm menos de lo que hay es error del metro, no merma real
+    justo = datos["peso_restante_kg"]
+    bobina.cantidad_disponible = Decimal(str(justo)) + Decimal(str(datos["kg_por_mm"]))
+    db_session.commit()
+    assert _prever(cliente, bobina, 300).json()["merma_dentro_del_margen"] is True
+    bobina.cantidad_disponible = Decimal(str(justo + 10 * datos["kg_por_mm"]))
+    db_session.commit()
+    fuera = _prever(cliente, bobina, 300).json()
+    assert fuera["merma_dentro_del_margen"] is False
+    assert fuera["merma_pct"] > 0
