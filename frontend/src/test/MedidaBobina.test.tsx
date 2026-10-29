@@ -56,4 +56,12 @@ describe('Medir la carne de una bobina (maquetación del legacy)', () => {
     await new Promise((r) => setTimeout(r, 400))
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('si el servidor no manda la ficha ni el margen, la pantalla no se rompe', async () => {
+    stub({ radio_mm: 100, peso_restante_kg: 300, sistema_kg: 310, merma_kg: 10 })
+    render(<MedidaBobina stockItemId="B1" textoConfirmar="Medir" onConfirmar={vi.fn()} />)
+    await userEvent.setup().type(screen.getByPlaceholderText(/carne \(mm\)/i), '100')
+    expect(await screen.findByText('310 kg')).toBeInTheDocument()
+    expect(screen.queryByText('Ancho')).not.toBeInTheDocument()
+  })
 })
