@@ -130,8 +130,9 @@ def logout(db: Session, token: str) -> None:
 
 def buscar_tenant_demo(db: Session):
     """Localiza el tenant demo por identidad estable (mismo que en seed_demo)."""
-    from app.models import Tenant
     from sqlalchemy import select
+
+    from app.models import Tenant
 
     tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
     if tenant is None:
@@ -143,8 +144,9 @@ def buscar_tenant_demo(db: Session):
 
 def find_user_by_email_in_tenant(db: Session, tenant_id: uuid.UUID, email: str):
     """Busca usuario por email dentro de un tenant específico."""
-    from app.models import User
     from sqlalchemy import select
+
+    from app.models import User
 
     return db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == email))
 

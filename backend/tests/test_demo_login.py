@@ -1,17 +1,13 @@
 """Tests para demo-login (Fase 2 - entrada sin credenciales a la demo)."""
 
 import os
-from unittest.mock import patch
 
-import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import Tenant, User
-from app.services.auth import hash_password
 from app.routers import auth as auth_router
-from app.core.database import Base
+from app.services.auth import hash_password
 
 
 def _make_demo_tenant(db):
