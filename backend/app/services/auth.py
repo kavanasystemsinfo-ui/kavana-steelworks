@@ -128,6 +128,27 @@ def logout(db: Session, token: str) -> None:
     db.commit()
 
 
+def buscar_tenant_demo(db: Session):
+    """Localiza el tenant demo por identidad estable (mismo que en seed_demo)."""
+    from app.models import Tenant
+    from sqlalchemy import select
+
+    tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo"))
+    if tenant is None:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == "demo-aceros"))
+    if tenant is None:
+        tenant = db.scalar(select(Tenant).where(Tenant.name == "Demo Aceros"))
+    return tenant
+
+
+def find_user_by_email_in_tenant(db: Session, tenant_id: uuid.UUID, email: str):
+    """Busca usuario por email dentro de un tenant específico."""
+    from app.models import User
+    from sqlalchemy import select
+
+    return db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == email))
+
+
 def close_shift(db: Session, token: str) -> dict:
     """Cierra el turno activo con total_hours y turno A/B/C (spec 02 3.11)."""
     payload = verify_token(token)
