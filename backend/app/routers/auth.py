@@ -1,6 +1,9 @@
 """Router de autenticación: login y logout."""
 
+import os
+import time
 import uuid
+from collections import defaultdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -62,9 +65,6 @@ class DemoLoginRequest(BaseModel):
 
 # Rate limit en memoria para demo-login (20 req/min/IP)
 # En Fly 1 réplica basta; si se escala, migrar a Redis.
-from collections import defaultdict
-import time
-
 _demo_login_attempts = defaultdict(list)
 DEMO_LOGIN_WINDOW = 60  # segundos
 DEMO_LOGIN_MAX = 20
@@ -74,7 +74,10 @@ def _check_demo_login_rate_limit(ip: str) -> None:
     now = time.time()
     recent = [t for t in _demo_login_attempts[ip] if now - t < DEMO_LOGIN_WINDOW]
     if len(recent) >= DEMO_LOGIN_MAX:
-        raise HTTPException(status_code=429, detail="Demasiados intentos de demo-login. Espera un momento.")
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiados intentos de demo-login. Espera un momento.",
+        )
     recent.append(now)
     _demo_login_attempts[ip] = recent
 
@@ -97,8 +100,6 @@ def demo_login(
     """Demo login por rol — solo si DEMO_LOGIN_ENABLED=true.
     Devuelve el mismo JWT que el login normal, usando usuarios demo ya sembrados.
     """
-    import os
-
     if os.getenv("DEMO_LOGIN_ENABLED") != "true":
         raise HTTPException(status_code=404, detail="Not found")
 
