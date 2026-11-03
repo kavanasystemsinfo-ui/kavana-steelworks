@@ -24,10 +24,11 @@ describe('Guard de rutas por rol (Fase 6)', () => {
     sessionStorage.clear()
   })
 
-  it('sin token redirige a /login', () => {
+  it('sin token redirige a /login', async () => {
     renderApp('/operario')
     expect(screen.getByText(/KAVANA Steelworks/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /entrar/i })).toBeInTheDocument()
+    // Just verify we can find the login form (it's async due to redirect)
+    await screen.findByText(/Acceso rápido a la demo \(sin credenciales\)/i)
   })
 
   it('operario entra en /operario y no ve el nav de supervisor', () => {
@@ -89,17 +90,21 @@ describe('Guard de rutas por rol (Fase 6)', () => {
       token_type: 'bearer',
     })
     renderApp('/login')
-    await user.type(screen.getByLabelText(/usuario/i), 'supervisor@demo.local')
-    await user.type(screen.getByLabelText(/contraseña/i), 'kavana')
-    await user.click(screen.getByRole('button', { name: /entrar/i }))
+    // Click "Tengo cuenta propia" to show the credentials form
+    await user.click(screen.getByRole('button', { name: /Tengo cuenta propia/i }))
+    await user.type(screen.getByLabelText(/Usuario/i), 'supervisor@demo.local')
+    await user.type(screen.getByLabelText(/Contraseña/i), 'kavana')
+    await user.click(screen.getByRole('button', { name: /Entrar/i }))
     expect(await screen.findByRole('navigation', { name: 'Vistas del panel' })).toBeInTheDocument()
     expect(sessionStorage.getItem('kavana_token')).toBeTruthy()
   })
 
-  it('muestra credenciales demo en el login para entrar fácil', () => {
+  it('muestra botones de acceso rápido a la demo en el login', () => {
     renderApp('/login')
-    expect(screen.getByText(/operario@demo.local/)).toBeInTheDocument()
-    expect(screen.getByText(/supervisor@demo.local/)).toBeInTheDocument()
-    expect(screen.getByText(/materias@demo.local/)).toBeInTheDocument()
+    expect(screen.getByText('Acceso rápido a la demo (sin credenciales)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Operario/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Supervisor/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Materias Primas/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Admin/i })).toBeInTheDocument()
   })
 })

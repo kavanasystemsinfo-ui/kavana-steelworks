@@ -1,25 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, getJwtPayload } from '../lib/api'
+import { api, getJwtPayload, ApiError } from '../lib/api'
 import { HOME_BY_ROLE, type Role } from '../lib/roles'
 
-const DEMO_ACCOUNTS: { email: string; label: string; role: Role }[] = [
-  { email: 'operario@demo.local', label: 'Operario', role: 'operator' },
-  { email: 'supervisor@demo.local', label: 'Supervisor', role: 'supervisor' },
-  { email: 'materias@demo.local', label: 'Materias Primas', role: 'materials' },
-  { email: 'admin@demo.local', label: 'Admin', role: 'admin' },
-]
+const DEMO_ROLES = [
+  { key: 'operator', label: 'Operario', description: 'Registra producción en la línea' },
+  { key: 'supervisor', label: 'Supervisor', description: 'Ve la planta entera, OEE y paradas' },
+  { key: 'materials', label: 'Materias Primas', description: 'Recibe bobinas, gestiona stock y calidad' },
+  { key: 'admin', label: 'Admin', description: 'Configura puestos, usuarios y catálogos' },
+] as const
 
-const DEMO_PASSWORD = 'kavana'
+type DemoRoleKey = typeof DEMO_ROLES[number]['key']
 
-/** Login industrial: tarjeta única, un solo campo a la vez (no abrumar).
- *  Fase 6: redirige al panel según el rol del token y muestra las cuentas
- *  demo con su contraseña para que cualquiera pueda entrar fácil.
- */
+/** Login industrial: botones de rol para demo, formulario plegable para cuentas propias. */
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [showCredentials, setShowCredentials] = useState(false)
+  const [demoLoggingIn, setDemoLoggingIn] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const goHomeByRole = () => {
@@ -27,6 +26,43 @@ export function LoginPage() {
     navigate(role && HOME_BY_ROLE[role] ? HOME_BY_ROLE[role] : '/operario', {
       replace: true,
     })
+  }
+
+  // Auto demo login from query param ?demo=<role>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const demoRole = params.get('demo')
+    if (demoRole && DEMO_ROLES.some(r => r.key === demoRole)) {
+      handleDemoLogin(demoRole as DemoRoleKey)
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
+
+  const handleDemoLogin = async (role: DemoRoleKey) => {
+    setError('')
+    setDemoLoggingIn(role)
+
+    try {
+      const data = await api.demoLogin(role)
+      sessionStorage.setItem('kavana_token', data.access_token)
+      goHomeByRole()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 404) {
+          setError('Acceso demo desactivado. Contacta con el administrador.')
+        } else if (err.status === 400) {
+          setError('Rol no permitido para demo.')
+        } else if (err.status === 429) {
+          setError('Demasiados intentos. Espera un momento.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Error de conexión')
+      }
+    } finally {
+      setDemoLoggingIn(null)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,12 +77,6 @@ export function LoginPage() {
     }
   }
 
-  const fillDemo = (demoEmail: string) => {
-    setEmail(demoEmail)
-    setPassword(DEMO_PASSWORD)
-    setError('')
-  }
-
   return (
     <div className="min-h-screen bg-kavana-dark flex items-center justify-center p-4">
       <form
@@ -59,60 +89,101 @@ export function LoginPage() {
         <p className="text-kavana-text-dim text-sm">
           MES/MOM para el sector metalúrgico
         </p>
-        {error && (
-          <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
-            {error}
-          </p>
-        )}
-        <label className="block">
-          <span className="label-industrial text-xs text-kavana-text-dim">
-            Usuario
-          </span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 min-h-[48px] text-kavana-text focus:border-kavana-orange outline-none"
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="label-industrial text-xs text-kavana-text-dim">
-            Contraseña
-          </span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 min-h-[48px] text-kavana-text focus:border-kavana-orange outline-none"
-            required
-          />
-        </label>
-        <button
-          type="submit"
-          className="w-full min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
-        >
-          Entrar
-        </button>
 
-        <div className="border-t border-kavana-border pt-3">
-          <p className="label-industrial text-xs text-kavana-text-dim mb-2">
-            Acceso demo · contraseña: {DEMO_PASSWORD}
+        {/* Demo role buttons */}
+        <div className="space-y-3 mb-6">
+          <p className="label-industrial text-xs text-kavana-text-dim text-center">
+            Acceso rápido a la demo (sin credenciales)
           </p>
-          <ul className="space-y-1">
-            {DEMO_ACCOUNTS.map((acc) => (
-              <li key={acc.email}>
-                <button
-                  type="button"
-                  onClick={() => fillDemo(acc.email)}
-                  className="w-full text-left text-xs px-2 py-1.5 rounded-sm border border-kavana-border/50 text-kavana-text-dim hover:text-kavana-text hover:border-kavana-orange transition-colors"
-                >
-                  <span className="font-bold">{acc.label}</span>
-                  <span className="ml-2">{acc.email}</span>
-                </button>
-              </li>
+          <div className="space-y-2" role="group" aria-label="Roles de demo">
+            {DEMO_ROLES.map(({ key, label, description }) => (
+              <button
+                key={key}
+                type="button"
+                disabled={demoLoggingIn === key}
+                onClick={() => handleDemoLogin(key)}
+                className="w-full text-left rounded-sm p-4 border transition-all active:scale-[0.99] flex items-center gap-3 bg-kavana-dark/50 border-kavana-border hover:bg-kavana-dark hover:border-kavana-orange text-kavana-text disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-busy={demoLoggingIn === key}
+              >
+                <span className="font-bold text-base text-kavana-text">{label}</span>
+                <span className="text-sm text-kavana-text-dim">{description}</span>
+                {demoLoggingIn === key && (
+                  <span className="ml-auto animate-spin h-5 w-5 border-2 border-kavana-orange border-t-transparent rounded-full" aria-hidden="true" />
+                )}
+              </button>
             ))}
-          </ul>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="relative mb-6 text-kavana-text-dim">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-kavana-border" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-kavana-surface px-2">O</span>
+          </div>
+        </div>
+
+        {/* Foldable credentials form */}
+        <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => setShowCredentials(!showCredentials)}
+            className="w-full flex items-center justify-between font-medium text-sm rounded-sm py-2 px-3 transition-colors text-kavana-text-dim hover:text-kavana-text hover:bg-kavana-dark/50"
+            aria-expanded={showCredentials}
+          >
+            <span>Tengo cuenta propia</span>
+            <svg
+              className={`h-5 w-5 transition-transform text-kavana-text-dim ${showCredentials ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showCredentials && (
+            <div className="space-y-4 animate-slide-down">
+              {error && (
+                <p className="text-kavana-danger text-sm border border-kavana-danger/40 rounded-sm p-2">
+                  {error}
+                </p>
+              )}
+              <label className="block">
+                <span className="label-industrial text-xs text-kavana-text-dim" id="label-email">Usuario</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 min-h-[48px] text-kavana-text focus:border-kavana-orange outline-none"
+                  required
+                  placeholder="usuario@empresa.com"
+                  aria-labelledby="label-email"
+                />
+              </label>
+              <label className="block">
+                <span className="label-industrial text-xs text-kavana-text-dim" id="label-password">Contraseña</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 w-full bg-kavana-dark border border-kavana-border rounded-sm px-3 py-2 min-h-[48px] text-kavana-text focus:border-kavana-orange outline-none"
+                  required
+                  placeholder="••••••••"
+                  aria-labelledby="label-password"
+                />
+              </label>
+              <button
+                type="submit"
+                className="w-full min-h-[52px] bg-kavana-orange text-black font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+              >
+                Entrar
+              </button>
+            </div>
+          )}
         </div>
       </form>
     </div>

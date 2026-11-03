@@ -697,6 +697,14 @@ export const api = {
     })
   },
 
+  /** Demo login por rol — llama a POST /api/v1/auth/demo-login. */
+  demoLogin(role: string): Promise<LoginResponse> {
+    return request('/auth/demo-login', {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    })
+  },
+
   /** Cierra la sesión. Con bobinas sin medir (409) la sesión sigue abierta. */
   async logout(): Promise<void> {
     try {
