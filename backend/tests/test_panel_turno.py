@@ -238,3 +238,19 @@ def test_la_orden_enseña_producto_y_cliente_por_separado(db_session, tenant):
     fila = r["ordenes"][0]
     assert fila["cliente"] == "Metálicas del Sur S.A."
     assert fila["producto"] != "Metálicas del Sur S.A."  # sin producto es None, no el cliente
+
+
+def test_un_puesto_que_espera_piezas_no_suma_al_plan(db_session, tenant):
+    _puesto(db_session, tenant, "CORTE-1", ritmo=100)
+    _puesto(db_session, tenant, "DOBL-1", ritmo=50)
+    order = make_order(db_session, tenant)
+    corte = make_order_line(db_session, order, workstation="CORTE-1", total_quantity=100)
+    corte.estado = "in_progress"
+    make_order_line(db_session, order, workstation="DOBL-1", total_quantity=100, linea_numero=2)
+    db_session.commit()
+
+    r = resumen_turno(db_session, tenant.id, AHORA)
+
+    estados = {p["code"]: p["estado"] for p in r["puestos"]}
+    assert estados["DOBL-1"] == "preparado"
+    assert r["plan_turno"] == 800  # solo CORTE-1: 100 piezas/h x 8 h
