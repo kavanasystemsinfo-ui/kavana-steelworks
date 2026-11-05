@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { PanelPlanta, PeriodoPlanta } from '../lib/api'
 import { FichaPuesto } from './FichaPuesto'
+import { TablaPuestos } from './TablaPuestos'
 import { fmtDuracion, fmtEntrega, fmtNum, plural } from '../panel/formato'
 import { GraficoLinea } from '../panel/GraficoLinea'
 import { CLASES_TONO, type Tono } from '../panel/tokens'
@@ -381,6 +382,17 @@ export function VistaPlanta({
           )}
         </Seccion>
       </div>
+
+      <Seccion
+        titulo="Comparativa de puestos"
+        subtitulo="Todos los puestos lado a lado. Pulsa una columna para ordenar y un puesto para ver su ficha."
+      >
+        {d.detalle_puestos.length === 0 ? (
+          <p className="m-0 text-sm text-p-texto2">No hay puestos configurados.</p>
+        ) : (
+          <TablaPuestos puestos={d.detalle_puestos} objetivoOee={obj.oee} onPuesto={onPuesto} />
+        )}
+      </Seccion>
 
       <Seccion
         titulo="¿Qué entregas están en peligro?"

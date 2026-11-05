@@ -94,6 +94,19 @@ const plantaBody = {
     { puesto: 'PUNZ-1', oee: 58, disponibilidad: 70, rendimiento: 85, calidad: 97 },
     { puesto: 'LINEA-1', oee: 81, disponibilidad: 95, rendimiento: 88, calidad: 97 },
   ],
+  detalle_puestos: [
+    {
+      puesto: 'PUNZ-1',
+      piezas: 9000,
+      plan: 12000,
+      eficiencia: { oee: 58, disponibilidad: 70, rendimiento: 85, calidad: 97 },
+      paradas_min: 300,
+      paradas_n: 10,
+      kg_material: 800,
+      chatarra_kg: 24,
+      chatarra_pct: 3,
+    },
+  ],
   anterior: { eficiencia: 66, piezas: 35000, paradas_min: 505 },
   entregas: { total: 17, a_tiempo: 14, tarde: ['2591', '2594', '2598'] },
   tendencia: [
