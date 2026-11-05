@@ -625,6 +625,19 @@ export interface FactoresEficiencia {
   calidad: number
 }
 
+/** Una fila de la tabla comparativa de puestos (todos los puestos, produzcan o no). */
+export interface DetallePuesto {
+  puesto: string
+  piezas: number
+  plan: number | null
+  eficiencia: FactoresEficiencia | null
+  paradas_min: number
+  paradas_n: number
+  kg_material: number
+  chatarra_kg: number
+  chatarra_pct: number | null
+}
+
 export interface PanelPlanta {
   periodo: PeriodoPlanta
   desde: string
@@ -640,6 +653,7 @@ export interface PanelPlanta {
   }
   chatarra_pct: number | null
   puestos: ({ puesto: string } & FactoresEficiencia)[]
+  detalle_puestos: DetallePuesto[]
   anterior: { eficiencia: number | null; piezas: number; paradas_min: number }
   entregas: { total: number; a_tiempo: number; tarde: string[] }
   tendencia: { semana: string; oee: number | null }[]

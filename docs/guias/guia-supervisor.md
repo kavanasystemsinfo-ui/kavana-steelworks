@@ -94,6 +94,14 @@ quién la hizo. Rojo = incidencia abierta; verde = en curso; ámbar = parado.
 "Modo Andon" pone el mismo monitor a pantalla completa para una TV de planta
 (Esc para salir).
 
+## Comparativa de puestos
+
+En la pestaña **Planta**, antes de las entregas: una fila por puesto (también los que no
+han producido) con piezas, plan, eficiencia, paradas (tiempo y número) y chatarra (kg y %).
+Pulsa el título de una columna para ordenar (otra vez para invertir); por defecto va primero
+el puesto de menor eficiencia, y los que no tienen dato quedan al final. Pulsa el puesto para
+abrir su ficha. Cada puesto usa su propia chatarra para su calidad.
+
 ## Ficha de puesto: qué ha hecho cada operario
 
 Desde la pestaña **Planta** (pulsa el nombre del puesto en «¿Qué puesto frena la

@@ -173,3 +173,22 @@ def test_endpoint_planta(db_session, tenant):
     assert sup.get("/api/v1/supervisor/planta?periodo=año").status_code == 400
     op = _client(db_session, auth_headers(db_session, tenant, role="operator", email="o@t.local"))
     assert op.get("/api/v1/supervisor/planta").status_code == 403
+
+
+def test_detalle_de_cada_puesto_incluye_los_que_no_han_producido(db_session, tenant, user):
+    _puesto(db_session, tenant, "PERF-1", ritmo=100)
+    _puesto(db_session, tenant, "SOL-1", ritmo=40)
+    orden = make_order(db_session, tenant)
+    perf = make_order_line(db_session, orden, workstation="PERF-1")
+    meta = {"efficiency": 80, "consumedMaterial": "kg", "consumedAmount": 90}
+    _log(db_session, tenant, user, orden, perf, LUNES + timedelta(hours=10), 80, meta=meta)
+    _log(db_session, tenant, user, orden, perf, LUNES + timedelta(hours=11), 10, action="scrap")
+
+    r = resumen_planta(db_session, tenant.id, "semana", AHORA)
+    d = {p["puesto"]: p for p in r["detalle_puestos"]}
+
+    assert set(d) == {"PERF-1", "SOL-1"}
+    assert d["PERF-1"]["piezas"] == 80 and d["PERF-1"]["plan"] == 100
+    assert d["PERF-1"]["chatarra_kg"] == 10.0 and d["PERF-1"]["chatarra_pct"] == 10.0
+    assert d["PERF-1"]["eficiencia"]["calidad"] == 90.0  # calidad propia del puesto
+    assert d["SOL-1"]["piezas"] == 0 and d["SOL-1"]["eficiencia"] is None

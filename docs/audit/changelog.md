@@ -4,6 +4,15 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-11-05 — Tabla comparativa de puestos
+
+- **Problema:** para decidir sobre el ritmo general el supervisor tenía que ir puesto a puesto.
+- **Solución:** `GET /supervisor/planta` devuelve `detalle_puestos` (todos los puestos, con
+  piezas, plan, eficiencia, paradas y chatarra) y la pestaña Planta lo enseña en una tabla
+  ordenable que enlaza con la ficha. Sin euros.
+- **Archivos:** `frontend/src/components/TablaPuestos.tsx`, `VistaPlanta.tsx`, `lib/api.ts`.
+- **Verificación:** vitest (`TablaPuestos.test.tsx`) y pytest (`test_panel_planta.py`).
+
 ## 2026-11-05 — Ficha de puesto con sesiones del operario
 
 - **Problema:** el supervisor veía qué puesto frenaba la planta, pero no por qué ni quién
