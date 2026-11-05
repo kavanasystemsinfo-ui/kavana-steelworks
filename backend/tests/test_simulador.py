@@ -166,7 +166,9 @@ def test_la_chatarra_del_simulador_es_realista(db_session):
 
     material, chatarra = _balance(db_session, tenant, inicio)
     assert material > 0
-    assert 0.01 < chatarra / (material + chatarra) < 0.07
+    # Con incidencias y piezas ajustadas a lo que da la bobina hay menos cambios de bobina
+    # y la medición los recoge menos veces: sigue lejos de una planta perfecta (0,2 %)
+    assert 0.005 < chatarra / (material + chatarra) < 0.07
 
 
 def test_el_cambio_de_turno_mide_la_bobina_y_la_deja_montada(db_session):

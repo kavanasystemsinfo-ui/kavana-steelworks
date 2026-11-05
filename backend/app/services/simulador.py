@@ -48,7 +48,7 @@ from app.models import Order, OrderLine, ProductionLog, StockItem, User, Worksta
 from app.services.shifts import en_horario_laboral
 
 MINUTOS_POR_PIEZA = Decimal("3")
-ORDENES_ACTIVAS_MIN = 2
+ORDENES_ACTIVAS_MIN = 5  # suficientes para que la mayoría de los puestos tengan trabajo
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +60,39 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
     activas = db.scalars(
         select(Order).where(Order.tenant_id == tenant_id, Order.estado == "active")
     ).all()
-    plantillas = db.scalars(
-        select(Order)
-        .where(Order.tenant_id == tenant_id, Order.estado == "completed")
-        .order_by(Order.created_at.asc())
-    ).all()
+    activos = {
+        w.code
+        for w in db.scalars(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.is_active.is_(True)
+            )
+        )
+    }
+    plantillas = [
+        o
+        for o in db.scalars(
+            select(Order)
+            .where(
+                Order.tenant_id == tenant_id,
+                Order.estado == "completed",
+                Order.cliente != "Cliente demo",
+            )
+            .order_by(Order.created_at.asc())
+        )
+        if o.lines and all(ln.workstation_id in activos for ln in o.lines)
+    ]
+    ocupados = {
+        ln.workstation_id for o in activas for ln in o.lines if ln.estado != "completed"
+    }
     acciones = []
     for _ in range(ORDENES_ACTIVAS_MIN - len(activas)):
         if not plantillas:
             break
-        plantilla = rng.choice(plantillas)
+        # La plantilla que menos puestos ya ocupados pisa (así se reparte el trabajo por la planta)
+        pisados = {id(o): sum(ln.workstation_id in ocupados for ln in o.lines) for o in plantillas}
+        minimo = min(pisados.values())
+        plantilla = rng.choice([o for o in plantillas if pisados[id(o)] == minimo])
+        ocupados |= {ln.workstation_id for ln in plantilla.lines}
         orden = Order(
             tenant_id=tenant_id,
             numero=next_sequence(db, tenant_id, "order"),
@@ -245,6 +268,83 @@ def _aware(ts: datetime) -> datetime:
     return ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
 
 
+CAUSAS_INCIDENCIA = {
+    "maquina": [
+        "Fallo en el motor de arrastre: salta la protección térmica",
+        "Fuga de aceite en el circuito hidráulico",
+        "El sensor de final de carrera no responde",
+        "Vibración anormal en el cabezal",
+    ],
+    "material": [
+        "Falta de material: la bobina no llega del almacén",
+        "Fleje con borde dañado, se aparta para revisión",
+    ],
+    "otro": [
+        "Cambio de utillaje más largo de lo previsto",
+        "Ajuste de medidas tras control de calidad",
+    ],
+}
+MINUTOS_INCIDENCIA = (15, 90)
+
+
+def _duracion_incidencia(incidencia_id) -> int:
+    """Minutos que dura una incidencia simulada: estable por id, entre 15 y 90."""
+    ini, fin = MINUTOS_INCIDENCIA
+    return ini + incidencia_id.int % (fin - ini + 1)
+
+
+def _gestionar_incidencias(
+    db: Session, tenant, operario, lineas, rng: random.Random, minutos_tick: int,
+    ahora: datetime,
+) -> tuple[list[str], set[str]]:
+    """Resuelve las incidencias abiertas que ya duraron lo suyo y abre alguna nueva.
+
+    Como mucho una abierta a la vez, siempre sobre un puesto con línea en curso. Devuelve
+    lo hecho y los puestos que no producen en este tick (parados o recién arreglados).
+    """
+    from app.models import Incidencia
+    from app.services.incidencias import actualizar_incidencia, crear_incidencia
+    from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA
+
+    acciones: list[str] = []
+    recien_resueltas: set[str] = set()
+    abiertas = db.scalars(
+        select(Incidencia).where(
+            Incidencia.tenant_id == tenant.id, Incidencia.estado.in_(ESTADOS_INCIDENCIA_ABIERTA)
+        )
+    ).all()
+    for inc in list(abiertas):
+        minutos = (_aware(ahora) - _aware(inc.created_at)).total_seconds() / 60
+        if minutos >= _duracion_incidencia(inc.id):
+            actualizar_incidencia(
+                db, incidencia_id=inc.id, tenant_id=tenant.id, usuario_id=operario.id,
+                estado="resuelta", comentario="Resuelta por mantenimiento",
+                resolucion_tipo="reparacion",
+                resolucion_descripcion="Resuelta en planta (simulador demo).",
+                tiempo_parada=Decimal(str(round(minutos))),
+            )
+            acciones.append(f"resuelve incidencia de {inc.puesto} tras {round(minutos)} min")
+            recien_resueltas.add(inc.puesto)
+            abiertas.remove(inc)
+
+    if not abiertas:
+        en_curso = [ln for ln, _ in lineas if ln.estado == "in_progress" and ln.workstation_id]
+        if en_curso and rng.random() < min(0.5, minutos_tick / 120):
+            linea = rng.choice(en_curso)
+            tipo = rng.choices(list(CAUSAS_INCIDENCIA), weights=(6, 3, 1))[0]
+            inc = crear_incidencia(
+                db, tenant_id=tenant.id, operario_id=operario.id,
+                linea_id=linea.workstation_id,
+                descripcion=rng.choice(CAUSAS_INCIDENCIA[tipo]), tipo=tipo,
+            )
+            inc.created_at = _aware(ahora).astimezone(UTC)
+            db.commit()
+            abiertas = [inc]
+            acciones.append(f"abre incidencia de {tipo} en {linea.workstation_id}")
+    # El puesto recién arreglado retoma la producción en el tick siguiente
+    return acciones, {inc.puesto for inc in abiertas} | recien_resueltas
+
+
 def _momento_en_tramo(
     ahora: datetime | None, minutos_tick: int, rng: random.Random
 ) -> datetime | None:
@@ -326,6 +426,15 @@ def simular_tick(
     # 1. Arrancar la siguiente línea pendiente en los puestos sin trabajo
     ocupados = {ln.workstation_id for ln, _ in lineas if ln.estado == "in_progress"}
     for linea, orden in lineas:
+        previa = next(
+            (ln for ln, o in lineas
+             if o.id == orden.id and ln.linea_numero == linea.linea_numero - 1),
+            None,
+        )
+        # Un paso arranca cuando le llegan piezas del anterior: un puesto no está "en curso"
+        # esperando con el contador a cero
+        if previa is not None and not (previa.produced_quantity or 0):
+            continue
         if linea.estado == "pending" and linea.workstation_id not in ocupados:
             linea.estado = "in_progress"
             ocupados.add(linea.workstation_id)
@@ -369,10 +478,19 @@ def simular_tick(
             db.rollback()
             saltos.append(f"{orden.numero} L{linea.linea_numero}: {exc}")
 
+    ahora_tick = _aware(ahora or datetime.now(UTC))
+    acc_inc, parados = _gestionar_incidencias(
+        db, tenant, operario, lineas, rng, minutos_tick, ahora_tick
+    )
+    acciones += acc_inc
+
     for linea, orden in lineas:
         if linea.estado != "in_progress":
             continue
         etiqueta = f"{orden.numero} L{linea.linea_numero}"
+        if linea.workstation_id in parados:
+            saltos.append(f"{etiqueta}: puesto parado por incidencia")
+            continue
 
         # La bobina se acabó de verdad antes de lo que cree el sistema (el
         # desperdicio no se ve hasta medir): fin de bobina con radio 0
@@ -461,7 +579,7 @@ def simular_tick(
             except ValueError as exc:
                 db.rollback()
                 error = exc
-                if not _sin_material(exc):
+                if not (_sin_material(exc) or _bloqueo_kilos(exc)):
                     break
                 mitad = (piezas / 2).quantize(Decimal("1"), rounding=ROUND_DOWN)
                 if mitad >= 1:
