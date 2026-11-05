@@ -1,3 +1,4 @@
+import { reiniciarOpciones } from '../panel/opciones'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { TenantOut, UserOut, SequencesOut, WorkstationOut, WorkstationGroupOut, RoleOut, SeqCfg, ProductOut, QualityModel, MaterialOut } from '../lib/api'
@@ -68,6 +69,7 @@ function EmpresaTab() {
     primaryColor: '#e56b2e',
     companyName: '',
     overhead: 0,
+    mostrarCostes: false,
   })
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -88,6 +90,7 @@ function EmpresaTab() {
               ?.companyName ?? '',
           overhead:
             (t.finances.overhead_hourly_cost as number | undefined) ?? 0,
+          mostrarCostes: t.finances.mostrar_costes === true,
         })
       })
       .catch((e) => setErr(e instanceof Error ? e.message : 'Error al cargar empresa'))
@@ -102,7 +105,11 @@ function EmpresaTab() {
       colors: { primary: form.primaryColor },
       branding: { companyName: form.companyName, logoUrl: '' },
     }
-    const finances = { ...(tenant?.finances ?? {}), overhead_hourly_cost: Number(form.overhead) }
+    const finances = {
+      ...(tenant?.finances ?? {}),
+      overhead_hourly_cost: Number(form.overhead),
+      mostrar_costes: form.mostrarCostes,
+    }
     try {
       const updated = await api.updateTenant({
         name: form.name,
@@ -112,6 +119,7 @@ function EmpresaTab() {
         finances,
       })
       setTenant(updated)
+      reiniciarOpciones()
       setMsg('Empresa actualizada')
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error al guardar')
@@ -173,6 +181,21 @@ function EmpresaTab() {
               onChange={(e) => setForm({ ...form, overhead: Number(e.target.value) })}
             />
           </Field>
+          <label className="col-span-2 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.mostrarCostes}
+              onChange={(e) => setForm({ ...form, mostrarCostes: e.target.checked })}
+            />
+            <span>
+              Mostrar costes en euros en el panel del supervisor
+              <span className="block text-kavana-text-dim text-xs">
+                Desactivado, el panel solo enseña kilos y merma. Actívalo cuando la empresa haya cargado sus
+                precios de material y costes por hora reales.
+              </span>
+            </span>
+          </label>
           <div className="col-span-2 flex items-center gap-3">
             <Button type="submit">Guardar</Button>
             {msg && <span className="text-kavana-ok text-sm">{msg}</span>}

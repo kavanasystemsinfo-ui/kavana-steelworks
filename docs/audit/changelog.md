@@ -4,6 +4,17 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-11-05 — Costes en euros opcionales y pestaña Material
+
+- **Problema:** los euros del panel (€/kg, coste por orden, mano de obra) salen de precios y
+  costes por hora de demostración; en un entorno real son un tema delicado y restan
+  credibilidad si no son los de la empresa.
+- **Solución:** opción de empresa `finances.mostrar_costes` (desactivada por defecto),
+  `GET /supervisor/panel/opciones`, pestaña **Material** (kilos, chatarra y merma, sin euros),
+  y la pestaña Costes, los euros del informe de turno y el coste al resolver una incidencia
+  solo con la opción activada (Administración, Empresa). No se borra nada.
+- **Verificación:** pytest (3 tests de la opción) y vitest (3 tests de pestañas y euros).
+
 ## 2026-11-05 — Planta viva y panel del supervisor coherente
 
 - **Problema:** de noche y en fin de semana la demo salía vacía y en rojo (0 piezas,

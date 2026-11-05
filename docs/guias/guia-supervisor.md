@@ -2,6 +2,15 @@
 
 Para quien lleva la planta. Una pantalla: Supervisor, de arriba abajo.
 
+## Material y costes: qué se ve por defecto
+
+El panel enseña por defecto lo que la planta mide: **kilos transformados, chatarra y
+merma** (pestaña **Material**). Los euros (€/kg, coste por orden, mano de obra,
+desviación en euros, coste de las incidencias) dependen de precios y costes por hora que
+cada empresa tiene que cargar, y el MES no lleva contabilidad. Por eso la pestaña
+**Costes** y los importes en euros están **desactivados** hasta que un administrador los
+active en Administración, Empresa, "Mostrar costes en euros en el panel del supervisor".
+
 ## Centro de mando: cuatro tarjetas
 
 - **OEE global**: disponibilidad x rendimiento x calidad. Sin datos muestra

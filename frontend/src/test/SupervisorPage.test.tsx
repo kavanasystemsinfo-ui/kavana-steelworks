@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { SupervisorPage } from '../pages/SupervisorPage'
+import { reiniciarOpciones } from '../panel/opciones'
+
+// La opción de costes se lee una vez por carga: cada prueba empieza de cero
+beforeEach(() => reiniciarOpciones())
 
 /** Las herramientas (informe, órdenes, trazabilidad, incidencias) viven en Gestión. */
 function renderPage(url = '/supervisor?vista=gestion') {
@@ -165,9 +169,12 @@ const traceOP2 = [
   },
 ]
 
-function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown> } = {}) {
-  const { orders = ordersBody, trace = {} } = opts
+function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown>; costes?: boolean } = {}) {
+  const { orders = ordersBody, trace = {}, costes = true } = opts
   vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url.includes('/supervisor/panel/opciones')) {
+      return Promise.resolve({ ok: true, json: async () => ({ mostrar_costes: costes }) })
+    }
     if (url.includes('/supervisor/planta')) {
       return Promise.resolve({ ok: true, json: async () => ({ ...plantaBody, periodo: url.split('periodo=')[1] }) })
     }
@@ -291,12 +298,37 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     expect(screen.getByRole('link', { name: 'Turno' })).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByText('Cuánto cuesta producir')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: 'Costes' }))
+    await user.click(await screen.findByRole('link', { name: 'Costes' }))
 
     expect(screen.getByRole('link', { name: 'Costes' })).toHaveAttribute('aria-current', 'page')
     const titulo = await screen.findByText('Coste por kilo')
     expect(titulo.closest('article')).toHaveTextContent('3,20')
     expect(screen.getByRole('button', { name: 'Exportar informe' })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('sin costes activados no hay pestaña Costes: el enlace cae en Material, con kilos y merma y sin euros', async () => {
+    stubApi({ costes: false })
+
+    renderPage('/supervisor?vista=costes')
+
+    expect(await screen.findByText('Material y merma')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Material' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'Costes' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Kilos transformados')).toBeInTheDocument()
+    const cuerpo = document.body.textContent ?? ''
+    expect(cuerpo).not.toContain('€')
+    expect(cuerpo).not.toContain('Exportar informe')
+    vi.unstubAllGlobals()
+  })
+
+  it('con costes activados aparecen las dos pestañas, Material y Costes', async () => {
+    stubApi({ costes: true })
+
+    renderTurno()
+
+    expect(await screen.findByRole('link', { name: 'Costes' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Material' })).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
@@ -444,8 +476,12 @@ const incidenciaDemo = {
 describe('Incidencias de planta en el Supervisor (spec 04 §3.3)', () => {
   function stubConIncidencias(
     fetchMock: (url: string, init?: RequestInit) => Promise<unknown>,
+    costes = true,
   ) {
     const base = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes('/supervisor/panel/opciones')) {
+        return Promise.resolve({ ok: true, json: async () => ({ mostrar_costes: costes }) })
+      }
       if (url.includes('/api/v1/incidencias')) return fetchMock(url, init)
       if (url.includes('/api/v1/orders')) {
         return Promise.resolve({ ok: true, json: async () => [] })
@@ -467,6 +503,24 @@ describe('Incidencias de planta en el Supervisor (spec 04 §3.3)', () => {
     expect(screen.getByText('Atasco de bobina en la cizalla')).toBeInTheDocument()
     expect(screen.getByText('abierta')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /resolver/i })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('sin costes activados la resolución de una incidencia no pide euros', async () => {
+    const user = userEvent.setup()
+    stubConIncidencias(
+      vi.fn(() =>
+        Promise.resolve({ ok: true, json: async () => ({ success: true, incidencias: [incidenciaDemo] }) }),
+      ),
+      false,
+    )
+    renderPage()
+
+    await screen.findByText('Atasco de bobina en la cizalla')
+    await user.click(screen.getByRole('button', { name: /resolver/i }))
+
+    expect(screen.getByPlaceholderText(/minutos de parada/i)).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/coste.*€/i)).not.toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 

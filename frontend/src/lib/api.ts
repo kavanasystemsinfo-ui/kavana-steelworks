@@ -751,6 +751,11 @@ export const api = {
     return request('/supervisor/costes-ordenes')
   },
 
+  /** Opciones de la empresa que cambian lo que enseña el panel (hoy: si se ven los euros). */
+  getOpcionesPanel(): Promise<{ mostrar_costes: boolean }> {
+    return request('/supervisor/panel/opciones')
+  },
+
   /** Vista Costes del periodo (servicio panel_costes; el cliente no calcula). */
   getPanelCostes(periodo: PeriodoPanel = 'mes'): Promise<PanelCostes> {
     return request(`/supervisor/panel/costes?periodo=${periodo}`)

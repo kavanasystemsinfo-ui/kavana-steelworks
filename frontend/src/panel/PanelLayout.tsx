@@ -19,11 +19,14 @@ export function PanelLayout({
   vista,
   onVista,
   onModoTv,
+  mostrarCostes = true,
   children,
 }: {
   vista: Vista
   onVista: (v: Vista) => void
   onModoTv: () => void
+  /** Los euros solo se enseñan si la empresa los ha activado (Administración). */
+  mostrarCostes?: boolean
   children: ReactNode
 }) {
   const [ahora, setAhora] = useState(() => new Date())
@@ -40,7 +43,7 @@ export function PanelLayout({
       <div className="bg-p-tarjeta border-b border-p-borde">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-6 py-2 flex flex-wrap items-center gap-x-6 gap-y-2">
           <nav aria-label="Vistas del panel" className="flex flex-wrap gap-1">
-            {VISTAS.map((v) => (
+            {VISTAS.filter((v) => mostrarCostes || v.valor !== 'costes').map((v) => (
               <a
                 key={v.valor}
                 href={`?vista=${v.valor}`}
