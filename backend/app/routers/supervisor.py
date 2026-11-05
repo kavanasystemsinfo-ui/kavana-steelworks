@@ -94,6 +94,27 @@ def get_puestos(
     return estado_puestos(db, current_user.tenant_id)
 
 
+@router.get("/puestos/{codigo}/ficha")
+def get_ficha_puesto(
+    codigo: str,
+    db: DbDep,
+    periodo: str = "hoy",
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor")),
+    ] = None,
+):
+    """Ficha de un puesto: estado, piezas contra plan, paradas, chatarra y sesiones del operario."""
+    from app.services.ficha_puesto import ficha_puesto
+
+    try:
+        return ficha_puesto(db, current_user.tenant_id, codigo, periodo)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/turno")
 def get_turno(
     db: DbDep,

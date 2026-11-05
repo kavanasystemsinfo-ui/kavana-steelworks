@@ -191,10 +191,20 @@ export function SupervisorPage() {
         onModoTv={() => setModoTv(true)}
         mostrarCostes={mostrarCostes}
       >
-        {vista === 'turno' && <VistaTurno datos={turno.datos} error={turno.error} onIr={irDesdeTurno} />}
+        {vista === 'turno' && <VistaTurno
+            datos={turno.datos}
+            error={turno.error}
+            onIr={irDesdeTurno}
+            onFicha={(codigo) => setParams({ vista: 'planta', puesto: codigo })}
+          />}
         {vista === 'material' && <VistaMaterial />}
         {vista === 'costes' && <VistaCostes />}
-        {vista === 'planta' && <VistaPlanta />}
+        {vista === 'planta' && (
+          <VistaPlanta
+            puesto={params.get('puesto')}
+            onPuesto={(codigo) => setParams(codigo ? { vista: 'planta', puesto: codigo } : { vista: 'planta' })}
+          />
+        )}
         {vista === 'gestion' && (
     <div className="flex flex-col gap-6">
       <div>

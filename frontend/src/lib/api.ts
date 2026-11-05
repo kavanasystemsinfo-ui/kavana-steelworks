@@ -647,6 +647,60 @@ export interface PanelPlanta {
   objetivos: Objetivos
 }
 
+/** Ficha de un puesto (GET /supervisor/puestos/{codigo}/ficha). */
+export interface EventoSesion {
+  hora: string
+  accion: string
+  texto: string
+  cantidad: number
+  bobina: string | null
+  kg_material: number | null
+  nota: string | null
+}
+
+export interface SesionPuesto {
+  operario: string
+  orden: string
+  linea: number
+  inicio: string
+  fin: string
+  minutos: number
+  piezas: number
+  chatarra_kg: number
+  kg_material: number
+  bobinas: string[]
+  eventos: EventoSesion[]
+}
+
+export interface FichaPuesto {
+  puesto: { code: string; name: string; color: string | null; ritmo_nominal: number | null }
+  periodo: PeriodoPlanta
+  desde: string
+  hasta: string
+  ahora: {
+    estado: 'incidencia' | 'en_curso' | 'parado' | 'pendiente' | 'libre'
+    orden: {
+      numero: string
+      cliente: string | null
+      piezas: number
+      objetivo: number
+      bobina: string | null
+    } | null
+    ultima_actividad: { accion: string; timestamp: string; operario: string | null } | null
+    incidencias_abiertas: { id: string; tipo: string; descripcion: string }[]
+  } | null
+  piezas: number
+  plan: number | null
+  eficiencia: FactoresEficiencia | null
+  paradas: {
+    minutos: number
+    numero: number
+    por_causa: { causa: string; minutos: number; pct: number | null }[]
+  }
+  material: { kg_consumidos: number; chatarra_kg: number; chatarra_pct: number | null }
+  sesiones: SesionPuesto[]
+}
+
 export interface WorkstationGroupOut {
   id: string
   name: string
@@ -798,6 +852,10 @@ export const api = {
 
   getPlanta(periodo: PeriodoPlanta): Promise<PanelPlanta> {
     return request(`/supervisor/planta?periodo=${periodo}`)
+  },
+
+  getFichaPuesto(codigo: string, periodo: PeriodoPlanta): Promise<FichaPuesto> {
+    return request(`/supervisor/puestos/${encodeURIComponent(codigo)}/ficha?periodo=${periodo}`)
   },
 
   getAlertas(): Promise<AlertasData> {
