@@ -33,7 +33,7 @@ export function useTurno() {
 
 /** Cómo va el turno contra el plan a esta hora. */
 export function ritmoTurno(d: PanelTurno): { texto: string; tono: Tono } | null {
-  if (!d.plan_ahora) return null
+  if (d.planta_parada || !d.plan_ahora) return null
   const r = d.piezas / d.plan_ahora
   if (r >= 0.95) return { texto: 'En ritmo', tono: 'ok' }
   if (r >= 0.8) return { texto: 'Por debajo', tono: 'aviso' }
@@ -51,6 +51,24 @@ export function estadoTurno(d: PanelTurno): { tono: Tono; titular: string; detal
         ? ` La parada más larga del turno: ${mayor.puesto}, ${fmtDuracion(mayor.minutos)} por ${mayor.motivo}.`
         : ''
 
+  if (d.planta_parada) {
+    const cierre =
+      d.plan_turno !== null
+        ? `${fmtNum(d.piezas)} de ${fmtNum(d.plan_turno)} piezas`
+        : plural(d.piezas, 'pieza', 'piezas')
+    return {
+      tono: 'gris',
+      titular: 'Planta parada hasta el domingo a las 22:00',
+      detalle: `Último turno trabajado: el ${d.turno.codigo}, que cerró con ${cierre}.${pesa}`,
+    }
+  }
+  if (d.puestos.length > 0 && d.puestos.every((p) => p.estado === 'sin_orden')) {
+    return {
+      tono: 'gris',
+      titular: 'Sin producción asignada',
+      detalle: 'Ningún puesto tiene una orden en curso en este momento.',
+    }
+  }
   if (d.plan_turno === null) {
     return {
       tono: 'gris',

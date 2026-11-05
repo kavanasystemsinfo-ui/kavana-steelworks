@@ -85,7 +85,9 @@ export function VistaTurno({
         detalle={estado.detalle}
         progreso={{
           pct: pctTurno,
-          texto: `Turno transcurrido ${fmtNum(pctTurno)} % · quedan ${fmtDuracion(restante)}`,
+          texto: d.planta_parada
+            ? `Turno ${d.turno.codigo} cerrado`
+            : `Turno transcurrido ${fmtNum(pctTurno)} % · quedan ${fmtDuracion(restante)}`,
         }}
       />
 
@@ -94,7 +96,7 @@ export function VistaTurno({
           label="Piezas buenas"
           valor={fmtNum(d.piezas)}
           unidad={d.plan_turno !== null ? `de ${fmtNum(d.plan_turno)}` : undefined}
-          estado={ritmo ?? { texto: 'Sin plan', tono: 'gris' }}
+          estado={ritmo ?? { texto: d.planta_parada ? 'Planta parada' : 'Sin plan', tono: 'gris' }}
           barra={
             d.plan_turno ? { pct: (d.piezas / d.plan_turno) * 100, tono: ritmo?.tono ?? 'gris' } : undefined
           }
@@ -294,6 +296,7 @@ export function VistaTurno({
                 <tr className="text-left text-xs uppercase tracking-wide text-p-etiqueta">
                   <th className="py-2 pr-3 font-semibold">Orden</th>
                   <th className="py-2 pr-3 font-semibold">Producto</th>
+                  <th className="py-2 pr-3 font-semibold">Cliente</th>
                   <th className="py-2 pr-3 font-semibold">Puesto</th>
                   <th className="py-2 pr-3 font-semibold min-w-[180px]">Avance</th>
                   <th className="py-2 pr-3 font-semibold">Entrega</th>
@@ -307,6 +310,7 @@ export function VistaTurno({
                     <tr key={o.numero} className="border-t border-p-linea">
                       <td className="py-2.5 pr-3 font-bold">{o.numero}</td>
                       <td className="py-2.5 pr-3 text-p-texto2">{o.producto ?? '—'}</td>
+                      <td className="py-2.5 pr-3 text-p-texto2">{o.cliente ?? '—'}</td>
                       <td className="py-2.5 pr-3 text-p-texto2">{o.puesto ?? '—'}</td>
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-3">

@@ -371,6 +371,14 @@ def seed_estanterias(db: Session) -> dict:
             logging.getLogger(__name__).exception(
                 "no se pudo reparar el histórico de la demo; se deja como está"
             )
+        try:
+            asegurar_flujo_demo(db, tenant.id)
+            reparar_demo_coherente(db, tenant.id)
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logging.getLogger(__name__).exception(
+                "no se pudo reparar la demo coherente; se deja como está"
+            )
         reparar_costes_demo(db, tenant.id)
         asegurar_ritmos_demo(db, tenant.id)
         db.commit()
@@ -1162,3 +1170,167 @@ def _incidencia_historica(db, tenant_id, orden, operario) -> None:
             )
         )
     db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Reparación coherente de la demo (Fase 1)
+# ---------------------------------------------------------------------------
+
+CLIENTES_FICTICIOS = [
+    "Ferretería del Este S.L.",
+    "Almacenes Rodrigo e Hijos S.A.",
+    "Distribuciones Valencianas S.L.",
+    "Suministros Industriales del Levante S.A.",
+    "Logística y Montajes del Mediterráneo S.L.",
+    "Metálicas del Sur S.A.",
+]
+
+
+
+# Recetas de orden que recorren el flujo de la planta (Corte, Punzonado, Doblado, Soldadura,
+# Galvanizado, Montaje). Son órdenes completadas: el simulador las copia como plantilla para
+# que cada puesto tenga siempre trabajo. Cada línea es un paso en cascada (WIP).
+# (numero, cliente, producto, pieza, material, metros por pieza, total, [puestos en orden])
+RECETAS_FLUJO = [
+    ("OP-EST-2701", "Metálicas del Sur S.A.", "EST-PORTICO", "MONTANTE-P50",
+     "FLEJE-D265-18", "3.0", "80", ["CORTE-1", "PUNZ-1", "DOBL-1", "MONT-1"]),
+    ("OP-EST-2702", "Almacenes Rodrigo e Hijos S.A.", "EST-TITAN", "LARGUERO-E27",
+     "FLEJE-D265-18", "2.7", "60", ["CORTE-1", "DOBL-1", "SOL-1", "GALV-1", "MONT-2"]),
+    ("OP-EST-2703", "Distribuciones Valencianas S.L.", "EST-VOLADIZO", "COLUMNA-CNT",
+     "PERFIL-U100", "4.0", "40", ["CORTE-1", "SOL-1", "GALV-1", "MONT-1"]),
+    ("OP-EST-2704", "Logística y Montajes del Mediterráneo S.L.", "EST-ALTILLO", "VIGA-SIGMA",
+     "ACERO-S355", "2.7", "12", ["PUNZ-1", "DOBL-1", "SOL-1", "MONT-2"]),
+]
+
+
+def asegurar_flujo_demo(db: Session, tenant_id) -> int:
+    """Crea las órdenes plantilla que recorren todo el flujo de planta. Idempotente."""
+    materiales = _asegurar_materiales(db, tenant_id)
+    piezas = _asegurar_piezas(db, tenant_id)
+    productos = _asegurar_productos(db, tenant_id, piezas, materiales)
+    creadas = 0
+    for numero, cliente, prod, pieza, mat_code, metros, total, puestos in RECETAS_FLUJO:
+        if db.scalar(
+            select(Order).where(Order.tenant_id == tenant_id, Order.numero == numero)
+        ):
+            continue
+        orden = Order(
+            tenant_id=tenant_id,
+            numero=numero,
+            estado="completed",
+            cliente=cliente,
+            fecha_entrega=datetime.now(UTC) - timedelta(days=3),
+            notas="Plantilla de flujo de planta (demo).",
+        )
+        db.add(orden)
+        db.flush()
+        mat = materiales[mat_code]
+        for i, puesto in enumerate(puestos, start=1):
+            db.add(
+                OrderLine(
+                    order_id=orden.id,
+                    linea_numero=i,
+                    product_id=productos[prod].id,
+                    modelo_id=piezas[pieza].id,
+                    material_id=mat.id,
+                    workstation_id=puesto,
+                    estado="completed",
+                    total_quantity=Decimal(total),
+                    produced_quantity=Decimal(total),
+                    real_time=Decimal("0"),
+                    meters_per_piece=Decimal(metros),
+                    target_material_qty=_objetivo_material(mat, Decimal(total), metros),
+                    target_material_unit=mat.unit,
+                )
+            )
+        creadas += 1
+    db.flush()
+    return creadas
+
+
+def reparar_demo_coherente(db: Session, tenant_id) -> dict:
+    """Repara datos demo incoherentes: clientes, incidencias, puestos.
+
+    Idempotente: solo actua sobre el tenant demo, sin borrar nada.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.admin import Workstation
+    from app.models.incidencia import Incidencia, IncidenciaHistorial
+    from app.models.order import Order
+
+    cambios = {"clientes": 0, "incidencias_cerradas": 0, "puestos_desactivados": 0}
+
+    # 1. Clientes ficticios creíbles y variados
+    ordenes = db.scalars(
+        select(Order).where(Order.tenant_id == tenant_id, Order.cliente == "Cliente demo")
+    ).all()
+    for i, orden in enumerate(ordenes):
+        orden.cliente = CLIENTES_FICTICIOS[i % len(CLIENTES_FICTICIOS)]
+        cambios["clientes"] += 1
+
+    # 2. Cerrar incidencias abiertas con más de 24 h
+    ahora = datetime.now(UTC)
+    limite = ahora - timedelta(hours=24)
+    incidencias = db.scalars(
+        select(Incidencia).where(
+            Incidencia.tenant_id == tenant_id,
+            Incidencia.estado.in_(("abierta", "en_revision")),
+            Incidencia.created_at < limite,
+        )
+    ).all()
+    for inc in incidencias:
+        inc.estado = "resuelta"
+        inc.resolucion_tipo = "reparacion"
+        inc.resolucion_descripcion = "Cierre automatico por antigüedad (demo)."
+        db.add(
+            IncidenciaHistorial(
+                incidencia_id=inc.id,
+                estado="resuelta",
+                usuario_id=inc.operario_id,
+                timestamp=ahora,
+                comentario="Cierre automatico: incidencia abierta mas de 24 h.",
+            )
+        )
+        cambios["incidencias_cerradas"] += 1
+
+    # 3. Desactivar LINEA-1..3 sin borrarlos
+    for code in ("LINEA-1", "LINEA-2", "LINEA-3"):
+        puesto = db.scalar(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.code == code
+            )
+        )
+        if puesto is not None and puesto.is_active:
+            puesto.is_active = False
+            cambios["puestos_desactivados"] += 1
+
+    db.flush()  # la sesión no autoflushea: que la consulta vea los puestos recién desactivados
+
+    # 4. Órdenes activas sin nada hecho cuyos puestos están desactivados: se cancelan
+    #    (estado reversible, sin borrar) para que no queden órdenes fantasma
+    inactivos = {
+        w.code
+        for w in db.scalars(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.is_active.is_(False)
+            )
+        )
+    }
+    cambios["ordenes_canceladas"] = 0
+    if inactivos:
+        for orden in db.scalars(
+            select(Order).where(Order.tenant_id == tenant_id, Order.estado == "active")
+        ):
+            lineas = list(orden.lines)
+            if lineas and all(
+                ln.workstation_id in inactivos and not (ln.produced_quantity or 0)
+                for ln in lineas
+            ):
+                orden.estado = "cancelled"
+                for ln in lineas:
+                    ln.estado = "pending"
+                cambios["ordenes_canceladas"] += 1
+
+    db.flush()
+    return cambios

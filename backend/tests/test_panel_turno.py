@@ -7,9 +7,9 @@ from app.models import Incidencia, ProductionLog, Workstation
 from app.services.panel_turno import resumen_turno, ventana_turno
 from tests.helpers import auth_headers, make_order, make_order_line, make_tenant
 
-# Martes 27-10-2026 a las 18:00 en planta (UTC-5): turno B, 4 h transcurridas
-AHORA = datetime(2026, 10, 27, 23, 0, tzinfo=UTC)
-INICIO_B = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
+# Martes 27-10-2026 a las 18:00 en planta (Madrid, UTC+1): turno B, 4 h transcurridas
+AHORA = datetime(2026, 10, 27, 17, 0, tzinfo=UTC)
+INICIO_B = datetime(2026, 10, 27, 13, 0, tzinfo=UTC)
 
 
 def _puesto(db, tenant, code, ritmo=None):
@@ -43,9 +43,9 @@ def _produce(db, tenant, user, order, line, cuando, piezas, action="produce", me
 def test_ventana_de_cada_turno():
     assert ventana_turno(AHORA) == ("B", INICIO_B, INICIO_B + timedelta(hours=8))
     # 03:00 en planta: turno C que empezó a las 22:00 del día anterior
-    codigo, inicio, _ = ventana_turno(datetime(2026, 10, 28, 8, 0, tzinfo=UTC))
+    codigo, inicio, _ = ventana_turno(datetime(2026, 10, 28, 2, 0, tzinfo=UTC))
     assert codigo == "C"
-    assert inicio == datetime(2026, 10, 28, 3, 0, tzinfo=UTC)
+    assert inicio == datetime(2026, 10, 27, 21, 0, tzinfo=UTC)
 
 
 def test_sin_ritmo_no_hay_plan(db_session, tenant):
@@ -197,3 +197,44 @@ def test_endpoint_turno_solo_supervisor_y_por_tenant(db_session, tenant):
 
     op = _client(db_session, auth_headers(db_session, tenant, role="operator", email="o@t.local"))
     assert op.get("/api/v1/supervisor/turno").status_code == 403
+
+
+def test_en_fin_de_semana_la_planta_esta_parada_y_se_resume_el_ultimo_turno(db_session, tenant):
+    from zoneinfo import ZoneInfo
+
+    madrid = ZoneInfo("Europe/Madrid")
+    sabado = datetime(2026, 10, 31, 12, 0, tzinfo=madrid)
+
+    r = resumen_turno(db_session, tenant.id, sabado)
+
+    assert r["planta_parada"] is True
+    assert r["proximo_arranque"] == datetime(2026, 11, 1, 22, 0, tzinfo=madrid).astimezone(
+        UTC
+    ).isoformat()
+    # El último turno trabajado es el B del viernes, cerrado entero
+    assert r["turno"]["codigo"] == "B"
+    assert r["turno"]["fin"] == datetime(2026, 10, 30, 22, 0, tzinfo=madrid).astimezone(
+        UTC
+    ).isoformat()
+    assert r["turno"]["transcurrido_min"] == r["turno"]["duracion_min"]
+
+
+def test_en_horario_de_produccion_la_planta_no_esta_parada(db_session, tenant):
+    r = resumen_turno(db_session, tenant.id, AHORA)
+    assert r["planta_parada"] is False
+    assert r["proximo_arranque"] is None
+
+
+def test_la_orden_enseña_producto_y_cliente_por_separado(db_session, tenant):
+    _puesto(db_session, tenant, "PERF-1", ritmo=100)
+    order = make_order(db_session, tenant)
+    order.cliente = "Metálicas del Sur S.A."
+    line = make_order_line(db_session, order, workstation="PERF-1", total_quantity=100)
+    line.estado = "in_progress"
+    db_session.commit()
+
+    r = resumen_turno(db_session, tenant.id, AHORA)
+
+    fila = r["ordenes"][0]
+    assert fila["cliente"] == "Metálicas del Sur S.A."
+    assert fila["producto"] != "Metálicas del Sur S.A."  # sin producto es None, no el cliente

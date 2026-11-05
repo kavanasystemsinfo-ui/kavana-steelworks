@@ -53,18 +53,19 @@ def test_varios_ticks_mantienen_el_coste_coherente(db_session):
 
 
 def test_horario_laboral_de_planta():
+    """Calendario: dom 22:00 a vie 22:00 en hora de Madrid (detalle en test_calendario_backfill)."""
     from datetime import UTC, datetime
 
     from app.services.simulador import en_horario_laboral
 
-    # Planta en UTC-5. Lunes 26-10-2026 12:00 UTC = 07:00 en planta
+    # Lunes 26-10-2026 12:00 UTC = 13:00 en Madrid (invierno)
     assert en_horario_laboral(datetime(2026, 10, 26, 12, 0, tzinfo=UTC))
-    # Lunes 04:00 UTC = domingo 23:00 en planta
-    assert not en_horario_laboral(datetime(2026, 10, 26, 4, 0, tzinfo=UTC))
-    # Martes 03:30 UTC = lunes 22:30 en planta: turno C, fuera
-    assert not en_horario_laboral(datetime(2026, 10, 27, 3, 30, tzinfo=UTC))
-    # Sábado 31-10 a mediodía
-    assert not en_horario_laboral(datetime(2026, 10, 31, 17, 0, tzinfo=UTC))
+    # Sábado 31-10-2026 a mediodía: planta parada
+    assert not en_horario_laboral(datetime(2026, 10, 31, 11, 0, tzinfo=UTC))
+    # Viernes 30-10-2026 20:59 UTC = 21:59 en Madrid: aún turno B
+    assert en_horario_laboral(datetime(2026, 10, 30, 20, 59, tzinfo=UTC))
+    # Viernes 21:00 UTC = 22:00 en Madrid: parada
+    assert not en_horario_laboral(datetime(2026, 10, 30, 21, 0, tzinfo=UTC))
 
 
 def test_la_demo_no_se_agota_en_muchos_ticks(db_session):
@@ -165,7 +166,9 @@ def test_la_chatarra_del_simulador_es_realista(db_session):
 
     material, chatarra = _balance(db_session, tenant, inicio)
     assert material > 0
-    assert 0.01 < chatarra / (material + chatarra) < 0.07
+    # Con incidencias y piezas ajustadas a lo que da la bobina hay menos cambios de bobina
+    # y la medición los recoge menos veces: sigue lejos de una planta perfecta (0,2 %)
+    assert 0.005 < chatarra / (material + chatarra) < 0.07
 
 
 def test_el_cambio_de_turno_mide_la_bobina_y_la_deja_montada(db_session):

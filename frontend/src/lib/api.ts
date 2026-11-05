@@ -559,6 +559,9 @@ export type EstadoPuestoTurno =
 export type EstadoOrdenTurno = 'retraso' | 'en_riesgo' | 'a_tiempo' | 'sin_ritmo' | 'sin_plazo'
 
 export interface PanelTurno {
+  /** true de viernes 22:00 a domingo 22:00: se resume el último turno trabajado. */
+  planta_parada: boolean
+  proximo_arranque: string | null
   turno: { codigo: 'A' | 'B' | 'C'; inicio: string; fin: string; transcurrido_min: number; duracion_min: number }
   piezas: number
   /** null = ningún puesto con orden tiene ritmo nominal: no hay plan. */
@@ -593,6 +596,7 @@ export interface PanelTurno {
   ordenes: {
     numero: string
     producto: string | null
+    cliente: string | null
     puesto: string | null
     piezas: number
     objetivo: number
