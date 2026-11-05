@@ -211,7 +211,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         if estado == "en_marcha" and minutos is not None and minutos > SIN_REGISTRAR_MIN:
             estado = "sin_registrar"
         r = ritmo(p["code"])
-        if orden and r:
+        # Un puesto "preparado" espera piezas del paso anterior: no suma capacidad al plan
+        if orden and r and p["estado"] != "pendiente":
             plan_hora += r
         puestos.append(
             {
@@ -225,7 +226,7 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
                 "orden": (
                     {
                         "numero": orden["numero"],
-                        "producto": productos.get(orden["linea_id"]) or orden["cliente"],
+                        "producto": productos.get(orden["linea_id"]),
                         "piezas": orden["piezas"],
                         "objetivo": orden["objetivo"],
                     }
