@@ -36,7 +36,12 @@ from app.services.alertas import alertas
 from app.services.objetivos import objetivos_tenant
 from app.services.paradas import paradas_abiertas_por_puesto, paradas_en
 from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA, estado_puestos
-from app.services.shifts import TZ_PLANTA
+from app.services.shifts import (
+    TZ_PLANTA,
+    en_horario_laboral,
+    proximo_arranque,
+    semana_produccion,
+)
 
 DURACION_TURNO_MIN = 480
 INICIO_TURNO = {"A": 6, "B": 14, "C": 22}
@@ -83,6 +88,12 @@ def _pct(parte: float, total: float) -> float | None:
 
 def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = None) -> dict:
     ahora = _utc(ahora or datetime.now(UTC))
+    # Fuera de la semana de producción (vie 22:00 a dom 22:00) no hay turno en curso: se
+    # resume el último turno trabajado, tal como quedó al cerrar el viernes.
+    planta_parada = not en_horario_laboral(ahora)
+    arranque = proximo_arranque(ahora) if planta_parada else None
+    if planta_parada:
+        ahora = semana_produccion(ahora)[1].astimezone(UTC) - timedelta(seconds=1)
     codigo, inicio, fin = ventana_turno(ahora)
     transcurrido = min(_minutos(inicio, ahora), DURACION_TURNO_MIN)
     restante = DURACION_TURNO_MIN - transcurrido
@@ -313,7 +324,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         ordenes.append(
             {
                 "numero": orden.numero,
-                "producto": producto or orden.cliente,
+                "producto": producto,
+                "cliente": orden.cliente,
                 "puesto": actual.workstation_id,
                 "piezas": float(actual.produced_quantity or 0),
                 "objetivo": float(actual.total_quantity or 0),
@@ -383,6 +395,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
             )
 
     return {
+        "planta_parada": planta_parada,
+        "proximo_arranque": arranque.astimezone(UTC).isoformat() if arranque else None,
         "turno": {
             "codigo": codigo,
             "inicio": inicio.isoformat(),

@@ -6,15 +6,10 @@ import '@fontsource/inter/600.css'
 import '@fontsource/inter/700.css'
 import '@fontsource/inter/800.css'
 import { turnoActual } from '../lib/tiempo'
+import { horaPlanta } from './formato'
 import { VISTAS, type Vista } from './vistas'
 
 const HORARIO_TURNO = { A: '06:00–14:00', B: '14:00–22:00', C: '22:00–06:00' } as const
-
-/** Hora de planta HH:MM (mismo desfase que turnoActual). */
-function horaPlanta(ahora: Date): string {
-  const planta = new Date(ahora.getTime() - 5 * 3600 * 1000)
-  return planta.toISOString().slice(11, 16)
-}
 
 /** Marco del panel de mando: pestañas por pregunta (Turno, Planta, Costes),
  *  turno y hora siempre a la vista y acceso al modo TV. Fondo claro y fuente

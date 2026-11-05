@@ -57,6 +57,16 @@ def en_horario_laboral(ahora: datetime | None = None) -> bool:
     return True
 
 
+def proximo_arranque(ahora: datetime) -> datetime:
+    """Siguiente domingo a las 22:00 (hora de planta) en que la planta vuelve a producir."""
+    local = (ahora if ahora.tzinfo else ahora.replace(tzinfo=UTC)).astimezone(TZ_PLANTA)
+    dias = (6 - local.weekday()) % 7
+    arranque = datetime.combine(local.date() + timedelta(days=dias), time(22, 0), tzinfo=TZ_PLANTA)
+    if arranque <= local:
+        arranque += timedelta(days=7)
+    return arranque
+
+
 def ventana_turno(fecha: datetime, turno: str) -> tuple[datetime, datetime]:
     """Inicio y fin (aware, horario de planta) del turno A/B/C de esa fecha.
 

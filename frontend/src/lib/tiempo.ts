@@ -8,17 +8,37 @@ export function haceCuanto(iso: string, ahora = new Date()): string {
   return fecha.toLocaleString('es-ES')
 }
 
-/** Desfase del horario de planta respecto a UTC (espejo de backend shifts.TZ_PLANTA). */
-const OFFSET_PLANTA_H = -5
+/** Zona horaria de la planta (espejo de backend shifts.TZ_PLANTA): hora de Madrid, con
+ *  cambio de hora de verano. */
+export const TZ_PLANTA = 'Europe/Madrid'
+
+const FORMATO_PLANTA = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ_PLANTA,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  hourCycle: 'h23',
+})
+
+/** Fecha (YYYY-MM-DD) y hora (0-23) de un instante en horario de planta. */
+export function fechaYHoraPlanta(instante: Date): { fecha: string; hora: number } {
+  const partes: Record<string, string> = {}
+  for (const p of FORMATO_PLANTA.formatToParts(instante)) partes[p.type] = p.value
+  return { fecha: `${partes.year}-${partes.month}-${partes.day}`, hora: Number(partes.hour) }
+}
 
 /** Fecha (YYYY-MM-DD) y turno A/B/C en curso en horario de planta.
  *  A 06-14, B 14-22, C 22-06; de 00 a 06 el turno C es el de la víspera.
  */
 export function turnoActual(ahora = new Date()): { fecha: string; turno: 'A' | 'B' | 'C' } {
-  const planta = new Date(ahora.getTime() + OFFSET_PLANTA_H * 3600 * 1000)
-  const hora = planta.getUTCHours()
-  if (hora < 6) planta.setUTCDate(planta.getUTCDate() - 1)
-  const fecha = planta.toISOString().slice(0, 10)
+  const { fecha: hoy, hora } = fechaYHoraPlanta(ahora)
+  let fecha = hoy
+  if (hora < 6) {
+    const ayer = new Date(`${hoy}T12:00:00Z`)
+    ayer.setUTCDate(ayer.getUTCDate() - 1)
+    fecha = ayer.toISOString().slice(0, 10)
+  }
   const turno = hora >= 6 && hora < 14 ? 'A' : hora >= 14 && hora < 22 ? 'B' : 'C'
   return { fecha, turno }
 }

@@ -197,3 +197,44 @@ def test_endpoint_turno_solo_supervisor_y_por_tenant(db_session, tenant):
 
     op = _client(db_session, auth_headers(db_session, tenant, role="operator", email="o@t.local"))
     assert op.get("/api/v1/supervisor/turno").status_code == 403
+
+
+def test_en_fin_de_semana_la_planta_esta_parada_y_se_resume_el_ultimo_turno(db_session, tenant):
+    from zoneinfo import ZoneInfo
+
+    madrid = ZoneInfo("Europe/Madrid")
+    sabado = datetime(2026, 10, 31, 12, 0, tzinfo=madrid)
+
+    r = resumen_turno(db_session, tenant.id, sabado)
+
+    assert r["planta_parada"] is True
+    assert r["proximo_arranque"] == datetime(2026, 11, 1, 22, 0, tzinfo=madrid).astimezone(
+        UTC
+    ).isoformat()
+    # El último turno trabajado es el B del viernes, cerrado entero
+    assert r["turno"]["codigo"] == "B"
+    assert r["turno"]["fin"] == datetime(2026, 10, 30, 22, 0, tzinfo=madrid).astimezone(
+        UTC
+    ).isoformat()
+    assert r["turno"]["transcurrido_min"] == r["turno"]["duracion_min"]
+
+
+def test_en_horario_de_produccion_la_planta_no_esta_parada(db_session, tenant):
+    r = resumen_turno(db_session, tenant.id, AHORA)
+    assert r["planta_parada"] is False
+    assert r["proximo_arranque"] is None
+
+
+def test_la_orden_enseña_producto_y_cliente_por_separado(db_session, tenant):
+    _puesto(db_session, tenant, "PERF-1", ritmo=100)
+    order = make_order(db_session, tenant)
+    order.cliente = "Metálicas del Sur S.A."
+    line = make_order_line(db_session, order, workstation="PERF-1", total_quantity=100)
+    line.estado = "in_progress"
+    db_session.commit()
+
+    r = resumen_turno(db_session, tenant.id, AHORA)
+
+    fila = r["ordenes"][0]
+    assert fila["cliente"] == "Metálicas del Sur S.A."
+    assert fila["producto"] != "Metálicas del Sur S.A."  # sin producto es None, no el cliente
