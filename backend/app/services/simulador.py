@@ -641,7 +641,8 @@ def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict
         # Aplicar factor 0.6 - 1.0
         factor = Decimal(str(rng.uniform(0.6, 1.0)))
         piezas = max(1, int(piezas_nominal * factor))
-        piezas = min(piezas, (linea.total_quantity or 0) - (linea.produced_quantity or 0))
+        restantes = int((linea.total_quantity or 0) - (linea.produced_quantity or 0))
+        piezas = min(piezas, restantes)
         if piezas <= 0:
             continue
 
@@ -782,7 +783,7 @@ def _backfill_turno_completo(db: Session, fecha, turno: str, rng: random.Random,
         piezas_nominal = max(1, duracion_min // int(MINUTOS_POR_PIEZA))
         factor = Decimal(str(rng.uniform(0.6, 1.0)))
         piezas = max(1, int(piezas_nominal * factor))
-        piezas = min(piezas, linea.total_quantity or 0)
+        piezas = min(piezas, int(linea.total_quantity or 0))
         if piezas <= 0:
             continue
 

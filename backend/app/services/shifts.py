@@ -6,9 +6,10 @@ viernes a las 22:00 (fin del turno B). De viernes 22:00 a domingo 22:00 la
 planta está parada. Zona horaria: la de planta (TZ_PLANTA).
 """
 
-from datetime import UTC, datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
-TZ_PLANTA = timezone(timedelta(hours=-5))  # America/Bogota, sin DST
+TZ_PLANTA = ZoneInfo("Europe/Madrid")
 
 TURNOS = {
     "A": (6, 14),
@@ -39,8 +40,6 @@ def en_horario_laboral(ahora: datetime | None = None) -> bool:
     La semana de producción va del domingo 22:00 al viernes 22:00 en TZ_PLANTA.
     Fuera de esa ventana (vie 22:00 - dom 22:00) la planta está parada.
     """
-    from app.services.shifts import TZ_PLANTA
-
     local = (ahora or datetime.now(UTC)).astimezone(TZ_PLANTA)
     # weekday: 0=lunes ... 6=domingo
     wd = local.weekday()
@@ -79,9 +78,11 @@ def ventana_turno(fecha: datetime, turno: str) -> tuple[datetime, datetime]:
     inicio = datetime.combine(fecha_local, time(hour=h_inicio), tzinfo=TZ_PLANTA)
 
     if turno == "C":
-        fin = inicio + timedelta(hours=8)  # 22:00 a 06:00 = 8h
+        fin = datetime.combine(
+            fecha_local + timedelta(days=1), time(hour=h_fin), tzinfo=TZ_PLANTA
+        )
     else:
-        fin = inicio + timedelta(hours=8)  # 06-14 y 14-22 = 8h
+        fin = datetime.combine(fecha_local, time(hour=h_fin), tzinfo=TZ_PLANTA)
 
     return inicio, fin
 

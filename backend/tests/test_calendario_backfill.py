@@ -1,12 +1,12 @@
 """Tests del calendario de planta 3 turnos 24/7 y backfill del simulador.
 
 Calendario: A 06:00-14:00, B 14:00-22:00, C 22:00-06:00.
-Semana producción: domingo 22:00 a viernes 22:00 (TZ_PLANTA = UTC-5).
+Semana producción: domingo 22:00 a viernes 22:00 (TZ_PLANTA = Europe/Madrid).
 Fin de semana: viernes 22:00 a domingo 22:00, planta parada.
 """
 
 import random
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -56,91 +56,107 @@ class TestCalendarioTurnos:
     """Límites exactos de turno A/B/C."""
 
     def test_domingo_2159_parado(self):
-        # Domingo 25-10-2026 21:59 planta = lunes 26-10 02:59 UTC
-        dt = datetime(2026, 10, 26, 2, 59, tzinfo=UTC)
+        # Domingo 26-10-2025 21:59 en Madrid (cambio a invierno ese día)
+        dt = datetime(2025, 10, 26, 21, 59, tzinfo=TZ_PLANTA)
         assert not en_horario_laboral(dt)
 
     def test_domingo_2200_turno_c(self):
-        # Domingo 25-10-2026 22:00 planta = lunes 26-10 03:00 UTC
-        dt = datetime(2026, 10, 26, 3, 0, tzinfo=UTC)
+        # Domingo 26-10-2025 22:00 en Madrid
+        dt = datetime(2025, 10, 26, 22, 0, tzinfo=TZ_PLANTA)
         assert en_horario_laboral(dt)
         assert turno_desde(dt) == "C"
 
     def test_viernes_2159_turno_b(self):
-        # Viernes 30-10-2026 21:59 planta = sábado 31-10 02:59 UTC
-        dt = datetime(2026, 10, 31, 2, 59, tzinfo=UTC)
+        # Viernes 31-10-2025 21:59 en Madrid
+        dt = datetime(2025, 10, 31, 21, 59, tzinfo=TZ_PLANTA)
         assert en_horario_laboral(dt)
         assert turno_desde(dt) == "B"
 
     def test_viernes_2200_parado(self):
-        # Viernes 30-10-2026 22:00 planta = sábado 31-10 03:00 UTC
-        dt = datetime(2026, 10, 31, 3, 0, tzinfo=UTC)
+        # Viernes 31-10-2025 22:00 en Madrid
+        dt = datetime(2025, 10, 31, 22, 0, tzinfo=TZ_PLANTA)
         assert not en_horario_laboral(dt)
 
     def test_sabado_parado(self):
-        # Sábado 31-10-2026 12:00 planta = 17:00 UTC
-        dt = datetime(2026, 10, 31, 17, 0, tzinfo=UTC)
+        # Sábado 01-11-2025 12:00 en Madrid
+        dt = datetime(2025, 11, 1, 12, 0, tzinfo=TZ_PLANTA)
         assert not en_horario_laboral(dt)
 
     def test_limite_turno_0559_0600(self):
-        # 05:59 planta = 10:59 UTC (turno C)
-        dt = datetime(2026, 10, 27, 10, 59, tzinfo=UTC)
+        # 05:59 en Madrid (turno C)
+        dt = datetime(2025, 10, 28, 5, 59, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "C"
-        # 06:00 planta = 11:00 UTC (turno A)
-        dt = datetime(2026, 10, 27, 11, 0, tzinfo=UTC)
+        # 06:00 en Madrid (turno A)
+        dt = datetime(2025, 10, 28, 6, 0, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "A"
 
     def test_limite_turno_1359_1400(self):
-        # 13:59 planta = 18:59 UTC (turno A)
-        dt = datetime(2026, 10, 27, 18, 59, tzinfo=UTC)
+        # 13:59 en Madrid (turno A)
+        dt = datetime(2025, 10, 28, 13, 59, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "A"
-        # 14:00 planta = 19:00 UTC (turno B)
-        dt = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
+        # 14:00 en Madrid (turno B)
+        dt = datetime(2025, 10, 28, 14, 0, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "B"
 
     def test_limite_turno_2159_2200(self):
-        # 21:59 planta = 02:59 UTC+1d (turno B)
-        dt = datetime(2026, 10, 28, 2, 59, tzinfo=UTC)
+        # 21:59 en Madrid (turno B)
+        dt = datetime(2025, 10, 28, 21, 59, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "B"
-        # 22:00 planta = 03:00 UTC+1d (turno C)
-        dt = datetime(2026, 10, 28, 3, 0, tzinfo=UTC)
+        # 22:00 en Madrid (turno C)
+        dt = datetime(2025, 10, 28, 22, 0, tzinfo=TZ_PLANTA)
         assert turno_desde(dt) == "C"
 
     def test_ventana_turno_a(self):
-        fecha = datetime(2026, 10, 27)  # lunes
+        fecha = datetime(2025, 10, 28)  # martes
         inicio, fin = ventana_turno(fecha, "A")
         assert inicio.hour == 6
         assert fin.hour == 14
 
     def test_ventana_turno_b(self):
-        fecha = datetime(2026, 10, 27)
+        fecha = datetime(2025, 10, 28)
         inicio, fin = ventana_turno(fecha, "B")
         assert inicio.hour == 14
         assert fin.hour == 22
 
     def test_ventana_turno_c(self):
-        fecha = datetime(2026, 10, 27)
+        fecha = datetime(2025, 10, 28)
         inicio, fin = ventana_turno(fecha, "C")
         assert inicio.hour == 22
         assert fin.hour == 6
         assert fin.day == (inicio + timedelta(days=1)).day
 
     def test_semana_produccion_domingo(self):
-        # Domingo 25-10-2026 22:00 planta = lunes 26-10 03:00 UTC
-        dt = datetime(2026, 10, 26, 3, 0, tzinfo=UTC)
+        # Domingo 26-10-2025 22:00 en Madrid
+        dt = datetime(2025, 10, 26, 22, 0, tzinfo=TZ_PLANTA)
         inicio, fin = semana_produccion(dt)
-        local_inicio = _utc_to_planta(inicio)
-        local_fin = _utc_to_planta(fin)
+        local_inicio = inicio.astimezone(TZ_PLANTA)
+        local_fin = fin.astimezone(TZ_PLANTA)
         assert local_inicio.weekday() == 6  # domingo
         assert local_inicio.hour == 22
         assert local_fin.weekday() == 4  # viernes
         assert local_fin.hour == 22
 
     def test_horas_de_turno_tope(self):
-        h = horas_de_turno(datetime(2026, 1, 1, 6, 0), datetime(2026, 1, 1, 14, 0))
+        h = horas_de_turno(datetime(2025, 1, 1, 6, 0), datetime(2025, 1, 1, 14, 0))
         assert h == Decimal("8.00")
-        h = horas_de_turno(datetime(2026, 1, 1, 6, 0), datetime(2026, 1, 1, 22, 0))
+        h = horas_de_turno(datetime(2025, 1, 1, 6, 0), datetime(2025, 1, 1, 22, 0))
         assert h == Decimal("8.00")  # >14h → tope 8
+
+    def test_cambio_horario_verano(self):
+        # 30 marzo 2025: cambio a horario de verano (02:00 → 03:00)
+        # El turno A del 30 marzo empieza a las 06:00 CEST (UTC+2)
+        dt = datetime(2025, 3, 30, 6, 0, tzinfo=TZ_PLANTA)
+        assert turno_desde(dt) == "A"
+        inicio, fin = ventana_turno(datetime(2025, 3, 30), "A")
+        assert inicio.utcoffset() == timedelta(hours=2)  # CEST
+
+    def test_cambio_horario_invierno(self):
+        # 26 octubre 2025: cambio a horario de invierno (03:00 → 02:00)
+        # El turno A del 26 octubre empieza a las 06:00 CET (UTC+1)
+        dt = datetime(2025, 10, 26, 6, 0, tzinfo=TZ_PLANTA)
+        assert turno_desde(dt) == "A"
+        inicio, fin = ventana_turno(datetime(2025, 10, 26), "A")
+        assert inicio.utcoffset() == timedelta(hours=1)  # CET
 
 
 # ---------------------------------------------------------------------------
