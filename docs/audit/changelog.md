@@ -4,6 +4,21 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-11-05 — Ficha de puesto con sesiones del operario
+
+- **Problema:** el supervisor veía qué puesto frenaba la planta, pero no por qué ni quién
+  había trabajado en él; la trazabilidad solo existía por orden, en una lista plana.
+- **Solución:** `GET /supervisor/puestos/{codigo}/ficha?periodo=` (solo supervisor) con
+  estado, piezas contra plan, eficiencia, paradas por causa, chatarra y sesiones. Una sesión
+  son los registros seguidos del mismo operario en la misma línea; se corta si cambia
+  alguno o si pasan más de 4 h. La agregación vive en `services/ficha_puesto.py`; el cálculo
+  por puesto se reutiliza de `panel_planta._medir`, que ahora da a cada puesto su propia
+  calidad (su chatarra sobre su material) y un `detalle_puestos` con todos. Sin euros.
+- **Archivos:** `backend/app/services/ficha_puesto.py`, `panel_planta.py`, `routers/supervisor.py`,
+  `frontend/src/components/FichaPuesto.tsx`, `VistaPlanta.tsx`, `VistaTurno.tsx`.
+- **Verificación:** pytest (`test_ficha_puesto.py`, cortes por operario, línea y hueco, roles,
+  otra empresa) y vitest (`FichaPuesto.test.tsx`).
+
 ## 2026-11-05 — Costes en euros opcionales y pestaña Material
 
 - **Problema:** los euros del panel (€/kg, coste por orden, mano de obra) salen de precios y

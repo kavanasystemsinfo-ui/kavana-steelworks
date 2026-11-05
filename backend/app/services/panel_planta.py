@@ -67,7 +67,15 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
     }
 
     por_puesto: dict[str, dict] = defaultdict(
-        lambda: {"piezas": 0.0, "horas": 0.0, "piezas_medidas": 0.0, "paradas_min": 0.0}
+        lambda: {
+            "piezas": 0.0,
+            "horas": 0.0,
+            "piezas_medidas": 0.0,
+            "paradas_min": 0.0,
+            "paradas_n": 0,
+            "kg_material": 0.0,
+            "kg_chatarra": 0.0,
+        }
     )
     kg_material = 0.0
     kg_chatarra = 0.0
@@ -83,13 +91,16 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
     ).all()
     for log, puesto in filas:
         cantidad = float(log.quantity or 0)
+        p = por_puesto[puesto or "—"]
         if log.action == "scrap":
             kg_chatarra += cantidad
+            p["kg_chatarra"] += cantidad
             continue
         meta = log.metadata_ or {}
         if meta.get("consumedMaterial") == "kg":
-            kg_material += float(meta.get("consumedAmount") or 0)
-        p = por_puesto[puesto or "—"]
+            consumo = float(meta.get("consumedAmount") or 0)
+            kg_material += consumo
+            p["kg_material"] += consumo
         p["piezas"] += cantidad
         eficiencia = meta.get("efficiency")
         if eficiencia:
@@ -103,10 +114,17 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
         numero_paradas += 1
         paradas_causa[parada["motivo"]] += parada["minutos"]
         por_puesto[parada["puesto"]]["paradas_min"] += parada["minutos"]
+        por_puesto[parada["puesto"]]["paradas_n"] += 1
 
     calidad = 1 - (kg_chatarra / (kg_material + kg_chatarra)) if kg_material + kg_chatarra else 1.0
 
-    def factores(horas: float, paradas_min: float, piezas_medidas: float, nominal: float):
+    def factores(
+        horas: float,
+        paradas_min: float,
+        piezas_medidas: float,
+        nominal: float,
+        calidad: float = calidad,
+    ):
         if horas <= 0:
             return None
         marcha = horas / (horas + paradas_min / 60)
@@ -121,18 +139,37 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
         }
 
     puestos = []
+    detalle = []
     horas_tot = paradas_tot = medidas_tot = nominal_tot = 0.0
     plan = 0.0
-    for code, p in por_puesto.items():
+    for code in sorted(set(por_puesto) | set(ritmos)):
+        p = por_puesto[code]
         ritmo = ritmos.get(code)
         nominal = ritmo * p["horas"] if ritmo else 0.0
-        f = factores(p["horas"], p["paradas_min"], p["piezas_medidas"], nominal)
+        # La calidad de un puesto es la suya: su chatarra sobre su material
+        kg_p = p["kg_material"] + p["kg_chatarra"]
+        calidad_p = 1 - p["kg_chatarra"] / kg_p if kg_p else 1.0
+        f = factores(p["horas"], p["paradas_min"], p["piezas_medidas"], nominal, calidad_p)
+        plan_p = ritmo * (p["horas"] + p["paradas_min"] / 60) if ritmo else None
+        detalle.append(
+            {
+                "puesto": code,
+                "piezas": round(p["piezas"]),
+                "plan": round(plan_p) if plan_p else None,
+                "eficiencia": f,
+                "paradas_min": round(p["paradas_min"]),
+                "paradas_n": p["paradas_n"],
+                "kg_material": round(p["kg_material"], 1),
+                "chatarra_kg": round(p["kg_chatarra"], 1),
+                "chatarra_pct": _pct(p["kg_chatarra"], kg_p),
+            }
+        )
         if ritmo:
             horas_tot += p["horas"]
             paradas_tot += p["paradas_min"]
             medidas_tot += p["piezas_medidas"]
             nominal_tot += nominal
-            plan += ritmo * (p["horas"] + p["paradas_min"] / 60)
+            plan += plan_p
         if f is not None:
             puestos.append({"puesto": code, **f})
     puestos.sort(key=lambda x: x["oee"])
@@ -162,6 +199,7 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
         },
         "chatarra_pct": _pct(kg_chatarra, kg_material + kg_chatarra),
         "puestos": puestos,
+        "detalle_puestos": detalle,
     }
 
 

@@ -94,6 +94,22 @@ quién la hizo. Rojo = incidencia abierta; verde = en curso; ámbar = parado.
 "Modo Andon" pone el mismo monitor a pantalla completa para una TV de planta
 (Esc para salir).
 
+## Ficha de puesto: qué ha hecho cada operario
+
+Desde la pestaña **Planta** (pulsa el nombre del puesto en «¿Qué puesto frena la
+planta?») o desde la pestaña **Turno** («Ver ficha» en la tarjeta del puesto). Elige
+Hoy, Esta semana o Últimas 8 semanas.
+
+- **Arriba:** estado ahora (orden, bobina, último registro e incidencia abierta), piezas
+  contra plan, eficiencia (en marcha, velocidad, piezas buenas), tiempo parado y kilos
+  de chatarra. Sin euros, aunque la opción de costes esté activada.
+- **¿Por qué para este puesto?:** paradas e incidencias del puesto, por causa.
+- **Sesiones:** una sesión es el trabajo seguido de un operario en una línea de orden.
+  Se abre una nueva si cambia el operario, si cambia la línea o si pasan más de 4 horas
+  sin registros (así un operario que vuelve al día siguiente no suma una sesión de 20 h).
+  Cada sesión muestra operario, horario, orden, piezas, chatarra y bobinas; púlsala para
+  ver cada registro con su hora, cantidad y bobina activa. La más reciente va primero.
+
 ## Informe de turno
 
 Elige fecha y turno (A 06-14, B 14-22, C 22-06). Por puesto: piezas,

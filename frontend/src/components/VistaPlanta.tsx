@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { PanelPlanta, PeriodoPlanta } from '../lib/api'
+import { FichaPuesto } from './FichaPuesto'
 import { fmtDuracion, fmtEntrega, fmtNum, plural } from '../panel/formato'
 import { GraficoLinea } from '../panel/GraficoLinea'
 import { CLASES_TONO, type Tono } from '../panel/tokens'
@@ -62,7 +63,14 @@ function BarraObjetivo({
 /** Vista Planta del panel de mando: para el jefe de planta o el CTO, cómo
  *  evoluciona la eficiencia, dónde se pierde y qué entregas peligran.
  */
-export function VistaPlanta() {
+export function VistaPlanta({
+  puesto = null,
+  onPuesto,
+}: {
+  /** Puesto cuya ficha se enseña (viene de la URL); sin puesto, la vista Planta. */
+  puesto?: string | null
+  onPuesto?: (codigo: string | null) => void
+}) {
   const [periodo, setPeriodo] = useState<PeriodoPlanta>('semana')
   const [datos, setDatos] = useState<PanelPlanta | null>(null)
   const [error, setError] = useState('')
@@ -78,6 +86,10 @@ export function VistaPlanta() {
       vivo = false
     }
   }, [periodo])
+
+  if (puesto) {
+    return <FichaPuesto codigo={puesto} onVolver={() => onPuesto?.(null)} />
+  }
 
   const cabecera = (
     <div className="flex flex-wrap items-center justify-between gap-4">
@@ -347,7 +359,14 @@ export function VistaPlanta() {
                 const tono = tonoObjetivo(p.oee, obj.oee)
                 return (
                   <div key={p.puesto} className="grid grid-cols-[80px_1fr_52px] items-center gap-3 text-sm">
-                    <span className="font-semibold">{p.puesto}</span>
+                    <button
+                      type="button"
+                      onClick={() => onPuesto?.(p.puesto)}
+                      aria-label={`Ver la ficha de ${p.puesto}`}
+                      className="text-left font-semibold underline decoration-dotted underline-offset-4 cursor-pointer bg-transparent border-0 p-0 min-h-[32px]"
+                    >
+                      {p.puesto}
+                    </button>
                     <BarraObjetivo
                       pct={p.oee}
                       objetivo={obj.oee}

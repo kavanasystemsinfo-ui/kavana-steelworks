@@ -41,10 +41,13 @@ export function VistaTurno({
   datos,
   error,
   onIr,
+  onFicha,
 }: {
   datos: PanelTurno | null
   error: string
   onIr: (destino: DestinoTurno) => void
+  /** Abre la ficha del puesto (vista Planta). */
+  onFicha?: (codigo: string) => void
 }) {
   if (!datos) {
     return (
@@ -275,6 +278,16 @@ export function VistaTurno({
                   </>
                 ) : (
                   <p className="m-0 text-[13px] text-p-etiqueta">Sin orden asignada</p>
+                )}
+                {onFicha && (
+                  <button
+                    type="button"
+                    onClick={() => onFicha(p.code)}
+                    aria-label={`Ver la ficha de ${p.code}`}
+                    className="self-start mt-1 min-h-[32px] px-0 bg-transparent border-0 text-[13px] font-semibold text-p-plan underline underline-offset-4 cursor-pointer"
+                  >
+                    Ver ficha
+                  </button>
                 )}
               </article>
             )
