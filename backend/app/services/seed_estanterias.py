@@ -371,6 +371,13 @@ def seed_estanterias(db: Session) -> dict:
             logging.getLogger(__name__).exception(
                 "no se pudo reparar el histórico de la demo; se deja como está"
             )
+        try:
+            reparar_demo_coherente(db, tenant.id)
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logging.getLogger(__name__).exception(
+                "no se pudo reparar la demo coherente; se deja como está"
+            )
         reparar_costes_demo(db, tenant.id)
         asegurar_ritmos_demo(db, tenant.id)
         db.commit()
@@ -1162,3 +1169,87 @@ def _incidencia_historica(db, tenant_id, orden, operario) -> None:
             )
         )
     db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Reparación coherente de la demo (Fase 1)
+# ---------------------------------------------------------------------------
+
+CLIENTES_FICTICIOS = [
+    "Ferreteria del Este S.L.",
+    "Almacenes Rodrigo e Hijos S.A.",
+    "Distribuciones Valencianas S.L.",
+    "Suministros Industriales del Levante S.A.",
+    "Logistica y Montajes del Mediterraneo S.L.",
+    "Metalicas del Sur S.A.",
+]
+
+PRODUCTOS_CATALOGO = [
+    "Estanteria metalica picking 2000x600",
+    "Estanteria cantilever 3000 mm",
+    "Estanteria drive-in 4 niveles",
+    "Estanteria dinamica FIFO 2500",
+    "Estanteria para paletas euro 1200x800",
+    "Estanteria tornillos y accesorios 1800",
+]
+
+
+def reparar_demo_coherente(db: Session, tenant_id) -> dict:
+    """Repara datos demo incoherentes: clientes, incidencias, puestos.
+
+    Idempotente: solo actua sobre el tenant demo, sin borrar nada.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.admin import Workstation
+    from app.models.incidencia import Incidencia, IncidenciaHistorial
+    from app.models.order import Order
+
+    cambios = {"clientes": 0, "incidencias_cerradas": 0, "puestos_desactivados": 0}
+
+    # 1. Clientes ficticios creíbles y variados
+    ordenes = db.scalars(
+        select(Order).where(Order.tenant_id == tenant_id, Order.cliente == "Cliente demo")
+    ).all()
+    for i, orden in enumerate(ordenes):
+        orden.cliente = CLIENTES_FICTICIOS[i % len(CLIENTES_FICTICIOS)]
+        cambios["clientes"] += 1
+
+    # 2. Cerrar incidencias abiertas con más de 24 h
+    ahora = datetime.now(UTC)
+    limite = ahora - timedelta(hours=24)
+    incidencias = db.scalars(
+        select(Incidencia).where(
+            Incidencia.tenant_id == tenant_id,
+            Incidencia.estado.in_(("abierta", "en_revision")),
+            Incidencia.created_at < limite,
+        )
+    ).all()
+    for inc in incidencias:
+        inc.estado = "resuelta"
+        inc.resolucion_tipo = "reparacion"
+        inc.resolucion_descripcion = "Cierre automatico por antigüedad (demo)."
+        db.add(
+            IncidenciaHistorial(
+                incidencia_id=inc.id,
+                estado="resuelta",
+                usuario_id=inc.operario_id,
+                timestamp=ahora,
+                comentario="Cierre automatico: incidencia abierta mas de 24 h.",
+            )
+        )
+        cambios["incidencias_cerradas"] += 1
+
+    # 3. Desactivar LINEA-1..3 sin borrarlos
+    for code in ("LINEA-1", "LINEA-2", "LINEA-3"):
+        puesto = db.scalar(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.code == code
+            )
+        )
+        if puesto is not None and puesto.is_active:
+            puesto.is_active = False
+            cambios["puestos_desactivados"] += 1
+
+    db.flush()
+    return cambios
