@@ -7,9 +7,9 @@ from app.models import Incidencia, ProductionLog, Workstation
 from app.services.panel_turno import resumen_turno, ventana_turno
 from tests.helpers import auth_headers, make_order, make_order_line, make_tenant
 
-# Martes 27-10-2026 a las 18:00 en planta (UTC-5): turno B, 4 h transcurridas
-AHORA = datetime(2026, 10, 27, 23, 0, tzinfo=UTC)
-INICIO_B = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
+# Martes 27-10-2026 a las 18:00 en planta (Madrid, UTC+1): turno B, 4 h transcurridas
+AHORA = datetime(2026, 10, 27, 17, 0, tzinfo=UTC)
+INICIO_B = datetime(2026, 10, 27, 13, 0, tzinfo=UTC)
 
 
 def _puesto(db, tenant, code, ritmo=None):
@@ -43,9 +43,9 @@ def _produce(db, tenant, user, order, line, cuando, piezas, action="produce", me
 def test_ventana_de_cada_turno():
     assert ventana_turno(AHORA) == ("B", INICIO_B, INICIO_B + timedelta(hours=8))
     # 03:00 en planta: turno C que empezó a las 22:00 del día anterior
-    codigo, inicio, _ = ventana_turno(datetime(2026, 10, 28, 8, 0, tzinfo=UTC))
+    codigo, inicio, _ = ventana_turno(datetime(2026, 10, 28, 2, 0, tzinfo=UTC))
     assert codigo == "C"
-    assert inicio == datetime(2026, 10, 28, 3, 0, tzinfo=UTC)
+    assert inicio == datetime(2026, 10, 27, 21, 0, tzinfo=UTC)
 
 
 def test_sin_ritmo_no_hay_plan(db_session, tenant):

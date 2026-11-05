@@ -9,9 +9,9 @@ from app.models import Incidencia, ProductionLog, Workstation
 from app.services.panel_planta import resumen_planta, ventana_periodo
 from tests.helpers import auth_headers, make_order, make_order_line, make_tenant
 
-# Miércoles 28-10-2026 a las 12:00 en planta (UTC-5)
-AHORA = datetime(2026, 10, 28, 17, 0, tzinfo=UTC)
-LUNES = datetime(2026, 10, 26, 5, 0, tzinfo=UTC)  # lunes 00:00 en planta
+# Miércoles 28-10-2026 a las 12:00 en planta (Madrid, UTC+1)
+AHORA = datetime(2026, 10, 28, 11, 0, tzinfo=UTC)
+LUNES = datetime(2026, 10, 25, 23, 0, tzinfo=UTC)  # lunes 00:00 en planta
 
 
 def _puesto(db, tenant, code, ritmo=None):
@@ -43,9 +43,10 @@ def _log(db, tenant, user, order, line, cuando, cantidad, action="produce", meta
 
 
 def test_ventanas_de_periodo():
-    assert ventana_periodo("hoy", AHORA)[0] == datetime(2026, 10, 28, 5, 0, tzinfo=UTC)
+    assert ventana_periodo("hoy", AHORA)[0] == datetime(2026, 10, 27, 23, 0, tzinfo=UTC)
     assert ventana_periodo("semana", AHORA)[0] == LUNES
-    assert ventana_periodo("8semanas", AHORA)[0] == LUNES - timedelta(weeks=7)
+    # 7 semanas antes: lunes 7-9 a las 00:00 locales (CEST, UTC+2: cruza el cambio de hora)
+    assert ventana_periodo("8semanas", AHORA)[0] == datetime(2026, 9, 6, 22, 0, tzinfo=UTC)
     with pytest.raises(ValueError):
         ventana_periodo("año", AHORA)
 

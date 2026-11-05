@@ -53,17 +53,17 @@ def test_turno_desde_deriva_por_horario_de_planta():
 
     from app.services.shifts import turno_desde
 
-    bog = ZoneInfo("America/Bogota")
+    bog = ZoneInfo("Europe/Madrid")
     assert turno_desde(datetime(2026, 10, 16, 6, 0, tzinfo=bog)) == "A"
     assert turno_desde(datetime(2026, 10, 16, 13, 59, tzinfo=bog)) == "A"
     assert turno_desde(datetime(2026, 10, 16, 14, 0, tzinfo=bog)) == "B"
     assert turno_desde(datetime(2026, 10, 16, 21, 59, tzinfo=bog)) == "B"
     assert turno_desde(datetime(2026, 10, 16, 22, 0, tzinfo=bog)) == "C"
     assert turno_desde(datetime(2026, 10, 16, 5, 59, tzinfo=bog)) == "C"
-    # Un timestamp UTC se convierte al horario de planta (06:00 local = 11:00 UTC)
-    assert turno_desde(datetime(2026, 10, 16, 11, 0, tzinfo=UTC)) == "A"
-    # Naive se trata como UTC
-    assert turno_desde(datetime(2026, 10, 16, 4, 0)) == "C"
+    # Un timestamp UTC se convierte al horario de planta (octubre, UTC+2: 06:00 local = 04:00 UTC)
+    assert turno_desde(datetime(2026, 10, 16, 4, 0, tzinfo=UTC)) == "A"
+    # Naive se trata como UTC (03:00 UTC = 05:00 en planta: turno C)
+    assert turno_desde(datetime(2026, 10, 16, 3, 0)) == "C"
 
 
 def test_close_shift_sin_turno_activo_devuelve_404(db_session, tenant, user):
