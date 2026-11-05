@@ -222,7 +222,7 @@ def seed_demo(db: Session) -> dict:
         tenant_id=tenant.id,
         numero="OP-DEMO-001",
         estado="active",
-        cliente="Cliente demo",
+        cliente="Ferreteria del Este S.L.",
         fecha_entrega=datetime.now(UTC) + timedelta(days=7),
         notas="Orden de demostración pública",
     )
