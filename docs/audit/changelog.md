@@ -4,6 +4,19 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-11-05 — Planta viva y panel del supervisor coherente
+
+- **Problema:** de noche y en fin de semana la demo salía vacía y en rojo (0 piezas,
+  incidencia de 81 días, 9 de 10 puestos sin orden, cliente "Cliente demo"). La hora de
+  planta era la de Bogotá (UTC-5), no la de Madrid.
+- **Solución:** calendario de planta de domingo 22:00 a viernes 22:00 (turnos A/B/C) en
+  `Europe/Madrid`; `record_production` acepta la hora del evento (`ocurrido_en`) y el
+  simulador recupera el hueco por tramos al despertar la máquina; recetas de orden por todo
+  el flujo; incidencias simuladas de 15 a 90 minutos; reparación idempotente de la demo
+  (sin borrar nada); el panel muestra "Planta parada" en fin de semana, duraciones en días
+  y el cliente en columna aparte.
+- **Verificación:** pytest, vitest y build en CI.
+
 ## 2026-10-28 — Chatarra prevista y chatarra de más por modelo
 
 - **Problema:** el balance de masas daba la chatarra total, pero no separaba
