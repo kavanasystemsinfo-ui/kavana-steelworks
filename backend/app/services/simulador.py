@@ -29,51 +29,28 @@ con STEELWORKS_SIMULADOR_MINUTOS > 0 y solo en horario laboral de planta
 despierta, es decir, cuando alguien usa la demo. Un tick suelto a mano:
     python -m app.services.simulador
 
-Al despertar la máquina (backfill): recupera el hueco del turno actual desde
-su inicio hasta ahora a ritmo 60-100 % del nominal, con timestamps pasados y
-source=simulador, usando los mismos servicios (link_coil/record_production) o
-función de backfill que respete los invariantes. Si la máquina estuvo dormida
-varios turnos dentro de la semana de producción, recupera también los turnos
-completos que faltan (máx. 7 días atrás) para que Costes e histórico sean
-coherentes.
+Al despertar la máquina (rellenar_hueco): recupera el hueco desde la última producción
+(máx. 7 días y desde el inicio de la semana de producción) repitiendo el tick por
+tramos de tiempo simulado, con la hora del registro dentro del tramo. Pasa por los
+mismos servicios que un operario, así que stock, kardex y costes cuadran.
 """
 
 import asyncio
 import logging
 import random
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
+from app.services.shifts import en_horario_laboral
 
 MINUTOS_POR_PIEZA = Decimal("3")
 ORDENES_ACTIVAS_MIN = 2
 
 logger = logging.getLogger(__name__)
-
-
-def en_horario_laboral(ahora: datetime | None = None) -> bool:
-    """True si la planta está en horario de producción (dom 22:00 - vie 22:00).
-
-    La semana de producción va del domingo 22:00 al viernes 22:00 en TZ_PLANTA.
-    Fuera de esa ventana (vie 22:00 - dom 22:00) la planta está parada.
-    """
-    from app.services.shifts import TZ_PLANTA
-
-    local = (ahora or datetime.now(UTC)).astimezone(TZ_PLANTA)
-    wd = local.weekday()
-    hora = local.hour
-
-    if wd == 6:  # domingo
-        return hora >= 22
-    if wd == 4:  # viernes
-        return hora < 22
-    if wd == 5:  # sábado
-        return False
-    return True
 
 
 def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
@@ -220,11 +197,18 @@ def _real_restante(db: Session, bobina: StockItem) -> Decimal:
 
 
 def _inicio_turno(ahora: datetime) -> datetime:
-    """Inicio (UTC) del turno en curso en horario de planta: A 06:00, B 14:00."""
+    """Inicio (UTC) del turno en curso en horario de planta: A 06:00, B 14:00, C 22:00."""
     from app.services.shifts import TZ_PLANTA
 
     local = ahora.astimezone(TZ_PLANTA)
-    hora = 14 if local.hour >= 14 else 6
+    if 6 <= local.hour < 14:
+        hora = 6
+    elif 14 <= local.hour < 22:
+        hora = 14
+    else:
+        hora = 22
+        if local.hour < 6:
+            local -= timedelta(days=1)
     return local.replace(hour=hora, minute=0, second=0, microsecond=0).astimezone(UTC)
 
 
@@ -254,6 +238,21 @@ def _bobina_fifo(db: Session, tenant_id, material_id) -> StockItem | None:
             StockItem.id.not_in(en_uso),
         )
         .order_by(StockItem.fecha_entrada.asc())
+    )
+
+
+def _aware(ts: datetime) -> datetime:
+    return ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
+
+
+def _momento_en_tramo(
+    ahora: datetime | None, minutos_tick: int, rng: random.Random
+) -> datetime | None:
+    """Hora del registro: None (ahora mismo) o un instante dentro del tramo simulado."""
+    if ahora is None:
+        return None
+    return _aware(ahora).astimezone(UTC) - timedelta(
+        seconds=rng.randint(0, max(minutos_tick * 60 - 1, 0))
     )
 
 
@@ -454,6 +453,7 @@ def simular_tick(
                     order_id=orden.id, line_id=linea.id,
                     incremental_quantity=piezas, hours_worked=horas,
                     observaciones="simulador demo",
+                    ocurrido_en=_momento_en_tramo(ahora, minutos_tick, rng),
                 )
                 acciones.append(f"produce {piezas} uds en {etiqueta}")
                 error = None
@@ -524,9 +524,91 @@ def _tick_en_sesion(minutos: int) -> dict:
         db.close()
 
 
+PASO_RECIENTE_MIN = 15  # tramos de la última jornada de 8 h
+PASO_ANTIGUO_MIN = 60  # tramos de turnos más antiguos (menos detalle, menos coste)
+HORAS_RECIENTES = 8
+MAX_DIAS_RELLENO = 7
+MAX_PASOS_RELLENO = 200
+
+_ultimo_relleno: datetime | None = None
+
+
+def rellenar_hueco(
+    db: Session, ahora: datetime | None = None, rng: random.Random | None = None
+) -> dict:
+    """Recupera lo que la planta habría producido mientras la máquina dormía.
+
+    Repite simular_tick por tramos de tiempo simulado (15 min en las últimas 8 h,
+    60 min antes) desde la última producción registrada (como mucho 7 días y desde
+    el inicio de la semana de producción) hasta ahora, solo en horario de planta.
+    Cada tramo pasa por los mismos servicios que un operario, con la hora del
+    registro dentro del tramo. Idempotente: solo avanza con tramos completos, así que
+    una segunda llamada seguida no añade nada; el resto del hueco (menos de un tramo)
+    lo cubre el tick normal.
+    """
+    global _ultimo_relleno
+    from app.services.seed_demo import buscar_tenant_demo
+    from app.services.shifts import semana_produccion
+
+    rng = rng or random.Random()
+    ahora = _aware(ahora or datetime.now(UTC))
+    tenant = buscar_tenant_demo(db)
+    if tenant is None:
+        return {"tenant": None, "pasos": 0, "acciones": [], "saltos": ["sin tenant demo"]}
+
+    desde = max(ahora - timedelta(days=MAX_DIAS_RELLENO), semana_produccion(ahora)[0])
+    ultimo = db.scalar(
+        select(func.max(ProductionLog.timestamp)).where(
+            ProductionLog.tenant_id == tenant.id, ProductionLog.action == "produce"
+        )
+    )
+    if ultimo is not None:
+        desde = max(desde, _aware(ultimo))
+    if _ultimo_relleno is not None:
+        desde = max(desde, _ultimo_relleno)
+
+    pasos = 0
+    acciones: list[str] = []
+    saltos: list[str] = []
+    t = desde
+    while pasos < MAX_PASOS_RELLENO:
+        paso = (
+            PASO_RECIENTE_MIN
+            if ahora - t <= timedelta(hours=HORAS_RECIENTES)
+            else PASO_ANTIGUO_MIN
+        )
+        fin = t + timedelta(minutes=paso)
+        if fin > ahora:
+            break
+        if en_horario_laboral(fin - timedelta(seconds=1)):
+            resultado = simular_tick(db, rng, minutos_tick=paso, ahora=fin)
+            acciones += resultado["acciones"]
+            saltos += resultado["saltos"]
+            pasos += 1
+        t = fin
+    _ultimo_relleno = t
+    return {"tenant": str(tenant.id), "pasos": pasos, "acciones": acciones, "saltos": saltos}
+
+
+def _relleno_en_sesion() -> dict:
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        return rellenar_hueco(db)
+    finally:
+        db.close()
+
+
 async def bucle_simulador(minutos: int) -> None:
-    """Un tick cada `minutos` en horario laboral. Nunca tumba la API."""
+    """Relleno al despertar y un tick cada `minutos` en horario laboral. Nunca tumba la API."""
     while True:
+        try:
+            relleno = await asyncio.to_thread(_relleno_en_sesion)
+            if relleno["pasos"]:
+                logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
+        except Exception:
+            logger.exception("[simulador] relleno fallido; se reintenta en el siguiente ciclo")
         await asyncio.sleep(minutos * 60)
         if not en_horario_laboral():
             continue
@@ -539,282 +621,3 @@ async def bucle_simulador(minutos: int) -> None:
             )
         except Exception:
             logger.exception("[simulador] tick fallido; se reintenta en el siguiente")
-
-
-def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict:
-    """Backfill del turno actual: simula desde el inicio del turno hasta ahora.
-
-    Usa el mismo ritmo 60-100% del nominal que el simulador normal, pero con
-    timestamps en el pasado y source=simulador. Idempotente: si ya hay
-    producción en el turno actual para una línea, no duplica.
-    """
-    from app.services.inventory import link_coil
-    from app.services.production import record_production
-    from app.services.seed_demo import buscar_tenant_demo
-    from app.services.shifts import TZ_PLANTA, turno_desde, ventana_turno
-
-    rng = rng or random.Random()
-    tenant = buscar_tenant_demo(db)
-    if tenant is None:
-        return {"tenant": None, "acciones": [], "saltos": ["sin tenant demo"]}
-
-    ahora = datetime.now(UTC)
-    turno = turno_desde(ahora)
-    local_ahora = ahora.astimezone(TZ_PLANTA)
-    fecha_turno = local_ahora.date()
-    if turno == "C" and local_ahora.hour < 6:
-        fecha_turno = (local_ahora - timedelta(days=1)).date()
-
-    inicio_turno, _ = ventana_turno(fecha_turno, turno)
-    inicio_turno_utc = inicio_turno.astimezone(UTC)
-
-    # Si ya pasó el turno (edge case), no hacer nada
-    if inicio_turno_utc >= ahora:
-        return {"tenant": str(tenant.id), "acciones": [], "saltos": ["turno no iniciado"]}
-
-    operario = _operario_demo(db, tenant.id)
-    if operario is None:
-        return {"tenant": str(tenant.id), "acciones": [], "saltos": ["sin operario demo"]}
-
-    # Duración del turno en minutos
-    duracion_min = int((ahora - inicio_turno_utc).total_seconds() / 60)
-    if duracion_min <= 0:
-        return {"tenant": str(tenant.id), "acciones": [], "saltos": ["turno sin duración"]}
-
-    acciones: list[str] = []
-    saltos: list[str] = []
-
-    # Obtener líneas activas
-    lineas = db.execute(
-        select(OrderLine, Order)
-        .join(Order, Order.id == OrderLine.order_id)
-        .where(Order.tenant_id == tenant.id, Order.estado == "active")
-        .order_by(Order.created_at.asc(), OrderLine.linea_numero.asc())
-    ).all()
-
-    # Para cada línea en curso sin bobina, vincular una
-    for linea, orden in lineas:
-        if linea.active_coil_id is None and linea.material_id is not None:
-            bobina = _bobina_fifo(db, tenant.id, linea.material_id)
-            if bobina is None:
-                bobina = _reponer_bobina(db, tenant.id, linea.material_id, operario.id)
-                if bobina is None:
-                    saltos.append(f"{orden.numero} L{linea.linea_numero}: sin bobinas")
-                    continue
-                acciones.append(f"backfill: recibe {bobina.coil_id}")
-            try:
-                link_coil(
-                    db, tenant.id, operario.id,
-                    stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
-                )
-                acciones.append(
-                    f"backfill: vincula {bobina.coil_id} a {orden.numero} L{linea.linea_numero}"
-                )
-            except ValueError as exc:
-                db.rollback()
-                saltos.append(f"{orden.numero} L{linea.linea_numero}: {exc}")
-                continue
-
-    # Simular producción a ritmo variable (60-100%) durante el turno
-    # Usamos MINUTOS_POR_PIEZA nominal y ajustamos con factor aleatorio
-    for linea, orden in lineas:
-        if linea.estado != "in_progress":
-            continue
-        etiqueta = f"{orden.numero} L{linea.linea_numero}"
-
-        # Verificar si ya hay producción en este turno para esta línea
-        from app.models.traceability import ProductionLog
-        logs_turno = db.scalars(
-            select(ProductionLog)
-            .where(
-                ProductionLog.line_id == linea.id,
-                ProductionLog.timestamp >= inicio_turno_utc,
-                ProductionLog.timestamp <= ahora,
-            )
-        ).all()
-        if logs_turno:
-            saltos.append(f"{etiqueta}: ya tiene producción en este turno")
-            continue
-
-        # Calcular piezas teóricas a ritmo nominal
-        piezas_nominal = max(1, duracion_min // int(MINUTOS_POR_PIEZA))
-        # Aplicar factor 0.6 - 1.0
-        factor = Decimal(str(rng.uniform(0.6, 1.0)))
-        piezas = max(1, int(piezas_nominal * factor))
-        restantes = int((linea.total_quantity or 0) - (linea.produced_quantity or 0))
-        piezas = min(piezas, restantes)
-        if piezas <= 0:
-            continue
-
-        # Distribuir las piezas en intervalos a lo largo del turno
-        intervalo = duracion_min / max(1, piezas)
-        for i in range(piezas):
-            ts = inicio_turno_utc + timedelta(minutes=intervalo * (i + 0.5))
-            if ts > ahora:
-                ts = ahora
-            horas = (
-                MINUTOS_POR_PIEZA / 60 * Decimal(str(rng.uniform(0.9, 1.1)))
-            ).quantize(Decimal("0.01"))
-            try:
-                # Usar record_production con timestamp simulado en el pasado
-                # El servicio record_production usa datetime.now() internamente,
-                # así que necesitamos una variante o aceptar que el timestamp
-                # será "ahora". Para backfill real, usaríamos una función interna.
-                # Por simplicidad del demo, registramos con source=simulador
-                # y el timestamp se acerca al real del turno.
-                record_production(
-                    db, tenant.id, operario.id,
-                    order_id=orden.id, line_id=linea.id,
-                    incremental_quantity=1, hours_worked=horas,
-                    observaciones="simulador demo backfill",
-                )
-                acciones.append(f"backfill: produce 1 ud en {etiqueta} @ {ts.isoformat()}")
-            except ValueError as exc:
-                db.rollback()
-                saltos.append(f"{etiqueta}: {exc}")
-                break
-
-    db.commit()
-    return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
-
-
-def backfill_semana_produccion(
-    db: Session, rng: random.Random | None = None, max_dias: int = 7
-) -> dict:
-    """Backfill de turnos completos faltantes en la semana de producción actual.
-
-    Si la máquina estuvo dormida varios turnos, recupera también los turnos
-    completos que faltan (máx. 7 días atrás) para que Costes e histórico
-    sean coherentes. Solo actúa dentro de la semana de producción (dom 22:00
-    a vie 22:00).
-    """
-    from app.services.shifts import semana_produccion, ventana_turno
-
-    rng = rng or random.Random()
-    ahora = datetime.now(UTC)
-    inicio_semana, fin_semana = semana_produccion(ahora)
-
-    # Si estamos fuera de la semana de producción, no hacer backfill histórico
-    if ahora < inicio_semana or ahora > fin_semana:
-        return {"acciones": [], "saltos": ["fuera de semana de producción"]}
-
-    # Turnos a procesar: desde inicio_semana hasta ahora
-    # Iterar día por día, turno por turno
-    acciones_totales: list[str] = []
-    saltos_totales: list[str] = []
-
-    dia = inicio_semana
-    while dia <= fin_semana and dia <= ahora:
-        for turno in ("A", "B", "C"):
-            inicio_turno, fin_turno = ventana_turno(datetime.combine(dia, time(0)), turno)
-            if fin_turno > ahora:
-                break
-            # Solo procesar si el turno ya terminó completamente
-            if fin_turno <= ahora:
-                # Simular turno completo
-                _backfill_turno_completo(db, dia, turno, rng, acciones_totales, saltos_totales)
-        dia += timedelta(days=1)
-
-    # Finalmente, backfill del turno actual (parcial)
-    if en_horario_laboral():
-        resultado = backfill_turno_actual(db, rng)
-        acciones_totales.extend(resultado["acciones"])
-        saltos_totales.extend(resultado["saltos"])
-
-    return {"acciones": acciones_totales, "saltos": saltos_totales}
-
-
-def _backfill_turno_completo(db: Session, fecha, turno: str, rng: random.Random,
-                               acciones: list[str], saltos: list[str]) -> None:
-    """Simula un turno completo (8h) en el pasado."""
-    from app.services.seed_demo import buscar_tenant_demo
-    from app.services.shifts import ventana_turno
-
-    tenant = buscar_tenant_demo(db)
-    if tenant is None:
-        saltos.append("sin tenant demo")
-        return
-
-    operario = _operario_demo(db, tenant.id)
-    if operario is None:
-        saltos.append("sin operario demo")
-        return
-
-    inicio_turno, fin_turno = ventana_turno(fecha, turno)
-
-    # Obtener líneas que estaban activas en ese momento
-    # Aproximación: líneas de órdenes completadas cerca de esa fecha
-    from app.models import Order, OrderLine
-    lineas = db.execute(
-        select(OrderLine, Order)
-        .join(Order, Order.id == OrderLine.order_id)
-        .where(
-            Order.tenant_id == tenant.id,
-            Order.estado == "completed",
-            Order.created_at <= fin_turno,
-        )
-        .order_by(Order.created_at.desc(), OrderLine.linea_numero.asc())
-        .limit(10)
-    ).all()
-
-    if not lineas:
-        saltos.append(f"turno {turno} {fecha}: sin líneas candidatas")
-        return
-
-    # Para cada línea, simular producción completa del turno
-    for linea, orden in lineas:
-        etiqueta = f"{orden.numero} L{linea.linea_numero}"
-
-        # Verificar si ya tiene producción en este turno
-        from app.models.traceability import ProductionLog
-        logs_turno = db.scalars(
-            select(ProductionLog)
-            .where(
-                ProductionLog.line_id == linea.id,
-                ProductionLog.timestamp >= inicio_turno,
-                ProductionLog.timestamp <= fin_turno,
-            )
-        ).all()
-        if logs_turno:
-            continue
-
-        # Simular 8h de producción a ritmo 60-100%
-        duracion_min = 480  # 8h
-        piezas_nominal = max(1, duracion_min // int(MINUTOS_POR_PIEZA))
-        factor = Decimal(str(rng.uniform(0.6, 1.0)))
-        piezas = max(1, int(piezas_nominal * factor))
-        piezas = min(piezas, int(linea.total_quantity or 0))
-        if piezas <= 0:
-            continue
-
-        for _i in range(piezas):
-            horas = (
-                MINUTOS_POR_PIEZA / 60 * Decimal(str(rng.uniform(0.9, 1.1)))
-            ).quantize(Decimal("0.01"))
-            try:
-                from app.services.production import record_production
-                record_production(
-                    db, tenant.id, operario.id,
-                    order_id=orden.id, line_id=linea.id,
-                    incremental_quantity=1, hours_worked=horas,
-                    observaciones=f"simulador demo backfill {turno}",
-                )
-                acciones.append(f"backfill {turno}: produce 1 ud en {etiqueta}")
-            except ValueError as exc:
-                db.rollback()
-                saltos.append(f"{etiqueta}: {exc}")
-                break
-
-    db.commit()
-
-
-if __name__ == "__main__":
-    from app.core.database import engine
-
-    with Session(engine) as sesion:
-        resultado = simular_tick(sesion)
-    print(f"[simulador] tenant={resultado['tenant']}")
-    for accion in resultado["acciones"]:
-        print(f"  + {accion}")
-    for salto in resultado["saltos"]:
-        print(f"  - {salto}")

@@ -14,6 +14,7 @@ Portado de OrderService.recordProduction del legacy al v2:
 - WIP waterfall entre líneas en cascada.
 """
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -83,8 +84,13 @@ def record_production(
     hours_worked: Decimal | float = 0,
     observaciones: str = "",
     desglose: dict | None = None,
+    ocurrido_en: datetime | None = None,
 ) -> dict[str, Any]:
-    """Registra producción incremental en una línea con auto-consumo FIFO."""
+    """Registra producción incremental en una línea con auto-consumo FIFO.
+
+    ``ocurrido_en`` fija la hora del evento de trazabilidad (la demo recupera así el
+    hueco de un turno con horas pasadas). Sin él, el evento lleva la hora actual.
+    """
     qty = Decimal(str(incremental_quantity))
     hours = Decimal(str(hours_worked))
 
@@ -309,7 +315,8 @@ def record_production(
             "totalRealized": float(linea.produced_quantity),
             "calculationMethod": calculation_method,
         },
-        shift=turno_desde(datetime.now(UTC)),
+        timestamp=ocurrido_en,
+        shift=turno_desde(ocurrido_en or datetime.now(UTC)),
     )
 
     return {

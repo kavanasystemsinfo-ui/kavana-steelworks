@@ -53,25 +53,19 @@ def test_varios_ticks_mantienen_el_coste_coherente(db_session):
 
 
 def test_horario_laboral_de_planta():
-    """Calendario 3 turnos 24/7: dom 22:00 - vie 22:00 en TZ_PLANTA (UTC-5)."""
+    """Calendario: dom 22:00 a vie 22:00 en hora de Madrid (detalle en test_calendario_backfill)."""
     from datetime import UTC, datetime
 
     from app.services.simulador import en_horario_laboral
 
-    # Planta en UTC-5. Lunes 26-10-2026 12:00 UTC = 07:00 en planta → True
+    # Lunes 26-10-2026 12:00 UTC = 13:00 en Madrid (invierno)
     assert en_horario_laboral(datetime(2026, 10, 26, 12, 0, tzinfo=UTC))
-    # Lunes 04:00 UTC = domingo 23:00 en planta → domingo ≥22:00 → True
-    assert en_horario_laboral(datetime(2026, 10, 26, 4, 0, tzinfo=UTC))
-    # Domingo 02:00 UTC = sábado 21:00 en planta → False
-    assert not en_horario_laboral(datetime(2026, 10, 25, 2, 0, tzinfo=UTC))
-    # Viernes 30-10 03:00 UTC = jueves 22:00 en planta → True
-    assert en_horario_laboral(datetime(2026, 10, 30, 3, 0, tzinfo=UTC))
-    # Viernes 30-10 02:59 UTC = jueves 21:59 en planta → True
-    assert en_horario_laboral(datetime(2026, 10, 30, 2, 59, tzinfo=UTC))
-    # Viernes 30-10 03:01 UTC = jueves 22:01 en planta → True (aún no es vie 22:00)
-    assert en_horario_laboral(datetime(2026, 10, 30, 3, 1, tzinfo=UTC))
-    # Sábado 31-10 a mediodía UTC → sábado en planta → False
-    assert not en_horario_laboral(datetime(2026, 10, 31, 17, 0, tzinfo=UTC))
+    # Sábado 31-10-2026 a mediodía: planta parada
+    assert not en_horario_laboral(datetime(2026, 10, 31, 11, 0, tzinfo=UTC))
+    # Viernes 30-10-2026 20:59 UTC = 21:59 en Madrid: aún turno B
+    assert en_horario_laboral(datetime(2026, 10, 30, 20, 59, tzinfo=UTC))
+    # Viernes 21:00 UTC = 22:00 en Madrid: parada
+    assert not en_horario_laboral(datetime(2026, 10, 30, 21, 0, tzinfo=UTC))
 
 
 def test_la_demo_no_se_agota_en_muchos_ticks(db_session):
