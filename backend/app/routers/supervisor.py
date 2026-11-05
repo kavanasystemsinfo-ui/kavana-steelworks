@@ -213,6 +213,22 @@ def put_objetivos(
     return objetivos
 
 
+@router.get("/panel/opciones")
+def get_panel_opciones(
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor")),
+    ] = None,
+):
+    """Opciones de la empresa que cambian lo que enseña el panel (ahora, solo los euros)."""
+    from app.models import Tenant
+
+    tenant = db.get(Tenant, current_user.tenant_id)
+    finanzas = (tenant.finances or {}) if tenant else {}
+    return {"mostrar_costes": bool(finanzas.get("mostrar_costes", False))}
+
+
 @router.get("/panel/costes")
 def get_panel_costes(
     db: DbDep,

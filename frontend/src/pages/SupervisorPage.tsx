@@ -4,10 +4,12 @@ import { api } from '../lib/api'
 import { InformeTurno } from '../components/InformeTurno'
 import { ModoTv } from '../components/ModoTv'
 import { VistaCostes } from '../components/VistaCostes'
+import { VistaMaterial } from '../components/VistaMaterial'
 import { VistaPlanta } from '../components/VistaPlanta'
 import { VistaTurno, type DestinoTurno } from '../components/VistaTurno'
 import { PanelLayout } from '../panel/PanelLayout'
 import { useTurno } from '../panel/turno'
+import { useMostrarCostes } from '../panel/opciones'
 import { vistaDeUrl, type Vista } from '../panel/vistas'
 import type {
   MaterialOut,
@@ -132,7 +134,10 @@ export function SupervisorPage() {
 
   // Pestaña activa en la URL (?vista=...): se puede enlazar y sobrevive a recargar
   const [params, setParams] = useSearchParams()
-  const vista = vistaDeUrl(params.get('vista'))
+  const mostrarCostes = useMostrarCostes()
+  const vistaPedida = vistaDeUrl(params.get('vista'))
+  // Sin costes en euros activados, el enlace a Costes cae en Material (kilos y merma)
+  const vista: Vista = vistaPedida === 'costes' && !mostrarCostes ? 'material' : vistaPedida
   const irAVista = (v: Vista) => setParams({ vista: v })
 
   // Los avisos de la vista Turno llevan a donde se resuelven
@@ -180,8 +185,14 @@ export function SupervisorPage() {
   return (
     <>
       {modoTv && <ModoTv datos={turno.datos} onSalir={salirTv} />}
-      <PanelLayout vista={vista} onVista={irAVista} onModoTv={() => setModoTv(true)}>
+      <PanelLayout
+        vista={vista}
+        onVista={irAVista}
+        onModoTv={() => setModoTv(true)}
+        mostrarCostes={mostrarCostes}
+      >
         {vista === 'turno' && <VistaTurno datos={turno.datos} error={turno.error} onIr={irDesdeTurno} />}
+        {vista === 'material' && <VistaMaterial />}
         {vista === 'costes' && <VistaCostes />}
         {vista === 'planta' && <VistaPlanta />}
         {vista === 'gestion' && (
@@ -328,7 +339,7 @@ export function SupervisorPage() {
                     )}
                     {inc.tiempo_parada_min != null && (
                       <p className="text-kavana-text-dim text-xs">
-                        {inc.tiempo_parada_min} min parada · {inc.coste ?? 0} €
+                        {inc.tiempo_parada_min} min parada{mostrarCostes ? ` · ${inc.coste ?? 0} €` : ''}
                       </p>
                     )}
                   </div>
@@ -391,17 +402,19 @@ export function SupervisorPage() {
                       }
                       className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
                     />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Coste (€)"
-                      value={resForm.coste}
-                      onChange={(e) =>
-                        setResForm({ ...resForm, coste: e.target.value })
-                      }
-                      className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
-                    />
+                    {mostrarCostes && (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Coste (€)"
+                        value={resForm.coste}
+                        onChange={(e) =>
+                          setResForm({ ...resForm, coste: e.target.value })
+                        }
+                        className="w-full bg-kavana-dark border border-kavana-border rounded-sm px-2 py-1 text-sm"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => handleResolver(inc.id)}

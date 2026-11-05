@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { InformeTurno as InformeTurnoData } from '../lib/api'
 import { turnoActual } from '../lib/tiempo'
+import { useMostrarCostes } from '../panel/opciones'
 
 const fmt = (n: number, dec = 0) => n.toLocaleString('es-ES', { maximumFractionDigits: dec })
 
@@ -9,6 +10,7 @@ const fmt = (n: number, dec = 0) => n.toLocaleString('es-ES', { maximumFractionD
  *  tabla por puesto, descarga CSV para Excel e impresión (guardar como PDF).
  */
 export function InformeTurno() {
+  const mostrarCostes = useMostrarCostes()
   const inicial = turnoActual()
   const [fecha, setFecha] = useState(inicial.fecha)
   const [turno, setTurno] = useState<string>(inicial.turno)
@@ -97,7 +99,7 @@ export function InformeTurno() {
                     {fmt(p.consumo_kg, 1)} kg{p.consumo_m > 0 ? ` · ${fmt(p.consumo_m, 1)} m` : ''}
                   </td>
                   <td className="py-1 pr-2 text-right mono-data">
-                    {fmt(p.merma_kg, 1)} kg · {fmt(p.merma_coste, 2)} €
+                    {fmt(p.merma_kg, 1)} kg{mostrarCostes ? ` · ${fmt(p.merma_coste, 2)} €` : ''}
                   </td>
                   <td className="py-1 pr-2 text-right mono-data">
                     {p.autocontroles}
@@ -116,7 +118,8 @@ export function InformeTurno() {
                 <td className="py-1 pr-2 text-right mono-data">{fmt(informe.totales.piezas)}</td>
                 <td className="py-1 pr-2 text-right mono-data">{fmt(informe.totales.consumo_kg, 1)} kg</td>
                 <td className="py-1 pr-2 text-right mono-data">
-                  {fmt(informe.totales.merma_kg, 1)} kg · {fmt(informe.totales.merma_coste, 2)} €
+                  {fmt(informe.totales.merma_kg, 1)} kg
+                  {mostrarCostes ? ` · ${fmt(informe.totales.merma_coste, 2)} €` : ''}
                 </td>
                 <td className="py-1 pr-2 text-right mono-data">{informe.totales.autocontroles}</td>
                 <td className="py-1 text-right mono-data">{informe.totales.incidencias}</td>
