@@ -15,7 +15,7 @@ Solo actúa sobre el tenant demo (buscar_tenant_demo). Un tick:
    Cierre de turno: la bobina usada en el turno anterior se mide (radio) y
    sigue montada; la chatarra queda en ese turno.
 2. A cada línea en curso sin bobina le vincula la bobina FIFO de su material.
-3. Registra piezas: si el puesto tiene ritmo nominal, entre el 60 % y el 100 %
+3. Registra piezas: si el puesto tiene ritmo nominal, entre el 80 % y el 100 %
    de su ritmo en el intervalo del tick; si no, unas pocas (1-4).
 Desperdicio (balance de masa, Jorge 28-10): como en planta, no todo lo que
 sale de la bobina acaba en piezas registradas; el simulador pierde un 2-6 %
@@ -550,10 +550,10 @@ def simular_tick(
             continue
         ritmo = ritmos.get(linea.workstation_id)
         if ritmo:
-            # Con ritmo nominal: entre el 60 % y el 100 % de lo que el puesto
+            # Con ritmo nominal: entre el 80 % y el 100 % de lo que el puesto
             # haría en el intervalo del tick (una planta real no va al 100 %)
             esperado = ritmo * Decimal(minutos_tick) / 60
-            factor = Decimal(str(round(rng.uniform(0.6, 1.0), 2)))
+            factor = Decimal(str(round(rng.uniform(0.8, 1.0), 2)))
             piezas = min(max((esperado * factor).quantize(Decimal("1")), Decimal("1")), tope)
             horas = (Decimal(minutos_tick) / 60).quantize(Decimal("0.01"))
         else:

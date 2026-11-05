@@ -78,6 +78,11 @@ def ventana_turno(ahora: datetime) -> tuple[str, datetime, datetime]:
     )
 
 
+def _cant(valor) -> str:
+    """Cantidad redondeada y con punto de miles (es-ES): 418,341 kg -> "418"; 12500 -> "12.500"."""
+    return f"{round(float(valor)):,}".replace(",", ".")
+
+
 def _minutos(desde: datetime, hasta: datetime) -> float:
     return max((_utc(hasta) - _utc(desde)).total_seconds() / 60, 0.0)
 
@@ -358,7 +363,7 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
                 "urgencia": "hoy",
                 "titulo": f"Stock bajo mínimo: {m['name']}",
                 "detalle": (
-                    f"Quedan {m['stock']:g} {m['unidad']}, mínimo {m['minimo']:g}. "
+                    f"Quedan {_cant(m['stock'])} {m['unidad']}, mínimo {_cant(m['minimo'])}. "
                     "Avisa a Materias Primas para reponer."
                 ),
                 "minutos": None,

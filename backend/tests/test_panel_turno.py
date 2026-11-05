@@ -254,3 +254,10 @@ def test_un_puesto_que_espera_piezas_no_suma_al_plan(db_session, tenant):
     estados = {p["code"]: p["estado"] for p in r["puestos"]}
     assert estados["DOBL-1"] == "preparado"
     assert r["plan_turno"] == 800  # solo CORTE-1: 100 piezas/h x 8 h
+
+def test_la_alerta_de_stock_bajo_se_lee_con_cantidades_redondeadas():
+    from app.services.panel_turno import _cant
+
+    assert _cant(418.341) == "418"
+    assert _cant(12500) == "12.500"
+    assert _cant(0) == "0"
