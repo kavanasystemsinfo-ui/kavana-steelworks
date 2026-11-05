@@ -548,10 +548,10 @@ def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict
     timestamps en el pasado y source=simulador. Idempotente: si ya hay
     producción en el turno actual para una línea, no duplica.
     """
-    from app.services.shifts import TZ_PLANTA, turno_desde, ventana_turno
     from app.services.inventory import link_coil
     from app.services.production import record_production
     from app.services.seed_demo import buscar_tenant_demo
+    from app.services.shifts import TZ_PLANTA, turno_desde, ventana_turno
 
     rng = rng or random.Random()
     tenant = buscar_tenant_demo(db)
@@ -607,7 +607,9 @@ def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict
                     db, tenant.id, operario.id,
                     stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
                 )
-                acciones.append(f"backfill: vincula {bobina.coil_id} a {orden.numero} L{linea.linea_numero}")
+                acciones.append(
+                    f"backfill: vincula {bobina.coil_id} a {orden.numero} L{linea.linea_numero}"
+                )
             except ValueError as exc:
                 db.rollback()
                 saltos.append(f"{orden.numero} L{linea.linea_numero}: {exc}")
@@ -649,7 +651,9 @@ def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict
             ts = inicio_turno_utc + timedelta(minutes=intervalo * (i + 0.5))
             if ts > ahora:
                 ts = ahora
-            horas = (MINUTOS_POR_PIEZA / 60 * rng.uniform(0.9, 1.1)).quantize(Decimal("0.01"))
+            horas = (
+                MINUTOS_POR_PIEZA / 60 * Decimal(str(rng.uniform(0.9, 1.1)))
+            ).quantize(Decimal("0.01"))
             try:
                 # Usar record_production con timestamp simulado en el pasado
                 # El servicio record_production usa datetime.now() internamente,
@@ -673,7 +677,9 @@ def backfill_turno_actual(db: Session, rng: random.Random | None = None) -> dict
     return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
 
 
-def backfill_semana_produccion(db: Session, rng: random.Random | None = None, max_dias: int = 7) -> dict:
+def backfill_semana_produccion(
+    db: Session, rng: random.Random | None = None, max_dias: int = 7
+) -> dict:
     """Backfill de turnos completos faltantes en la semana de producción actual.
 
     Si la máquina estuvo dormida varios turnos, recupera también los turnos
@@ -681,7 +687,7 @@ def backfill_semana_produccion(db: Session, rng: random.Random | None = None, ma
     sean coherentes. Solo actúa dentro de la semana de producción (dom 22:00
     a vie 22:00).
     """
-    from app.services.shifts import semana_produccion, turno_desde, ventana_turno, TZ_PLANTA
+    from app.services.shifts import semana_produccion, ventana_turno
 
     rng = rng or random.Random()
     ahora = datetime.now(UTC)
@@ -720,8 +726,8 @@ def backfill_semana_produccion(db: Session, rng: random.Random | None = None, ma
 def _backfill_turno_completo(db: Session, fecha, turno: str, rng: random.Random,
                                acciones: list[str], saltos: list[str]) -> None:
     """Simula un turno completo (8h) en el pasado."""
-    from app.services.shifts import ventana_turno
     from app.services.seed_demo import buscar_tenant_demo
+    from app.services.shifts import ventana_turno
 
     tenant = buscar_tenant_demo(db)
     if tenant is None:
@@ -780,11 +786,12 @@ def _backfill_turno_completo(db: Session, fecha, turno: str, rng: random.Random,
         if piezas <= 0:
             continue
 
-        intervalo = duracion_min / max(1, piezas)
-        for i in range(piezas):
-            ts = inicio_turno + timedelta(minutes=intervalo * (i + 0.5))
-            horas = (MINUTOS_POR_PIEZA / 60 * rng.uniform(0.9, 1.1)).quantize(Decimal("0.01"))
+        for _i in range(piezas):
+            horas = (
+                MINUTOS_POR_PIEZA / 60 * Decimal(str(rng.uniform(0.9, 1.1)))
+            ).quantize(Decimal("0.01"))
             try:
+                from app.services.production import record_production
                 record_production(
                     db, tenant.id, operario.id,
                     order_id=orden.id, line_id=linea.id,

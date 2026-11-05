@@ -45,7 +45,6 @@ def en_horario_laboral(ahora: datetime | None = None) -> bool:
     # weekday: 0=lunes ... 6=domingo
     wd = local.weekday()
     hora = local.hour
-    minuto = local.minute
 
     if wd == 6:  # domingo
         # Producción empieza a las 22:00
