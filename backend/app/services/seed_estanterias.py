@@ -374,14 +374,9 @@ def seed_estanterias(db: Session) -> dict:
         try:
             asegurar_flujo_demo(db, tenant.id)
             reparar_demo_coherente(db, tenant.id)
-            from app.services.seed_planta import (
-                RECETAS_PLANTA,
-                asegurar_planta_realista,
-                corregir_eficiencia_historia,
-            )
+            from app.services.seed_planta import RECETAS_PLANTA, asegurar_planta_realista
 
             asegurar_planta_realista(db, tenant.id)
-            corregir_eficiencia_historia(db, tenant.id)
             asegurar_flujo_demo(db, tenant.id, RECETAS_PLANTA)
         except Exception:  # noqa: BLE001
             db.rollback()

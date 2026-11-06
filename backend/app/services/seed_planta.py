@@ -15,33 +15,35 @@ from app.models import User, Workstation, WorkstationGroup
 
 # (código, nombre, grupo, color, coste/hora, método de registro, piezas/hora nominal)
 PUESTOS_PLANTA = [
-    ("PERF-313", "Perfiladora 313 (travesaños)", "Perfilado", "#2980b9", "50", "quantity", "150"),
-    ("PERF-K300", "Perfiladora K300 (puntales y pilares)", "Perfilado", "#3498db", "52",
+    ("P-313", "Perfiladora 313 (travesaños)", "Perfilado", "#2980b9", "50", "quantity", "150"),
+    ("P-K300", "Perfiladora K300 (puntales y pilares)", "Perfilado", "#3498db", "52",
      "quantity", "120"),
-    ("LASER-3015", "Láser 3015", "Corte", "#f39c12", "48", "quantity", "60"),
-    ("PUNZ-80", "Punzonadora PU-80", "Punzonado", "#8e44ad", "46", "quantity", "40"),
-    ("PLEG-220", "Plegadora PL-220", "Doblado", "#2c3e50", "47", "quantity", "30"),
-    ("ROBOT-1", "Robot de soldadura", "Soldadura", "#e74c3c", "42", "timer", "25"),
-    ("ARMA-1", "Estación de armado", "Ensamble", "#1abc9c", "36", "quantity", "12"),
-    ("ESME-2", "Esmeriladora E-2", "Terminación", "#16a085", "34", "quantity", "20"),
+    ("L-3015", "Láser 3015", "Corte", "#f39c12", "48", "quantity", "60"),
+    ("PU-80", "Punzonadora PU-80", "Punzonado", "#8e44ad", "46", "quantity", "40"),
+    ("PL-220", "Plegadora PL-220", "Doblado", "#2c3e50", "47", "quantity", "30"),
+    ("RB-1", "Robot de soldadura", "Soldadura", "#e74c3c", "42", "timer", "25"),
+    ("AR-1", "Estación de armado", "Ensamble", "#1abc9c", "36", "quantity", "12"),
+    ("ES-2", "Esmeriladora E-2", "Terminación", "#16a085", "34", "quantity", "20"),
 ]
 
 # Puestos de siembras anteriores: se desactivan, no se borran
 PUESTOS_ANTIGUOS = (
     "CORTE-1", "PUNZ-1", "DOBL-1", "SOL-1", "GALV-1", "MONT-1", "MONT-2",
-    "PERF-1", "PERF-2", "LASER-1", "PLEG-1", "SOLD-1", "ESME-1", "LINEA-1", "LINEA-2", "LINEA-3",
+    "PERF-1", "PERF-2", "LASER-1", "PLEG-1", "SOLD-1", "ESME-1",
+    "PERF-313", "PERF-K300", "LASER-3015", "PUNZ-80", "PLEG-220", "ROBOT-1", "ARMA-1", "ESME-2",
+    "LINEA-1", "LINEA-2", "LINEA-3",
 )
 
 # Mañana (A, 06-14), tarde (B, 14-22) y noche (C, 22-06) de cada puesto
 OPERARIOS = {
-    "PERF-313": ("Juan Hernández Aguilar", "Antonio Ruiz Ferrer", "Manuel Soler Iglesias"),
-    "PERF-K300": ("Francisco Navarro Gil", "José Luis Moreno Prats", "Pedro Cano Valero"),
-    "LASER-3015": ("Javier Ortega Molina", "Miguel Ángel Serrano Pons", "Rafael Domínguez Lara"),
-    "PUNZ-80": ("David Castillo Ramos", "Carlos Jiménez Sanz", "Sergio Marín Blasco"),
-    "PLEG-220": ("Alberto Vidal Climent", "Fernando Gómez Olmos", "Raúl Peña Escrivá"),
-    "ROBOT-1": ("Pablo Herrero Cuesta", "Jorge Alonso Beltrán", "Andrés Medina Soria"),
-    "ARMA-1": ("Luis Romero Giner", "Enrique Torres Millán", "Ismael Vega Cortés"),
-    "ESME-2": ("Vicente Campos Roca", "Alejandro Gallego Ibáñez", "Óscar Santos Mora"),
+    "P-313": ("Juan Hernández Aguilar", "Antonio Ruiz Ferrer", "Manuel Soler Iglesias"),
+    "P-K300": ("Francisco Navarro Gil", "José Luis Moreno Prats", "Pedro Cano Valero"),
+    "L-3015": ("Javier Ortega Molina", "Miguel Ángel Serrano Pons", "Rafael Domínguez Lara"),
+    "PU-80": ("David Castillo Ramos", "Carlos Jiménez Sanz", "Sergio Marín Blasco"),
+    "PL-220": ("Alberto Vidal Climent", "Fernando Gómez Olmos", "Raúl Peña Escrivá"),
+    "RB-1": ("Pablo Herrero Cuesta", "Jorge Alonso Beltrán", "Andrés Medina Soria"),
+    "AR-1": ("Luis Romero Giner", "Enrique Torres Millán", "Ismael Vega Cortés"),
+    "ES-2": ("Vicente Campos Roca", "Alejandro Gallego Ibáñez", "Óscar Santos Mora"),
 }
 
 # La cuenta del botón "Operario" de la demo es ya un operario real de la plantilla
@@ -171,14 +173,14 @@ def asegurar_planta_realista(db: Session, tenant_id) -> dict:
 
 # Recetas que recorren los 8 puestos (como RECETAS_FLUJO, con los puestos nuevos)
 RECETAS_PLANTA = [
-    ("OP-EST-2801", "Metálicas del Sur S.A.", "EST-PORTICO", "MONTANTE-P50",
-     "FLEJE-D265-18", "3.0", "80", ["PERF-313", "PUNZ-80", "PLEG-220", "ARMA-1"]),
-    ("OP-EST-2802", "Almacenes Rodrigo e Hijos S.A.", "EST-TITAN", "LARGUERO-E27",
-     "FLEJE-D265-18", "2.7", "60", ["PERF-K300", "PLEG-220", "ROBOT-1", "ESME-2"]),
-    ("OP-EST-2803", "Distribuciones Valencianas S.L.", "EST-VOLADIZO", "COLUMNA-CNT",
-     "PERFIL-U100", "4.0", "40", ["LASER-3015", "ROBOT-1", "ESME-2", "ARMA-1"]),
-    ("OP-EST-2804", "Logística y Montajes del Mediterráneo S.L.", "EST-ALTILLO", "VIGA-SIGMA",
-     "ACERO-S355", "2.7", "12", ["LASER-3015", "PUNZ-80", "PLEG-220", "ROBOT-1"]),
+    ("OP-EST-2811", "Metálicas del Sur S.A.", "EST-PORTICO", "MONTANTE-P50",
+     "FLEJE-D265-18", "3.0", "80", ["P-313", "PU-80", "PL-220", "AR-1"]),
+    ("OP-EST-2812", "Almacenes Rodrigo e Hijos S.A.", "EST-TITAN", "LARGUERO-E27",
+     "FLEJE-D265-18", "2.7", "60", ["P-K300", "PL-220", "RB-1", "ES-2"]),
+    ("OP-EST-2813", "Distribuciones Valencianas S.L.", "EST-VOLADIZO", "COLUMNA-CNT",
+     "PERFIL-U100", "4.0", "40", ["L-3015", "RB-1", "ES-2", "AR-1"]),
+    ("OP-EST-2814", "Logística y Montajes del Mediterráneo S.L.", "EST-ALTILLO", "VIGA-SIGMA",
+     "ACERO-S355", "2.7", "12", ["L-3015", "PU-80", "PL-220", "RB-1"]),
 ]
 
 
@@ -223,46 +225,3 @@ def _cerrar_ordenes_de_puestos_antiguos(db: Session, tenant_id) -> int:
     db.flush()
     return cerradas
 
-
-def corregir_eficiencia_historia(db: Session, tenant_id) -> int:
-    """Pone en su sitio la velocidad de los registros que el simulador anotó con horas de más.
-
-    Una versión anterior del simulador contaba el tramo entero como trabajado aunque la línea
-    acabara antes, y la eficiencia de los puestos nuevos salía por los suelos. Aquí se lleva la
-    velocidad de esos registros al 80-100 % del ritmo del puesto (cifra estable por registro).
-    No borra nada y es idempotente: lo ya corregido no vuelve a cumplir la condición.
-    """
-    import zlib
-
-    from app.models import OrderLine, ProductionLog
-
-    ritmos = {
-        w.code: float(w.piezas_hora_nominal)
-        for w in db.scalars(
-            select(Workstation).where(
-                Workstation.tenant_id == tenant_id, Workstation.code.in_(list(OPERARIOS))
-            )
-        )
-        if w.piezas_hora_nominal
-    }
-    filas = db.execute(
-        select(ProductionLog, OrderLine.workstation_id)
-        .join(OrderLine, OrderLine.id == ProductionLog.line_id)
-        .where(
-            ProductionLog.tenant_id == tenant_id,
-            ProductionLog.action == "produce",
-            OrderLine.workstation_id.in_(list(ritmos)),
-        )
-    ).all()
-    corregidos = 0
-    for log, puesto in filas:
-        meta = log.metadata_ or {}
-        actual = meta.get("efficiency")
-        ritmo = ritmos[puesto]
-        if not actual or float(actual) >= ritmo * 0.8:
-            continue
-        u = (zlib.crc32(str(log.id).encode()) % 1000) / 1000
-        log.metadata_ = {**meta, "efficiency": round(ritmo * (0.8 + 0.2 * u), 2)}
-        corregidos += 1
-    db.flush()
-    return corregidos
