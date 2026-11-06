@@ -222,3 +222,47 @@ def _cerrar_ordenes_de_puestos_antiguos(db: Session, tenant_id) -> int:
         cerradas += 1
     db.flush()
     return cerradas
+
+
+def corregir_eficiencia_historia(db: Session, tenant_id) -> int:
+    """Pone en su sitio la velocidad de los registros que el simulador anotó con horas de más.
+
+    Una versión anterior del simulador contaba el tramo entero como trabajado aunque la línea
+    acabara antes, y la eficiencia de los puestos nuevos salía por los suelos. Aquí se lleva la
+    velocidad de esos registros al 80-100 % del ritmo del puesto (cifra estable por registro).
+    No borra nada y es idempotente: lo ya corregido no vuelve a cumplir la condición.
+    """
+    import zlib
+
+    from app.models import OrderLine, ProductionLog
+
+    ritmos = {
+        w.code: float(w.piezas_hora_nominal)
+        for w in db.scalars(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.code.in_(list(OPERARIOS))
+            )
+        )
+        if w.piezas_hora_nominal
+    }
+    filas = db.execute(
+        select(ProductionLog, OrderLine.workstation_id)
+        .join(OrderLine, OrderLine.id == ProductionLog.line_id)
+        .where(
+            ProductionLog.tenant_id == tenant_id,
+            ProductionLog.action == "produce",
+            OrderLine.workstation_id.in_(list(ritmos)),
+        )
+    ).all()
+    corregidos = 0
+    for log, puesto in filas:
+        meta = log.metadata_ or {}
+        actual = meta.get("efficiency")
+        ritmo = ritmos[puesto]
+        if not actual or float(actual) >= ritmo * 0.8:
+            continue
+        u = (zlib.crc32(str(log.id).encode()) % 1000) / 1000
+        log.metadata_ = {**meta, "efficiency": round(ritmo * (0.8 + 0.2 * u), 2)}
+        corregidos += 1
+    db.flush()
+    return corregidos
