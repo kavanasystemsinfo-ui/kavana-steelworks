@@ -192,3 +192,13 @@ def test_detalle_de_cada_puesto_incluye_los_que_no_han_producido(db_session, ten
     assert d["PERF-1"]["chatarra_kg"] == 10.0 and d["PERF-1"]["chatarra_pct"] == 10.0
     assert d["PERF-1"]["eficiencia"]["calidad"] == 90.0  # calidad propia del puesto
     assert d["SOL-1"]["piezas"] == 0 and d["SOL-1"]["eficiencia"] is None
+
+
+def test_un_puesto_dado_de_baja_no_sale_en_la_comparativa(db_session, tenant):
+    _puesto(db_session, tenant, "ACT-1", ritmo=60)
+    _puesto(db_session, tenant, "VIEJO-1", ritmo=60)
+    viejo = db_session.query(Workstation).filter_by(code="VIEJO-1").one()
+    viejo.is_active = False
+    db_session.commit()
+    r = resumen_planta(db_session, tenant.id, "semana", AHORA)
+    assert [p["puesto"] for p in r["detalle_puestos"]] == ["ACT-1"]
