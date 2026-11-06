@@ -49,6 +49,18 @@ describe('Medir la carne de una bobina (maquetación del legacy)', () => {
     expect(screen.queryByText(/€/)).not.toBeInTheDocument()
   })
 
+  it('si lo medido supera lo que queda según la producción, enseña el tip y no deja confirmar', async () => {
+    stub(prevision({
+      peso_restante_kg: 700, sistema_kg: 600, merma_kg: 0, supera_saldo: true,
+      mensaje_supera_saldo: 'Introduce un valor de 600,0 kg o inferior: vuelve a medir.',
+    }))
+    render(<MedidaBobina stockItemId="B1" textoConfirmar="Cerrar bobina" onConfirmar={vi.fn()} />)
+    await userEvent.setup().type(screen.getByPlaceholderText(/carne \(mm\)/i), '200')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/600,0 kg o inferior/i)
+    expect(screen.getByRole('button', { name: 'Cerrar bobina' })).toBeDisabled()
+  })
+
   it('sin bobina no pregunta nada', async () => {
     const fetchMock = stub(prevision())
     render(<MedidaBobina stockItemId={null} textoConfirmar="Medir" onConfirmar={vi.fn()} />)

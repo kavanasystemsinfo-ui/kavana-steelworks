@@ -365,7 +365,11 @@ def create_retal(
     from decimal import Decimal
 
     from app.models import MaterialConsumo, MaterialTransaction, Order, OrderLine
-    from app.services.coil_math import peso_desde_radio_mm
+    from app.services.coil_math import (
+        medida_supera_saldo,
+        mensaje_medida_supera_saldo,
+        peso_desde_radio_mm,
+    )
 
     if tenant_id is None:
         raise ValueError("tenant_id es requerido")
@@ -403,6 +407,8 @@ def create_retal(
         )
     )
     system_remaining = bobina.cantidad_disponible
+    if medida_supera_saldo(real_remaining, system_remaining):
+        raise ValueError(mensaje_medida_supera_saldo(real_remaining, system_remaining))
     hidden_merma = max(Decimal("0"), system_remaining - real_remaining)
     merma_cost = hidden_merma * bobina.coste_por_unidad
     coste_reembolso = real_remaining * bobina.coste_por_unidad
