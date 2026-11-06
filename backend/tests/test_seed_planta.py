@@ -42,8 +42,8 @@ def test_ocho_puestos_activos_y_los_antiguos_desactivados(db_session):
     activos = {c for c, w in puestos.items() if w.is_active}
     assert activos == {p[0] for p in PUESTOS_PLANTA}
     assert len(activos) == 8
-    assert puestos["PERF-313"].name.startswith("Perfiladora 313")
-    assert puestos["PLEG-220"].name == "Plegadora PL-220"
+    assert puestos["P-313"].name.startswith("Perfiladora 313")
+    assert puestos["PL-220"].name == "Plegadora PL-220"
     for code in PUESTOS_ANTIGUOS:
         if code in puestos:
             assert puestos[code].is_active is False  # se desactivan, nunca se borran
@@ -104,7 +104,7 @@ def test_la_planta_nueva_recibe_la_semana_de_historia_con_nombres_reales(db_sess
         .join(User, User.id == ProductionLog.operator_id)
         .where(ProductionLog.tenant_id == tenant.id)
     ).all()
-    assert {p for p, _ in filas} >= {"PERF-313", "LASER-3015", "ROBOT-1"}
+    assert {p for p, _ in filas} >= {"P-313", "L-3015", "RB-1"}
     assert not any("Demo" in n for _, n in filas)
     # una segunda llamada seguida no repite la historia
     assert simulador.rellenar_hueco(db_session, ahora, random.Random(5))["pasos"] == 0
@@ -115,31 +115,3 @@ def test_ningun_usuario_conserva_nombre_de_demo(db_session):
     nombres = [u.name for u in db_session.scalars(select(User))]
     assert not [n for n in nombres if "Demo" in n]
 
-
-def test_la_eficiencia_de_la_historia_vieja_se_corrige_sin_borrar(db_session, monkeypatch):
-    from app.services.seed_planta import corregir_eficiencia_historia
-
-    monkeypatch.setattr(simulador, "_ultimo_relleno", None)
-    tenant = _planta(db_session)
-    simulador.rellenar_hueco(
-        db_session, datetime(2030, 1, 16, 12, tzinfo=MADRID), random.Random(5)
-    )
-    logs = db_session.scalars(
-        select(ProductionLog).where(
-            ProductionLog.tenant_id == tenant.id, ProductionLog.action == "produce"
-        )
-    ).all()
-    antes = len(logs)
-    victima = next(lg for lg in logs if (lg.metadata_ or {}).get("efficiency"))
-    victima.metadata_ = {**victima.metadata_, "efficiency": 3}
-    db_session.commit()
-    assert corregir_eficiencia_historia(db_session, tenant.id) >= 1
-    db_session.refresh(victima)
-    assert victima.metadata_["efficiency"] > 3
-    assert corregir_eficiencia_historia(db_session, tenant.id) == 0  # idempotente
-    despues = db_session.scalars(
-        select(ProductionLog).where(
-            ProductionLog.tenant_id == tenant.id, ProductionLog.action == "produce"
-        )
-    ).all()
-    assert len(despues) == antes

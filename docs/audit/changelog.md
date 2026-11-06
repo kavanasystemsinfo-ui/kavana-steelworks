@@ -16,6 +16,10 @@ narrativa de ingeniería.
   borrar). El simulador firma cada registro con el operario del puesto y del turno, y da a
   la planta nueva la semana de producción entera. Las cuentas demo pasan a tener nombre de
   persona (el correo no cambia) y la pantalla del operario muestra quien ha entrado.
+- **Códigos:** P-313, P-K300, L-3015, PU-80, PL-220, RB-1, AR-1 y ES-2. Una primera tanda de
+  códigos (PERF-313...) generó historia con horas de más; `production_logs` es inmutable
+  (ISO 9001), así que no se corrige ni se borra: esos puestos quedan desactivados y los
+  nuevos empiezan con historia limpia.
 - **Archivos:** `backend/app/services/seed_planta.py`, `seed_estanterias.py`, `simulador.py`,
   `auth.py` (nombre en el token), `frontend/src/pages/OperarioPage.tsx`.
 - **Verificación:** `tests/test_seed_planta.py` y las suites de simulador y demo coherente.
