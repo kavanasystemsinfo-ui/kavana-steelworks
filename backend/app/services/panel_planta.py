@@ -56,15 +56,13 @@ def _pct(parte: float, total: float) -> float | None:
 
 def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) -> dict:
     """Producción, paradas y eficiencia de una ventana, global y por puesto."""
-    ritmos = {
-        w.code: float(w.piezas_hora_nominal)
-        for w in db.scalars(
-            select(Workstation).where(
-                Workstation.tenant_id == tenant_id, Workstation.is_active.is_(True)
-            )
+    activos_ws = db.scalars(
+        select(Workstation).where(
+            Workstation.tenant_id == tenant_id, Workstation.is_active.is_(True)
         )
-        if w.piezas_hora_nominal
-    }
+    ).all()
+    activos = {w.code for w in activos_ws}
+    ritmos = {w.code: float(w.piezas_hora_nominal) for w in activos_ws if w.piezas_hora_nominal}
 
     por_puesto: dict[str, dict] = defaultdict(
         lambda: {
@@ -151,19 +149,21 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
         calidad_p = 1 - p["kg_chatarra"] / kg_p if kg_p else 1.0
         f = factores(p["horas"], p["paradas_min"], p["piezas_medidas"], nominal, calidad_p)
         plan_p = ritmo * (p["horas"] + p["paradas_min"] / 60) if ritmo else None
-        detalle.append(
-            {
-                "puesto": code,
-                "piezas": round(p["piezas"]),
-                "plan": round(plan_p) if plan_p else None,
-                "eficiencia": f,
-                "paradas_min": round(p["paradas_min"]),
-                "paradas_n": p["paradas_n"],
-                "kg_material": round(p["kg_material"], 1),
-                "chatarra_kg": round(p["kg_chatarra"], 1),
-                "chatarra_pct": _pct(p["kg_chatarra"], kg_p),
-            }
-        )
+        # Un puesto dado de baja no sale en la comparativa (su producción sí cuenta en la planta)
+        if code in activos:
+            detalle.append(
+                {
+                    "puesto": code,
+                    "piezas": round(p["piezas"]),
+                    "plan": round(plan_p) if plan_p else None,
+                    "eficiencia": f,
+                    "paradas_min": round(p["paradas_min"]),
+                    "paradas_n": p["paradas_n"],
+                    "kg_material": round(p["kg_material"], 1),
+                    "chatarra_kg": round(p["kg_chatarra"], 1),
+                    "chatarra_pct": _pct(p["kg_chatarra"], kg_p),
+                }
+            )
         if ritmo:
             horas_tot += p["horas"]
             paradas_tot += p["paradas_min"]

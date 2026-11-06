@@ -564,8 +564,13 @@ def simular_tick(
             # haría en el intervalo del tick (una planta real no va al 100 %)
             esperado = ritmo * Decimal(minutos_tick) / 60
             factor = Decimal(str(round(rng.uniform(0.8, 1.0), 2)))
-            piezas = min(max((esperado * factor).quantize(Decimal("1")), Decimal("1")), tope)
-            horas = (Decimal(minutos_tick) / 60).quantize(Decimal("0.01"))
+            objetivo = max((esperado * factor).quantize(Decimal("1")), Decimal("1"))
+            piezas = min(objetivo, tope)
+            # Si la línea acaba o espera piezas del paso anterior, solo cuenta el tiempo trabajado
+            horas = max(
+                (Decimal(minutos_tick) / 60 * piezas / objetivo).quantize(Decimal("0.01")),
+                Decimal("0.01"),
+            )
         else:
             piezas = min(Decimal(rng.randint(1, 4)), tope)
             horas = (piezas * MINUTOS_POR_PIEZA / 60).quantize(Decimal("0.01"))
