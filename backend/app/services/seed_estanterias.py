@@ -374,6 +374,10 @@ def seed_estanterias(db: Session) -> dict:
         try:
             asegurar_flujo_demo(db, tenant.id)
             reparar_demo_coherente(db, tenant.id)
+            from app.services.seed_planta import RECETAS_PLANTA, asegurar_planta_realista
+
+            asegurar_planta_realista(db, tenant.id)
+            asegurar_flujo_demo(db, tenant.id, RECETAS_PLANTA)
         except Exception:  # noqa: BLE001
             db.rollback()
             logging.getLogger(__name__).exception(
@@ -1203,13 +1207,15 @@ RECETAS_FLUJO = [
 ]
 
 
-def asegurar_flujo_demo(db: Session, tenant_id) -> int:
+def asegurar_flujo_demo(db: Session, tenant_id, recetas=None) -> int:
     """Crea las órdenes plantilla que recorren todo el flujo de planta. Idempotente."""
     materiales = _asegurar_materiales(db, tenant_id)
     piezas = _asegurar_piezas(db, tenant_id)
     productos = _asegurar_productos(db, tenant_id, piezas, materiales)
     creadas = 0
-    for numero, cliente, prod, pieza, mat_code, metros, total, puestos in RECETAS_FLUJO:
+    for numero, cliente, prod, pieza, mat_code, metros, total, puestos in (
+        RECETAS_FLUJO if recetas is None else recetas
+    ):
         if db.scalar(
             select(Order).where(Order.tenant_id == tenant_id, Order.numero == numero)
         ):

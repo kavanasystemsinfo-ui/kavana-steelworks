@@ -45,6 +45,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
+from app.services.seed_planta import operario_de
 from app.services.shifts import en_horario_laboral
 
 MINUTOS_POR_PIEZA = Decimal("3")
@@ -295,7 +296,7 @@ def _duracion_incidencia(incidencia_id) -> int:
 
 def _gestionar_incidencias(
     db: Session, tenant, operario, lineas, rng: random.Random, minutos_tick: int,
-    ahora: datetime,
+    ahora: datetime, quien=None,
 ) -> tuple[list[str], set[str]]:
     """Resuelve las incidencias abiertas que ya duraron lo suyo y abre alguna nueva.
 
@@ -306,6 +307,7 @@ def _gestionar_incidencias(
     from app.services.incidencias import actualizar_incidencia, crear_incidencia
     from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA
 
+    quien = quien or (lambda _puesto, _momento: operario)
     acciones: list[str] = []
     recien_resueltas: set[str] = set()
     abiertas = db.scalars(
@@ -333,7 +335,7 @@ def _gestionar_incidencias(
             linea = rng.choice(en_curso)
             tipo = rng.choices(list(CAUSAS_INCIDENCIA), weights=(6, 3, 1))[0]
             inc = crear_incidencia(
-                db, tenant_id=tenant.id, operario_id=operario.id,
+                db, tenant_id=tenant.id, operario_id=quien(linea.workstation_id, ahora).id,
                 linea_id=linea.workstation_id,
                 descripcion=rng.choice(CAUSAS_INCIDENCIA[tipo]), tipo=tipo,
             )
@@ -376,6 +378,13 @@ def simular_tick(
     if operario is None:
         return {"tenant": str(tenant.id), "acciones": [], "saltos": ["sin operario demo"]}
 
+    ahora_tick = _aware(ahora or datetime.now(UTC))
+    usuarios_planta: dict = {}
+
+    def quien(puesto: str, momento: datetime) -> User:
+        """Operario del puesto en el turno de `momento` (el demo si no tiene plantilla)."""
+        return operario_de(usuarios_planta, db, tenant.id, puesto, momento) or operario
+
     acciones: list[str] = _reponer_ordenes(db, tenant.id, rng)
     ritmos = {
         w.code: w.piezas_hora_nominal
@@ -389,7 +398,7 @@ def simular_tick(
         codigo = linea.active_coil_code
         try:
             unlink_coil(
-                db, tenant.id, operario.id,
+                db, tenant.id, quien(linea.workstation_id, ahora_tick).id,
                 stock_item_id=linea.active_coil_id, order_id=orden.id, line_id=linea.id,
             )
             acciones.append(
@@ -468,7 +477,7 @@ def simular_tick(
             continue
         try:
             medir_bobina(
-                db, tenant.id, operario.id,
+                db, tenant.id, quien(linea.workstation_id, momento).id,
                 stock_item_id=bobina.id, radio_mm=radio,
                 order_id=orden.id, line_id=linea.id,
                 momento=momento + timedelta(seconds=1),
@@ -478,9 +487,8 @@ def simular_tick(
             db.rollback()
             saltos.append(f"{orden.numero} L{linea.linea_numero}: {exc}")
 
-    ahora_tick = _aware(ahora or datetime.now(UTC))
     acc_inc, parados = _gestionar_incidencias(
-        db, tenant, operario, lineas, rng, minutos_tick, ahora_tick
+        db, tenant, operario, lineas, rng, minutos_tick, ahora_tick, quien
     )
     acciones += acc_inc
 
@@ -491,6 +499,8 @@ def simular_tick(
         if linea.workstation_id in parados:
             saltos.append(f"{etiqueta}: puesto parado por incidencia")
             continue
+        momento_reg = _momento_en_tramo(ahora, minutos_tick, rng)
+        op = quien(linea.workstation_id, momento_reg or ahora_tick)
 
         # La bobina se acabó de verdad antes de lo que cree el sistema (el
         # desperdicio no se ve hasta medir): fin de bobina con radio 0
@@ -500,7 +510,7 @@ def simular_tick(
                 codigo = montada.coil_id
                 try:
                     create_retal(
-                        db, tenant.id, operario.id,
+                        db, tenant.id, op.id,
                         stock_item_id=montada.id, radio_mm=0,
                         order_id=orden.id, line_id=linea.id,
                     )
@@ -514,14 +524,14 @@ def simular_tick(
         if linea.active_coil_id is None and linea.material_id is not None:
             bobina = _bobina_fifo(db, tenant.id, linea.material_id)
             if bobina is None:
-                bobina = _reponer_bobina(db, tenant.id, linea.material_id, operario.id)
+                bobina = _reponer_bobina(db, tenant.id, linea.material_id, op.id)
                 if bobina is None:
                     saltos.append(f"{etiqueta}: sin bobinas de su material")
                     continue
                 acciones.append(f"recibe {bobina.coil_id}")
             try:
                 link_coil(
-                    db, tenant.id, operario.id,
+                    db, tenant.id, op.id,
                     stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
                 )
                 acciones.append(f"vincula {bobina.coil_id} a {etiqueta}")
@@ -567,11 +577,11 @@ def simular_tick(
         while piezas >= 1:
             try:
                 record_production(
-                    db, tenant.id, operario.id,
+                    db, tenant.id, op.id,
                     order_id=orden.id, line_id=linea.id,
                     incremental_quantity=piezas, hours_worked=horas,
                     observaciones="simulador demo",
-                    ocurrido_en=_momento_en_tramo(ahora, minutos_tick, rng),
+                    ocurrido_en=momento_reg,
                 )
                 acciones.append(f"produce {piezas} uds en {etiqueta}")
                 error = None
@@ -595,7 +605,7 @@ def simular_tick(
                 codigo = linea.active_coil_code
                 try:
                     create_retal(
-                        db, tenant.id, operario.id,
+                        db, tenant.id, op.id,
                         stock_item_id=linea.active_coil_id, radio_mm=0,
                         order_id=orden.id, line_id=linea.id,
                     )
@@ -614,7 +624,7 @@ def simular_tick(
                     if radio is None:
                         raise ValueError("sin ancho")
                     create_retal(
-                        db, tenant.id, operario.id,
+                        db, tenant.id, op.id,
                         stock_item_id=bobina.id, radio_mm=radio,
                         order_id=orden.id, line_id=linea.id,
                     )
