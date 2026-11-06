@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
+import { api, getJwtPayload, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
@@ -1293,7 +1293,7 @@ export function OperarioPage() {
             <div className="grid grid-cols-2 gap-2 text-xs border border-kavana-border rounded-xl p-3">
               <div>
                 <span className="label-industrial text-kavana-text-dim">Operario</span>
-                <p className="font-semibold">Operario Demo</p>
+                <p className="font-semibold">{getJwtPayload()?.name ?? '--'}</p>
               </div>
               <div>
                 <span className="label-industrial text-kavana-text-dim">Puesto</span>

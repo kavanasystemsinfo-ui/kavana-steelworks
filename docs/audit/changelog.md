@@ -4,6 +4,22 @@ Registro de cambios por fase. Formato: problema, solución, archivos,
 verificación. No documentar actividad por actividad: documentar fases con
 narrativa de ingeniería.
 
+## 2026-11-06 — Planta realista de la demo: 8 puestos y 24 operarios
+
+- **Problema:** la demo tenía puestos genéricos (CORTE-1, MONT-2) y un solo "Operario Demo"
+  que firmaba todo, así que la ficha de puesto no enseñaba turnos ni personas reales.
+- **Solución:** `seed_planta.py` crea 8 puestos nombrados como en una fábrica de estanterías
+  (máquina y número: Perfiladora 313 para travesaños, Perfiladora K300 para puntales y
+  pilares, Láser 3015, Punzonadora PU-80, Plegadora PL-220, Robot de soldadura, Estación de
+  armado y Esmeriladora E-2) y 24 operarios, 3 por puesto (mañana, tarde y noche). Los
+  puestos antiguos se desactivan y sus órdenes activas se cancelan (estado reversible, sin
+  borrar). El simulador firma cada registro con el operario del puesto y del turno, y da a
+  la planta nueva la semana de producción entera. Las cuentas demo pasan a tener nombre de
+  persona (el correo no cambia) y la pantalla del operario muestra quien ha entrado.
+- **Archivos:** `backend/app/services/seed_planta.py`, `seed_estanterias.py`, `simulador.py`,
+  `auth.py` (nombre en el token), `frontend/src/pages/OperarioPage.tsx`.
+- **Verificación:** `tests/test_seed_planta.py` y las suites de simulador y demo coherente.
+
 ## 2026-11-05 — Tabla comparativa de puestos
 
 - **Problema:** para decidir sobre el ritmo general el supervisor tenía que ir puesto a puesto.

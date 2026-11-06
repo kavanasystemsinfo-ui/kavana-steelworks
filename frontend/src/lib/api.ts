@@ -1208,6 +1208,8 @@ export interface JwtPayload {
   sub: string
   tenant_id: string
   role: string
+  /** Nombre de la persona que ha entrado. */
+  name?: string
   /** Tenant de demostración: la interfaz lo marca como DATOS DE DEMO. */
   demo?: boolean
   exp: number

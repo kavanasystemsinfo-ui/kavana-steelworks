@@ -55,6 +55,7 @@ def login(db: Session, tenant_id: uuid.UUID, email: str, password: str) -> str:
         "sub": str(user.id),
         "tenant_id": str(tenant_id),
         "role": user.role,
+        "name": user.name,
         # La interfaz marca "DATOS DE DEMO" para no presentar datos ficticios
         # como reales (slugs de buscar_tenant_demo en seed_demo)
         "demo": tenant is not None and tenant.slug in SLUGS_DEMO,
