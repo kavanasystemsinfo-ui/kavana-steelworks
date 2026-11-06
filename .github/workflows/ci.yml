@@ -9,6 +9,21 @@ jobs:
   backend-tests:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: sw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://postgres:pw@localhost:5432/sw_test
     defaults:
       run:
         working-directory: backend
