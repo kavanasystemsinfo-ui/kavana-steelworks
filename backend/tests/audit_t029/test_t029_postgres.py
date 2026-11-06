@@ -123,6 +123,41 @@ def test_h6_retirar_pico_bloquea_la_bobina(pg_sessionmaker):
     )
 
 
+def test_h6_medir_bobina_bloquea_la_bobina(pg_sessionmaker):
+    """El cierre de turno también sobrescribe cantidad_disponible: debe bloquear."""
+    from app.services import coil_math
+    from app.services.medicion import medir_bobina
+
+    sentencias: list[str] = []
+
+    with pg_sessionmaker() as db:
+        tenant, user, _m, bobina, orden, linea = _montada(db, peso=90.0)
+        engine = db.get_bind()
+
+        def _capturar(conn, cursor, statement, parameters, context, executemany):
+            if "stock_items" in statement:
+                sentencias.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _capturar)
+        try:
+            original = coil_math.peso_desde_radio_mm
+            coil_math.peso_desde_radio_mm = lambda **_: 88.0
+            try:
+                medir_bobina(
+                    db, tenant.id, user.id,
+                    stock_item_id=bobina.id, radio_mm=50.0,
+                    order_id=orden.id, line_id=linea.id,
+                )
+            finally:
+                coil_math.peso_desde_radio_mm = original
+        finally:
+            event.remove(engine, "before_cursor_execute", _capturar)
+
+    assert any("FOR UPDATE" in s.upper() for s in sentencias), (
+        "medir_bobina leyó stock_items sin FOR UPDATE"
+    )
+
+
 def test_e1_el_test_de_concurrencia_falla_sin_for_update(pg_sessionmaker, monkeypatch):
     """Evidencia: sin el bloqueo, la carrera pierde un descuento (70 en vez de 40)."""
     from sqlalchemy import select

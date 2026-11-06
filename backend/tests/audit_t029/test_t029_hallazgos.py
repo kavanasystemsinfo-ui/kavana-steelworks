@@ -197,6 +197,43 @@ def test_h4_medir_bobina_no_inventa_kilos(db_session, tenant, user, monkeypatch)
     )
 
 
+# ── H7: retirar pico deja la línea con la bobina "montada" ────────────────
+
+
+def test_h7_retirar_pico_desvincula_la_linea(db_session, tenant, user):
+    """El botón Retirar (que el panel envía solo con stock_item_id) saca la
+    bobina del puesto: la línea no puede seguir apuntándola como montada.
+
+    Hoy retirar_pico solo desvincula si le llegan order_id y line_id; el
+    frontend (OperarioPage.tsx:710) manda únicamente stock_item_id, así que la
+    bobina acaba en 'Retales' y la línea sigue con active_coil_id: el pico
+    queda bloqueado para otra orden y la línea mantiene el cobro completo.
+    """
+    from app.services.inventory import link_coil, retirar_pico
+
+    material = make_material(db_session, tenant, code="M-RET", cost=2.0)
+    bobina = make_stock_item(db_session, tenant, material, cantidad=100, lote="L-RET")
+    orden = make_order(db_session, tenant, numero="OP-RET")
+    linea = make_order_line(db_session, orden, workstation="LINEA-1")
+    link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=bobina.id, order_id=orden.id, line_id=linea.id,
+    )
+
+    # Mismo payload que manda el panel de operario.
+    retirar_pico(db_session, tenant.id, user.id, stock_item_id=bobina.id)
+
+    db_session.expire_all()
+    db_session.refresh(linea)
+    db_session.refresh(bobina)
+    assert bobina.ubicacion == "Retales"
+    assert linea.active_coil_id is None, (
+        "la bobina está en Retales pero la línea sigue apuntándola como montada "
+        f"(active_coil_id={linea.active_coil_id})"
+    )
+
+
+
 # ── H5: link_coil no es atómico (commit dentro de unlink_coil) ────────────
 
 
