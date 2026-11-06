@@ -639,6 +639,9 @@ def simular_tick(
         if linea.estado == "completed" and linea.active_coil_id is not None:
             soltar_bobina(linea, orden, "línea terminada")
 
+    # Las órdenes que se cierran en este tick se reponen ya: la planta nunca se queda corta
+    db.commit()
+    acciones += _reponer_ordenes(db, tenant.id, rng)
     return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
 
 
@@ -659,6 +662,28 @@ MAX_DIAS_RELLENO = 7
 MAX_PASOS_RELLENO = 200
 
 _ultimo_relleno: datetime | None = None
+
+
+def _planta_sin_historia(db: Session, tenant_id) -> bool:
+    """True si la planta nueva (seed_planta) existe pero todavía nadie ha producido en ella."""
+    from app.services.seed_planta import OPERARIOS
+
+    puestos = db.scalar(
+        select(func.count()).select_from(Workstation).where(
+            Workstation.tenant_id == tenant_id,
+            Workstation.is_active.is_(True),
+            Workstation.code.in_(list(OPERARIOS)),
+        )
+    )
+    if not puestos:
+        return False
+    con_registros = db.scalar(
+        select(func.count())
+        .select_from(ProductionLog)
+        .join(OrderLine, OrderLine.id == ProductionLog.line_id)
+        .where(ProductionLog.tenant_id == tenant_id, OrderLine.workstation_id.in_(list(OPERARIOS)))
+    )
+    return not con_registros
 
 
 def rellenar_hueco(
@@ -690,10 +715,14 @@ def rellenar_hueco(
             ProductionLog.tenant_id == tenant.id, ProductionLog.action == "produce"
         )
     )
-    if ultimo is not None:
-        desde = max(desde, _aware(ultimo))
-    if _ultimo_relleno is not None:
-        desde = max(desde, _ultimo_relleno)
+    if _planta_sin_historia(db, tenant.id):
+        # Puestos nuevos aún sin ningún registro: se les da la semana de producción entera
+        pass
+    else:
+        if ultimo is not None:
+            desde = max(desde, _aware(ultimo))
+        if _ultimo_relleno is not None:
+            desde = max(desde, _ultimo_relleno)
 
     pasos = 0
     acciones: list[str] = []

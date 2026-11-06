@@ -42,8 +42,8 @@ def test_ocho_puestos_activos_y_los_antiguos_desactivados(db_session):
     activos = {c for c, w in puestos.items() if w.is_active}
     assert activos == {p[0] for p in PUESTOS_PLANTA}
     assert len(activos) == 8
-    assert puestos["PERF-1"].name == "Perfiladora 1"
-    assert puestos["PLEG-1"].name == "Plegadora CNC"
+    assert puestos["PERF-313"].name.startswith("Perfiladora 313")
+    assert puestos["PLEG-220"].name == "Plegadora PL-220"
     for code in PUESTOS_ANTIGUOS:
         if code in puestos:
             assert puestos[code].is_active is False  # se desactivan, nunca se borran
@@ -53,7 +53,7 @@ def test_tres_operarios_distintos_por_puesto_y_es_idempotente(db_session):
     tenant = _planta(db_session)
     antes = db_session.scalars(select(User).where(User.role == "operator")).all()
     segunda = asegurar_planta_realista(db_session, tenant.id)
-    assert segunda == {"puestos": 0, "operarios": 0, "desactivados": 0}
+    assert segunda == {"puestos": 0, "operarios": 0, "desactivados": 0, "ordenes_cerradas": 0}
     nombres = [n for ternas in OPERARIOS.values() for n in ternas]
     assert len(nombres) == 24 == len(set(nombres))
     assert all(len(t) == 3 for t in OPERARIOS.values())
@@ -89,3 +89,28 @@ def test_el_simulador_registra_a_nombre_del_operario_del_turno(db_session, monke
     for lg, puesto in nuevos:
         ts = lg.timestamp if lg.timestamp.tzinfo else lg.timestamp.replace(tzinfo=UTC)
         assert usuarios[lg.operator_id].email == email_operario(puesto, turno_de(ts))
+
+
+def test_la_planta_nueva_recibe_la_semana_de_historia_con_nombres_reales(db_session, monkeypatch):
+    monkeypatch.setattr(simulador, "_ultimo_relleno", None)
+    tenant = _planta(db_session)
+    ahora = datetime(2030, 1, 16, 12, tzinfo=MADRID)
+    primera = simulador.rellenar_hueco(db_session, ahora, random.Random(5))
+    assert primera["pasos"] > 0
+    filas = db_session.execute(
+        select(OrderLine.workstation_id, User.name)
+        .select_from(ProductionLog)
+        .join(OrderLine, OrderLine.id == ProductionLog.line_id)
+        .join(User, User.id == ProductionLog.operator_id)
+        .where(ProductionLog.tenant_id == tenant.id)
+    ).all()
+    assert {p for p, _ in filas} >= {"PERF-313", "LASER-3015", "ROBOT-1"}
+    assert not any("Demo" in n for _, n in filas)
+    # una segunda llamada seguida no repite la historia
+    assert simulador.rellenar_hueco(db_session, ahora, random.Random(5))["pasos"] == 0
+
+
+def test_ningun_usuario_conserva_nombre_de_demo(db_session):
+    _planta(db_session)
+    nombres = [u.name for u in db_session.scalars(select(User))]
+    assert not [n for n in nombres if "Demo" in n]
