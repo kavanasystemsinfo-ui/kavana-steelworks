@@ -64,7 +64,7 @@ def receive_coil(
         user_id = _system_user(db, tenant_id)
 
     material = db.get(Material, material_id)
-    if material is None:
+    if material is None or material.tenant_id != tenant_id:
         raise ValueError(f"Material {material_id} no existe")
 
     # Auto-rellenado (Fase 0 UX): sin medidas explícitas se toman las del
@@ -172,7 +172,7 @@ def move_coil(
     indica la ubicación nueva (Kardex de movimientos).
     """
     bobina = db.get(StockItem, stock_item_id)
-    if bobina is None:
+    if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError(f"Bobina {stock_item_id} no existe")
 
     ubicacion_anterior = bobina.ubicacion

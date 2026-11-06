@@ -38,7 +38,8 @@ def get_current_user(
 
 
 class ReceiveCoilRequest(BaseModel):
-    tenant_id: uuid.UUID
+    # Obsoleto: se ignora. El tenant sale siempre del token del usuario.
+    tenant_id: uuid.UUID | None = None
     material_id: uuid.UUID
     lote: str = Field(max_length=255)
     coil_id: str | None = Field(default=None, max_length=255)
@@ -78,7 +79,7 @@ def receive(
     try:
         bobina = receiving_service.receive_coil(
             db,
-            body.tenant_id,
+            current_user.tenant_id,
             user_id=current_user.id,
             material_id=body.material_id,
             lote=body.lote,
@@ -139,7 +140,14 @@ def list_materials(
     current_user: Annotated[User, Depends(get_current_user)] = None,
 ):
     """Lista materiales activos del tenant (para el formulario de recepción)."""
-    return db.query(Material).filter(Material.is_active == True).all()  # noqa: E712
+    return (
+        db.query(Material)
+        .filter(
+            Material.tenant_id == current_user.tenant_id,
+            Material.is_active == True,  # noqa: E712
+        )
+        .all()
+    )
 
 
 class PicoSugerencia(BaseModel):
@@ -169,6 +177,7 @@ def sugerencias_picos(
     items = (
         db.query(StockItem)
         .filter(
+            StockItem.tenant_id == current_user.tenant_id,
             StockItem.estado.in_(["pico", "retal"]),
             StockItem.ubicacion == "Retales",  # solo picos retirados al almacén
         )
@@ -530,4 +539,10 @@ def list_stock(
     """Lista bobinas (para el panel de Materias Primas)."""
     from app.models import StockItem
 
-    return db.query(StockItem).order_by(StockItem.fecha_entrada.desc()).limit(100).all()
+    return (
+        db.query(StockItem)
+        .filter(StockItem.tenant_id == current_user.tenant_id)
+        .order_by(StockItem.fecha_entrada.desc())
+        .limit(100)
+        .all()
+    )
