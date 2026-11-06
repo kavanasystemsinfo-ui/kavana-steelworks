@@ -60,7 +60,12 @@ def medir_bobina(
         raise ValueError("Bobina no encontrada")
     orden = db.get(Order, order_id)
     linea = db.get(OrderLine, line_id)
-    if orden is None or linea is None or linea.order_id != orden.id:
+    if (
+        orden is None
+        or orden.tenant_id != tenant_id
+        or linea is None
+        or linea.order_id != orden.id
+    ):
         raise ValueError("Línea no encontrada para la orden")
     if linea.active_coil_id != bobina.id:
         raise ValueError("La bobina no está vinculada a esta línea")

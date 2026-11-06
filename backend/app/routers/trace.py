@@ -67,10 +67,10 @@ def get_order_trace(
     from app.services.traceability import get_order_trace as trace_service
 
     order = db.get(Order, order_id)
-    if order is None:
+    if order is None or order.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    logs = trace_service(db, order.tenant_id, order_id)
+    logs = trace_service(db, current_user.tenant_id, order_id)
     return [
         TraceEventOut(
             id=log.id,
