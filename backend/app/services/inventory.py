@@ -114,6 +114,9 @@ def _elegibles_fifo(
             sa_func.upper(sa_func.replace(StockItem.ubicacion, " ", "")) == normalized
         )
 
+    # Bloqueo de filas (PostgreSQL): dos puestos que consumen a la vez la misma
+    # bobina se serializan en vez de pisarse el saldo. SQLite lo ignora.
+    stmt = stmt.with_for_update()
     return list(db.scalars(stmt))
 
 
@@ -133,8 +136,13 @@ def consume_stock_fifo(
     calculation_method: str | None = None,
     consumo_tipo: str = "automatico",
     meters_per_piece: Decimal | float | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     """Consume cantidad_requerida aplicando cascada FIFO.
+
+    commit=False deja el consumo pendiente en la sesión del llamador (flush,
+    sin commit) para que consumo y registro de producción se confirmen juntos
+    en una sola transacción. Si lanza ValueError, deja las bobinas como estaban.
 
     workstation_id + priority_stock_item_id activan el modo auditoría
     (burbuja de vinculación): solo las bobinas vinculadas a la orden y la
@@ -160,6 +168,8 @@ def consume_stock_fifo(
     )
     if not elegibles:
         raise ValueError("Sin stock disponible para el material")
+    # Estado original por si hay que deshacer el descuento en memoria
+    originales = [(b, b.cantidad_disponible, b.estado, b.ubicacion) for b in elegibles]
 
     # JIT Move: si la bobina prioritaria está en otro puesto, se mueve al actual
     # (spec 01, sección 3.2 punto 1: "JIT Move para la bobina actual")
@@ -220,6 +230,10 @@ def consume_stock_fifo(
             restante = Decimal("0")
 
     if restante > 0:
+        for b, cant, estado, ubic in originales:
+            b.cantidad_disponible = cant
+            b.estado = estado
+            b.ubicacion = ubic
         raise ValueError(f"Stock insuficiente: faltan {restante} kg de material")
 
     # Registrar consumos en material_consumos (auditoría / roll-up)
@@ -268,7 +282,10 @@ def consume_stock_fifo(
     if material is not None:
         material.stock_current = max(material.stock_current - requerida, Decimal("0"))
 
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return {
         "consumos": consumos,
         "coste_real_total": coste_total,
@@ -350,23 +367,25 @@ def create_retal(
     from app.models import MaterialConsumo, MaterialTransaction, Order, OrderLine
     from app.services.coil_math import peso_desde_radio_mm
 
+    if tenant_id is None:
+        raise ValueError("tenant_id es requerido")
     bobina = db.get(StockItem, stock_item_id)
-    if bobina is None:
+    if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError("Bobina no encontrada")
 
-    if tenant_id is None:
-        tenant_id = bobina.tenant_id
     if user_id is None:
         from app.services.receiving import _system_user
 
         user_id = _system_user(db, tenant_id)
 
     order = db.get(Order, order_id)
-    if order is None:
+    if order is None or order.tenant_id != tenant_id:
         raise ValueError(f"Orden {order_id} no existe")
     linea = db.get(OrderLine, line_id)
     if linea is None or linea.order_id != order.id:
         raise ValueError("Línea no encontrada para la orden")
+    if linea.active_coil_id != bobina.id:
+        raise ValueError("La bobina no está vinculada a esa línea")
 
     # Fórmula v2: radio medido → kg restantes (densidad calibrada del material)
     densidad = (
@@ -511,14 +530,14 @@ def retirar_pico(
     """
     from decimal import Decimal
 
-    from app.models import MaterialTransaction, OrderLine
-
-    bobina = db.get(StockItem, stock_item_id)
-    if bobina is None:
-        raise ValueError("Bobina no encontrada")
+    from app.models import MaterialTransaction, Order, OrderLine
 
     if tenant_id is None:
-        tenant_id = bobina.tenant_id
+        raise ValueError("tenant_id es requerido")
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None or bobina.tenant_id != tenant_id:
+        raise ValueError("Bobina no encontrada")
+
     if user_id is None:
         from app.services.receiving import _system_user
 
@@ -532,6 +551,9 @@ def retirar_pico(
 
     # Si sigue vinculada a una línea activa, desvincular y reembolsar
     if order_id and line_id:
+        orden = db.get(Order, order_id)
+        if orden is None or orden.tenant_id != tenant_id:
+            raise ValueError(f"Orden {order_id} no existe")
         linea = db.get(OrderLine, line_id)
         if linea is not None and linea.order_id == order_id:
             if linea.active_coil_id == bobina.id:

@@ -308,7 +308,7 @@ def test_picos_solo_almacen_no_puesto(db_session, tenant, user):
     )
 
     # Antes de retirar: el pico está en el puesto (LINEA-1) → NO se sugiere
-    sugeridos = sugerencias_picos(db_session)
+    sugeridos = sugerencias_picos(db_session, user)
     assert len(sugeridos) == 0
 
     retirar_pico(
@@ -321,7 +321,7 @@ def test_picos_solo_almacen_no_puesto(db_session, tenant, user):
     )
 
     # Tras retirar: está en 'Retales' → se sugiere
-    sugeridos = sugerencias_picos(db_session)
+    sugeridos = sugerencias_picos(db_session, user)
     assert len(sugeridos) == 1
     assert sugeridos[0].stock_item_id == bobina.id
     assert sugeridos[0].ubicacion == "Retales"

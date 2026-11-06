@@ -179,8 +179,8 @@ def record_production(
         )
 
         # 4b'. GUARDIA DE SEGURIDAD (modo auditoría): teórico vs real vinculado.
-        # Se evalúa ANTES de descontar stock (consume_stock_fifo hace commit
-        # interno; un bloqueo posterior dejaría un descuento huérfano).
+        # Se evalúa ANTES de descontar stock (consume_stock_fifo no
+        # confirma por su cuenta: commit=False, un único commit final).
         if modo_auditoria and qty > 0:
             kg_per_unit = kg_por_pieza
             if kg_per_unit == 0 and linea.target_material_qty:
@@ -216,6 +216,7 @@ def record_production(
                     calculation_method=calculation_method,
                     consumo_tipo="auto_audit" if modo_auditoria else "automatico",
                     meters_per_piece=linea.meters_per_piece,
+                    commit=False,  # consumo y producción se confirman juntos
                 )
                 material_consumo_ids = [c["stock_item_id"] for c in resultado["consumos"]]
             except ValueError as exc:
