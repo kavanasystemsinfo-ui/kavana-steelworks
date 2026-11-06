@@ -56,6 +56,20 @@ def iniciar_parada(
         raise ValueError(f"Motivo de parada no válido: {motivo}")
     if parada_abierta(db, user_id) is not None:
         raise ValueError("Ya tienes una parada en curso: vuelve a producir antes de abrir otra")
+    if order_id is not None or line_id is not None:
+        from app.models import Order, OrderLine
+
+        orden = db.get(Order, order_id) if order_id is not None else None
+        if order_id is not None and (orden is None or orden.tenant_id != tenant_id):
+            raise ValueError("Orden no encontrada")
+        if line_id is not None:
+            linea = db.get(OrderLine, line_id)
+            if linea is None or (orden is not None and linea.order_id != orden.id):
+                raise ValueError("Línea no encontrada")
+            if orden is None:
+                duena = db.get(Order, linea.order_id)
+                if duena is None or duena.tenant_id != tenant_id:
+                    raise ValueError("Línea no encontrada")
     p = Parada(
         tenant_id=tenant_id,
         puesto=puesto,

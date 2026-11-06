@@ -131,6 +131,11 @@ def registrar_autocontrol(
     modelo = db.get(ManufacturingModel, manufacturing_model_id)
     if modelo is None or modelo.tenant_id != tenant_id:
         raise ValueError("Plantilla de calidad no encontrada")
+    from app.models import Order
+
+    orden = db.get(Order, order_id)
+    if orden is None or orden.tenant_id != tenant_id:
+        raise ValueError("Orden no encontrada")
 
     overrides = {}
     largo = _resolver_largo_orden(db, order_id, workstation_id)
