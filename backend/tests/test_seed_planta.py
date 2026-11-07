@@ -53,7 +53,10 @@ def test_tres_operarios_distintos_por_puesto_y_es_idempotente(db_session):
     tenant = _planta(db_session)
     antes = db_session.scalars(select(User).where(User.role == "operator")).all()
     segunda = asegurar_planta_realista(db_session, tenant.id)
-    assert segunda == {"puestos": 0, "operarios": 0, "desactivados": 0, "ordenes_cerradas": 0}
+    assert segunda == {
+        "puestos": 0, "operarios": 0, "desactivados": 0, "ordenes_cerradas": 0,
+        "bobinas_reubicadas": 0,
+    }
     nombres = [n for ternas in OPERARIOS.values() for n in ternas]
     assert len(nombres) == 24 == len(set(nombres))
     assert all(len(t) == 3 for t in OPERARIOS.values())

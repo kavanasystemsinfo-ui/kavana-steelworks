@@ -38,6 +38,7 @@ mismos servicios que un operario, así que stock, kardex y costes cuadran.
 import asyncio
 import logging
 import random
+import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
@@ -139,7 +140,8 @@ def _reponer_bobina(db: Session, tenant_id, material_id, user_id) -> StockItem |
     )
     if ultima is None:
         return None
-    marca = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    # Sufijo aleatorio: dos reposiciones en el mismo segundo no pueden repetir el código
+    marca = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
     return receive_coil(
         db, tenant_id, user_id,
         material_id=material_id,

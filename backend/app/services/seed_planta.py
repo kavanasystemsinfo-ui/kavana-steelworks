@@ -168,7 +168,27 @@ def asegurar_planta_realista(db: Session, tenant_id) -> dict:
             cuenta.name = nombre
     db.flush()
     cambios["ordenes_cerradas"] = _cerrar_ordenes_de_puestos_antiguos(db, tenant_id)
+    cambios["bobinas_reubicadas"] = _reubicar_bobinas_de_puestos_antiguos(db, tenant_id)
     return cambios
+
+
+def _reubicar_bobinas_de_puestos_antiguos(db: Session, tenant_id) -> int:
+    """Las bobinas libres que quedaron en un puesto desactivado vuelven al almacén
+    (así no salen con una ubicación que ya no existe). Las montadas en una línea no se tocan."""
+    from app.models import OrderLine, StockItem
+
+    montadas = select(OrderLine.active_coil_id).where(OrderLine.active_coil_id.is_not(None))
+    bobinas = db.scalars(
+        select(StockItem).where(
+            StockItem.tenant_id == tenant_id,
+            StockItem.ubicacion.in_(PUESTOS_ANTIGUOS),
+            StockItem.id.not_in(montadas),
+        )
+    ).all()
+    for b in bobinas:
+        b.ubicacion = "ALMACEN"
+    db.flush()
+    return len(bobinas)
 
 
 # Recetas que recorren los 8 puestos (como RECETAS_FLUJO, con los puestos nuevos)
