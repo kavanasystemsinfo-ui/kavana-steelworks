@@ -214,7 +214,8 @@ def list_available_orders(
 ):
     """Órdenes disponibles para el panel del operario (port de manufacturing).
 
-    El operario solo ve las órdenes draft/active de su estación de trabajo.
+    El operario solo ve las órdenes draft/active de su estación de trabajo
+    cuya línea en ese puesto NO esté completada.
     Sin parámetro usa default_workstation_code del usuario; con
     ?workstation=CODE (flujo legacy de selección de puesto) filtra por ese
     puesto, validando que exista en el tenant.
@@ -248,6 +249,7 @@ def list_available_orders(
             Order.tenant_id == current_user.tenant_id,
             Order.estado.in_(("active", "draft")),
             OrderLine.workstation_id == ws_code,
+            OrderLine.estado != "completed",
         )
         .order_by(Order.created_at.desc())
         .limit(LIMITE_ORDENES)

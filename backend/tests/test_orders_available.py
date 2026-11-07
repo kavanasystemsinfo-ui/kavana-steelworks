@@ -134,3 +134,30 @@ def test_available_sin_estacion_devuelve_vacio(db_session, tenant):
 
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_available_excluye_linea_completada_en_orden_activa(db_session, tenant):
+    """Una orden activa cuya línea en el puesto está completada no sale en available."""
+    o = make_order(db_session, tenant, numero="OP-AV-PARTIAL")
+    # Línea 1 en LINEA-1, completada
+    linea1 = make_order_line(db_session, o, workstation="LINEA-1", linea_numero=1)
+    linea1.estado = "completed"
+    # Línea 2 en LINEA-2, pendiente
+    make_order_line(db_session, o, workstation="LINEA-2", linea_numero=2)
+    db_session.commit()
+
+    operario = make_user(db_session, tenant, email="op-avail5@test.local", role="operator")
+    operario.default_workstation_code = "LINEA-1"
+    db_session.commit()
+    db_session.refresh(operario)
+
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
+    try:
+        client = authed_client_for(db_session, operario)
+        r = client.get("/api/v1/orders/available")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code == 200, r.text
+    numeros = [item["numero"] for item in r.json()]
+    assert "OP-AV-PARTIAL" not in numeros, f"La orden no debería aparecer para LINEA-1: {numeros}"

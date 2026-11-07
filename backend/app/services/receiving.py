@@ -59,6 +59,7 @@ def receive_coil(
 
     Devuelve el StockItem creado. La bobina entra activa (entrada directa).
     Si user_id es None, el movimiento se atribuye al usuario 'system'.
+    Rechaza coil_id duplicado en el mismo tenant.
     """
     if user_id is None:
         user_id = _system_user(db, tenant_id)
@@ -66,6 +67,17 @@ def receive_coil(
     material = db.get(Material, material_id)
     if material is None or material.tenant_id != tenant_id:
         raise ValueError(f"Material {material_id} no existe")
+
+    # Rechazar coil_id duplicado en el tenant
+    if coil_id:
+        existe = db.scalar(
+            select(StockItem).where(
+                StockItem.tenant_id == tenant_id,
+                StockItem.coil_id == coil_id,
+            )
+        )
+        if existe:
+            raise ValueError(f"coil_id {coil_id} ya existe en el tenant")
 
     # Auto-rellenado (Fase 0 UX): sin medidas explícitas se toman las del
     # material (fleje slit: ancho y espesor fijados por el proveedor).

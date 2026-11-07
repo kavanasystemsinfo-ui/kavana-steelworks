@@ -140,11 +140,14 @@ def _reponer_bobina(db: Session, tenant_id, material_id, user_id) -> StockItem |
     if ultima is None:
         return None
     marca = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    # Sufijo aleatorio de 4 dígitos hex para evitar colisiones en el mismo segundo
+    sufijo = random.Random().randint(0, 0xFFFF)
+    coil_id = f"SIM-{ultima.material.code}-{marca}-{sufijo:04x}"
     return receive_coil(
         db, tenant_id, user_id,
         material_id=material_id,
-        lote=f"SIM-{marca}",
-        coil_id=f"SIM-{ultima.material.code}-{marca}",
+        lote=f"SIM-{marca}-{sufijo:04x}",
+        coil_id=coil_id,
         peso=ultima.cantidad_inicial,
         width_mm=ultima.width_mm,
         thickness_mm=ultima.thickness_mm,

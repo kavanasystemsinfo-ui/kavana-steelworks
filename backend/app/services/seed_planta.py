@@ -168,7 +168,66 @@ def asegurar_planta_realista(db: Session, tenant_id) -> dict:
             cuenta.name = nombre
     db.flush()
     cambios["ordenes_cerradas"] = _cerrar_ordenes_de_puestos_antiguos(db, tenant_id)
+    cambios["bobinas_movidas_almacen"] = _mover_bobinas_puestos_antiguos_a_almacen(db, tenant_id)
     return cambios
+
+
+def _mover_bobinas_puestos_antiguos_a_almacen(db: Session, tenant_id) -> int:
+    """Mueve bobinas libres (no montadas en ninguna línea) que estén en puestos antiguos a ALMACEN.
+
+    Es idempotente: solo mueve las que no están ya en ALMACEN y no están montadas.
+    Usa move_coil del servicio de recepción para registrar el traslado en Kardex.
+    """
+    from app.models import OrderLine, StockItem, Workstation
+    from app.services.receiving import move_coil
+
+    # Códigos de puestos desactivados
+    inactivos = {
+        w.code
+        for w in db.scalars(
+            select(Workstation).where(
+                Workstation.tenant_id == tenant_id, Workstation.is_active.is_(False)
+            )
+        )
+    }
+    if not inactivos:
+        return 0
+
+    # Bobinas activas montadas en líneas (no se pueden mover)
+    montadas = {
+        ln.active_coil_id
+        for ln in db.scalars(
+            select(OrderLine).where(OrderLine.active_coil_id.is_not(None))
+        )
+    }
+
+    # Bobinas en ubicaciones de puestos antiguos que no están montadas
+    bobinas_a_mover = db.scalars(
+        select(StockItem).where(
+            StockItem.tenant_id == tenant_id,
+            StockItem.estado == "activo",
+            StockItem.ubicacion.in_(inactivos),
+            StockItem.id.not_in(montadas),
+        )
+    ).all()
+
+    if not bobinas_a_mover:
+        return 0
+
+    # Usuario system para el movimiento
+    from app.services.receiving import _system_user
+    user_id = _system_user(db, tenant_id)
+
+    movidas = 0
+    for bobina in bobinas_a_mover:
+        try:
+            move_coil(db, tenant_id, user_id, stock_item_id=bobina.id, nueva_ubicacion="ALMACEN")
+            movidas += 1
+        except ValueError:
+            db.rollback()
+            # Si falla una, seguimos con las demás
+            continue
+    return movidas
 
 
 # Recetas que recorren los 8 puestos (como RECETAS_FLUJO, con los puestos nuevos)

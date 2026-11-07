@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.routers import auth as auth_router
 from app.routers import stock as stock_router
-from tests.helpers import auth_headers, make_material
+from tests.helpers import auth_headers, make_material, make_stock_item
 
 
 def _override_get_db(db_session):
@@ -131,3 +131,59 @@ def test_receive_coil_sin_dimensiones_en_ninguna_parte_queda_none(db_session, te
 
     assert bobina.width_mm is None
     assert bobina.thickness_mm is None
+
+
+def test_receive_coil_rechaza_coil_id_duplicado(db_session, tenant, user):
+    """receive_coil debe rechazar un coil_id que ya existe en el tenant."""
+    from app.services.receiving import receive_coil
+
+    m = make_material(db_session, tenant, code="FLEJE-TEST")
+    # Primera bobina
+    bobina1 = receive_coil(
+        db_session,
+        tenant.id,
+        user.id,
+        material_id=m.id,
+        lote="L1",
+        peso=1000,
+        coil_id="COIL-DUPLICADO",
+    )
+    assert bobina1.coil_id == "COIL-DUPLICADO"
+
+    # Segunda bobina con el mismo coil_id debe fallar
+    try:
+        receive_coil(
+            db_session,
+            tenant.id,
+            user.id,
+            material_id=m.id,
+            lote="L2",
+            peso=1000,
+            coil_id="COIL-DUPLICADO",
+        )
+        assert False, "Debería haber lanzado ValueError"
+    except ValueError as e:
+        assert "ya existe en el tenant" in str(e)
+
+
+def test_reponer_bobina_genera_coil_id_unicos_en_mismo_segundo(db_session, tenant, user):
+    """Dos reposiciones en el mismo segundo deben generar coil_id distintos."""
+    from app.services.simulador import _reponer_bobina
+
+    m = make_material(db_session, tenant, code="FLEJE-TEST")
+    # Crear una bobina inicial para que _reponer_bobina tenga una "última"
+    bobina_inicial = make_stock_item(
+        db_session, tenant, m, cantidad=1000, lote="INICIAL", coil_id="COIL-INICIAL"
+    )
+    db_session.commit()
+
+    # Dos llamadas seguidas (mismo segundo)
+    bobina1 = _reponer_bobina(db_session, tenant.id, m.id, user.id)
+    bobina2 = _reponer_bobina(db_session, tenant.id, m.id, user.id)
+
+    assert bobina1 is not None
+    assert bobina2 is not None
+    assert bobina1.coil_id != bobina2.coil_id, f"coil_id duplicados: {bobina1.coil_id}"
+    # Ambos deben tener el patrón SIM-{material}-{timestamp}-{sufijo}
+    assert bobina1.coil_id.startswith(f"SIM-{m.code}-")
+    assert bobina2.coil_id.startswith(f"SIM-{m.code}-")
