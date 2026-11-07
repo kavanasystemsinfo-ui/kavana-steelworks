@@ -62,7 +62,9 @@ export function BobinasDisponibles({
               {b.material_code} · lote {b.lote}
               {b.ancho_mm ? ` · ${b.ancho_mm}x${b.espesor_mm ?? '?'} mm` : ''}
               {' · '}
-              {b.en_puesto ? 'ya en tu puesto' : b.estado === 'pico' ? 'pico / retal' : (b.ubicacion ?? 'sin ubicación')}
+              {b.en_puesto
+                ? 'ya en tu puesto'
+                : `${b.estado === 'pico' ? 'pico / retal · ' : ''}en ${b.ubicacion ?? 'sin ubicación'}`}
             </span>
           </span>
           <span className="shrink-0 text-right mono-data font-bold">

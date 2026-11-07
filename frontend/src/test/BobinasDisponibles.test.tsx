@@ -27,6 +27,22 @@ describe('Bobinas disponibles (sin saberse el código)', () => {
     expect(onElegir).toHaveBeenCalledWith(expect.objectContaining({ lote: 'VIEJA' }))
   })
 
+  it('una bobina de otro puesto dice dónde está, también si es un pico', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          bobina('PICO', { estado: 'pico', ubicacion: 'P-K300' }),
+          bobina('ALM', { ubicacion: 'ALMACEN' }),
+        ],
+      }),
+    )
+    render(<BobinasDisponibles lineId="L1" onElegir={vi.fn()} />)
+    expect(await screen.findByText(/pico \/ retal · en P-K300/i)).toBeInTheDocument()
+    expect(screen.getByText(/· en ALMACEN/i)).toBeInTheDocument()
+  })
+
   it('sin bobinas invita a registrarla a mano', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }))
     render(<BobinasDisponibles lineId="L1" onElegir={vi.fn()} />)
