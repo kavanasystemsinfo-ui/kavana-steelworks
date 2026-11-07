@@ -76,3 +76,30 @@ def test_h2_sesion_de_otra_empresa_da_404(db_session, tenant, user, otra):
     assert r.status_code == 404, (
         f"token de otra empresa leyó la sesión: HTTP {r.status_code} {r.text[:200]}"
     )
+
+def test_h1_foto_sin_token_devuelve_401_y_no_bytes(db_session, tenant, user):
+    """GET /photo sin token devuelve 401/403, sin bytes de la foto y content-type no image/*."""
+    from app.services.incidencia_uploads import adjuntar_foto, crear_sesion
+
+    sesion = crear_sesion(db_session, tenant_id=tenant.id, operario_id=user.id)
+    adjuntar_foto(db_session, session_id=sesion.session_id, buf=PNG_DEMO)
+
+    app.dependency_overrides[inc_router.get_db] = _override(db_session)
+    try:
+        anonimo = TestClient(app)  # sin Authorization
+        r = anonimo.get(f"/api/v1/incidencias/upload-session/{sesion.session_id}/photo")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert r.status_code in (401, 403), (
+        f"sin token devolvió {r.status_code}: {r.text[:200]}"
+    )
+    # El cuerpo NO debe contener los bytes de la foto
+    assert r.content != PNG_DEMO, "el cuerpo contiene los bytes de la foto"
+    assert len(r.content) == 0 or PNG_DEMO not in r.content, "foto filtrada en respuesta sin token"
+    # Content-Type no debe ser image/*
+    content_type = r.headers.get("content-type", "")
+    assert not content_type.startswith("image/"), (
+        f"content-type es image/* ({content_type}) sin token"
+    )
+
