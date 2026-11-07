@@ -86,7 +86,7 @@ def _elegibles_fifo(
             StockItem.material_id == material_id,
             StockItem.estado.in_(("activo", "pico")),
         )
-        .order_by(StockItem.fecha_entrada.asc())
+        .order_by(StockItem.fecha_entrada.asc(), StockItem.id.asc())
     )
 
     if priority_stock_item_id:
@@ -373,7 +373,8 @@ def create_retal(
 
     if tenant_id is None:
         raise ValueError("tenant_id es requerido")
-    bobina = db.get(StockItem, stock_item_id)
+    # FOR UPDATE: serializa con el FIFO de producción y otras mediciones
+    bobina = db.get(StockItem, stock_item_id, with_for_update=True)
     if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError("Bobina no encontrada")
 
@@ -536,11 +537,14 @@ def retirar_pico(
     """
     from decimal import Decimal
 
+    from sqlalchemy import select
+
     from app.models import MaterialTransaction, Order, OrderLine
 
     if tenant_id is None:
         raise ValueError("tenant_id es requerido")
-    bobina = db.get(StockItem, stock_item_id)
+    # FOR UPDATE: serializa con el FIFO de producción y otras mediciones
+    bobina = db.get(StockItem, stock_item_id, with_for_update=True)
     if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError("Bobina no encontrada")
 
@@ -567,6 +571,24 @@ def retirar_pico(
                 linea.real_cost = (linea.real_cost or Decimal("0")) - coste_reembolso
                 linea.active_coil_id = None
                 linea.active_coil_code = None
+        lineas_log = [(order_id, line_id)]
+    else:
+        # El panel del operario solo manda stock_item_id: localizar las líneas
+        # (del mismo tenant) que aún tienen esta bobina montada y desvincularlas
+        # con el mismo reembolso proporcional de unlink_coil, en esta transacción.
+        vinculadas = db.scalars(
+            select(OrderLine)
+            .join(Order, Order.id == OrderLine.order_id)
+            .where(OrderLine.active_coil_id == bobina.id, Order.tenant_id == tenant_id)
+        ).all()
+        lineas_log = []
+        for lin in list(vinculadas):
+            unlink_coil(
+                db, tenant_id, user_id,
+                stock_item_id=bobina.id, order_id=lin.order_id, line_id=lin.id,
+                commit=False,
+            )
+            lineas_log.append((lin.order_id, lin.id))
 
     # Devuelve al inventario como retal/pico sugerible
     bobina.estado = "pico"
@@ -591,14 +613,14 @@ def retirar_pico(
     db.refresh(bobina)
 
     # Trazabilidad ISO 9001 (spec 04): la línea deja de usar el material
-    if order_id and line_id:
+    for log_order_id, log_line_id in lineas_log:
         from app.services.traceability import log_event
 
         log_event(
             db,
             tenant_id=tenant_id,
-            order_id=order_id,
-            line_id=line_id,
+            order_id=log_order_id,
+            line_id=log_line_id,
             operator_id=user_id,
             action="finish",
             quantity=float(peso),
@@ -618,7 +640,20 @@ def retirar_pico(
     }
 
 
-def link_coil(
+def link_coil(db, tenant_id, user_id, **kwargs) -> dict:
+    """Vincula la bobina a la orden con cobro BULK por adelantado (spec 01 3.6).
+
+    Atómico: si algo falla a mitad (p. ej. tras desvincular de la orden
+    anterior en la misma máquina), se deshace toda la transacción.
+    """
+    try:
+        return _link_coil(db, tenant_id, user_id, **kwargs)
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _link_coil(
     db,
     tenant_id,
     user_id,
@@ -627,7 +662,6 @@ def link_coil(
     order_id,
     line_id,
 ) -> dict:
-    """Vincula la bobina a la orden con cobro BULK por adelantado (spec 01 3.6)."""
     from sqlalchemy import select
 
     from app.models import MaterialTransaction, Order, OrderLine, StockItem
@@ -673,6 +707,7 @@ def link_coil(
         unlink_coil(
             db, tenant_id, user_id,
             stock_item_id=bobina.id, order_id=otra.order_id, line_id=otra.id,
+            commit=False,
         )
         db.refresh(bobina)
         otra = None
@@ -771,6 +806,7 @@ def unlink_coil(
     stock_item_id,
     order_id,
     line_id,
+    commit: bool = True,
 ) -> dict:
     """Desvincula la bobina de la linea reembolsando solo lo no consumido.
 
@@ -784,12 +820,12 @@ def unlink_coil(
 
     from app.models import CoilLink, MaterialTransaction, Order, OrderLine, StockItem
 
-    bobina = db.get(StockItem, stock_item_id)
+    bobina = db.get(StockItem, stock_item_id, with_for_update=True)
     if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError("Bobina no encontrada")
 
     order = db.get(Order, order_id)
-    if order is None:
+    if order is None or order.tenant_id != tenant_id:
         raise ValueError(f"Orden {order_id} no existe")
 
     linea = db.get(OrderLine, line_id)
@@ -836,8 +872,11 @@ def unlink_coil(
     if burbuja is not None:
         burbuja.estado = "desvinculada"
 
-    db.commit()
-    db.refresh(linea)
+    if commit:
+        db.commit()
+        db.refresh(linea)
+    else:
+        db.flush()
     return {
         "success": True,
         "refunded_qty": float(restante),
