@@ -411,6 +411,14 @@ export interface OrderDetailOut {
   lines: OrderLineOut[]
 }
 
+export interface WorkstationModel {
+  id: string
+  code: string
+  name: string
+  material_id: string
+  material_code: string
+}
+
 export interface OrderLineIn {
   workstation_id: string
   total_quantity: number
@@ -958,6 +966,10 @@ export const api = {
 
   getQualityModels(): Promise<QualityModel[]> {
     return request('/quality/models')
+  },
+
+  getWorkstationModels(code: string): Promise<WorkstationModel[]> {
+    return request(`/quality/workstations/${encodeURIComponent(code)}/models`)
   },
 
   setPesoPiezaTerminada(modelId: string, kg: number | null): Promise<{ id: string; peso_pieza_terminada_kg: number | null }> {

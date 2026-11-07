@@ -18,6 +18,7 @@ import type {
   OrderLineIn,
   ProductOut,
   QualityModel,
+  WorkstationModel,
   QualityRecordOut,
   WorkstationOut,
 } from '../lib/api'
@@ -512,6 +513,8 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
   const [lines, setLines] = useState<LineDraft[]>([{ ...LINEA_VACIA }])
   const [workstations, setWorkstations] = useState<WorkstationOut[]>([])
   const [models, setModels] = useState<QualityModel[]>([])
+  // Cascada: modelos asignados a cada puesto (se piden al elegir el puesto)
+  const [modelosPuesto, setModelosPuesto] = useState<Record<string, WorkstationModel[]>>({})
   const [products, setProducts] = useState<ProductOut[]>([])
   const [materials, setMaterials] = useState<MaterialOut[]>([])
   const [detalle, setDetalle] = useState<OrderDetailOut | null>(null)
@@ -671,6 +674,31 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
     setLines((prev) => prev.map((ln, i) => (i === idx ? { ...ln, [campo]: valor } : ln)))
   }
 
+  // Elegir puesto desbloquea sus modelos y limpia lo que dependía del anterior
+  const cambiarPuesto = (idx: number, code: string) => {
+    setLines((prev) =>
+      prev.map((ln, i) =>
+        i === idx ? { ...ln, workstation_id: code, modelo_id: '', material_id: '' } : ln,
+      ),
+    )
+    if (code && !modelosPuesto[code]) {
+      api
+        .getWorkstationModels(code)
+        .then((ms) => setModelosPuesto((prev) => ({ ...prev, [code]: ms })))
+        .catch(() => setModelosPuesto((prev) => ({ ...prev, [code]: [] })))
+    }
+  }
+
+  // Elegir modelo fija solo su material en ese puesto
+  const cambiarModelo = (idx: number, modeloId: string) => {
+    const modelo = (modelosPuesto[lines[idx].workstation_id] ?? []).find((m) => m.id === modeloId)
+    setLines((prev) =>
+      prev.map((ln, i) =>
+        i === idx ? { ...ln, modelo_id: modeloId, material_id: modelo?.material_id ?? '' } : ln,
+      ),
+    )
+  }
+
   return (
     <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -756,7 +784,7 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                     required
                     className={selectCls}
                     value={ln.workstation_id}
-                    onChange={(e) => setLinea(idx, 'workstation_id', e.target.value)}
+                    onChange={(e) => cambiarPuesto(idx, e.target.value)}
                   >
                     <option value="">—</option>
                     {workstations.map((w) => (
@@ -771,10 +799,17 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                   <select
                     className={selectCls}
                     value={ln.modelo_id}
-                    onChange={(e) => setLinea(idx, 'modelo_id', e.target.value)}
+                    disabled={!ln.workstation_id}
+                    onChange={(e) => cambiarModelo(idx, e.target.value)}
                   >
-                    <option value="">—</option>
-                    {models.map((m) => (
+                    <option value="">
+                      {!ln.workstation_id
+                        ? 'Elige puesto'
+                        : (modelosPuesto[ln.workstation_id] ?? []).length === 0
+                          ? 'Sin modelos asignados'
+                          : '—'}
+                    </option>
+                    {(modelosPuesto[ln.workstation_id] ?? []).map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.code}
                       </option>
@@ -802,18 +837,9 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                   <span className="label-industrial text-[10px] text-kavana-text-dim">
                     Material
                   </span>
-                  <select
-                    className={selectCls}
-                    value={ln.material_id}
-                    onChange={(e) => setLinea(idx, 'material_id', e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.code}
-                      </option>
-                    ))}
-                  </select>
+                  <div className={`${selectCls} flex items-center mono-data`}>
+                    {(modelosPuesto[ln.workstation_id] ?? []).find((m) => m.id === ln.modelo_id)?.material_code ?? '—'}
+                  </div>
                 </label>
                 <label className="block">
                   <span className="label-industrial text-[10px] text-kavana-text-dim">Cant.</span>

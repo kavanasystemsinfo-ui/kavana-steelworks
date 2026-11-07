@@ -322,6 +322,49 @@ def set_model_materials(
     return {"actualizados": len(body)}
 
 
+@router.get("/workstations/{workstation_code}/models")
+def get_workstation_models(
+    workstation_code: str,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
+    """Modelos asignados a un puesto, cada uno con el material que gasta ahí.
+
+    Es el primer eslabón de la cascada: puesto -> modelos del puesto -> material."""
+    from sqlalchemy import select
+
+    from app.models import Material
+    from app.models.quality import ManufacturingModel, ModelWorkstationMaterial
+
+    filas = db.execute(
+        select(ManufacturingModel, Material)
+        .join(
+            ModelWorkstationMaterial,
+            ModelWorkstationMaterial.manufacturing_model_id == ManufacturingModel.id,
+        )
+        .join(Material, Material.id == ModelWorkstationMaterial.material_id)
+        .where(
+            ModelWorkstationMaterial.tenant_id == current_user.tenant_id,
+            ModelWorkstationMaterial.workstation_code == workstation_code,
+            ManufacturingModel.is_active.is_(True),
+        )
+        .order_by(ManufacturingModel.code)
+    ).all()
+    return [
+        {
+            "id": str(m.id),
+            "code": m.code,
+            "name": m.name,
+            "material_id": str(mat.id),
+            "material_code": mat.code,
+        }
+        for m, mat in filas
+    ]
+
+
 def _record_out(r) -> dict:
     """Serialización explícita (mismo patrón que trace.py)."""
     return {
