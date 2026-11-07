@@ -248,6 +248,8 @@ def list_available_orders(
             Order.tenant_id == current_user.tenant_id,
             Order.estado.in_(("active", "draft")),
             OrderLine.workstation_id == ws_code,
+            # Una línea ya completada en este puesto no hay que ofrecérsela al operario
+            OrderLine.estado.is_distinct_from("completed"),
         )
         .order_by(Order.created_at.desc())
         .limit(LIMITE_ORDENES)

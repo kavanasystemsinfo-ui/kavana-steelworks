@@ -78,11 +78,21 @@ def receive_coil(
     )
     costing_method = "real" if coste_real is not None else "standard"
 
+    coil_id_final = coil_id or f"COIL-{lote}"
+    # La identidad física de la bobina es su coil_id escaneable: no puede repetirse
+    repetida = db.scalar(
+        select(StockItem.id).where(
+            StockItem.tenant_id == tenant_id, StockItem.coil_id == coil_id_final
+        )
+    )
+    if repetida is not None:
+        raise ValueError(f"Ya existe una bobina con el código {coil_id_final}")
+
     bobina = StockItem(
         tenant_id=tenant_id,
         material_id=material_id,
         lote=lote,
-        coil_id=coil_id or f"COIL-{lote}",
+        coil_id=coil_id_final,
         cantidad_inicial=peso_dec,
         cantidad_disponible=peso_dec,
         unit=material.unit or "kg",
