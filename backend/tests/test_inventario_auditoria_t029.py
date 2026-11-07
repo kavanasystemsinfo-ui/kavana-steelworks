@@ -130,8 +130,8 @@ def test_h5_link_coil_fallo_tras_unlink_rollback_completo(db_session, tenant, us
     con una sesión nueva que la orden anterior sigue con active_coil_id = bobina,
     la nueva no la tiene, y no hay reembolso (devolucion) ni movimiento confirmado.
     """
-    from app.services import inventory
     from app.models import MaterialTransaction
+    from app.services import inventory
 
     material = make_material(db_session, tenant, code="M-ROLLBACK", cost=2.0)
     bobina = make_stock_item(db_session, tenant, material, cantidad=800, lote="L-ROLL")
