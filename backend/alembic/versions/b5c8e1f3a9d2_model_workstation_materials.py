@@ -1,7 +1,7 @@
 """model_workstation_materials: material de cada modelo en cada puesto
 
 Revision ID: b5c8e1f3a9d2
-Revises: a7f2c5e9d4b1
+Revises: c9f1a4d7e2b6
 Create Date: 2026-11-07 18:00:00.000000
 
 Solo crea una tabla nueva (no toca datos existentes). El material de una línea
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b5c8e1f3a9d2"
-down_revision: Union[str, Sequence[str], None] = "a7f2c5e9d4b1"
+down_revision: Union[str, Sequence[str], None] = "c9f1a4d7e2b6"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
