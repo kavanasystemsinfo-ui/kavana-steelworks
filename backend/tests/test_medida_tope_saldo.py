@@ -89,15 +89,15 @@ def test_h4_medida_dentro_de_tolerancia_se_acepta(db_session, tenant, user, monk
     con ValueError, tanto en create_retal como en medir_bobina.
     La tolerancia es TOLERANCIA_EXCESO_KG = 0.01 kg.
     """
-    from app.services import coil_math
-    from app.services.inventory import create_retal, link_coil
+    from app.services.inventory import create_retal
     from app.services.medicion import medir_bobina
     from tests.helpers import make_material, make_order, make_order_line, make_stock_item
 
     def _montada_con_codigo(db_session, tenant, codigo):
         material = make_material(db_session, tenant, code=codigo, cost=2.0)
         bobina = make_stock_item(
-            db_session, tenant, material, cantidad=1000.0, lote=f"L-{codigo}", ancho=122, espesor=0.5
+            db_session, tenant, material, cantidad=1000.0,
+            lote=f"L-{codigo}", ancho=122, espesor=0.5
         )
         orden = make_order(db_session, tenant, numero=f"OP-{codigo}")
         linea = make_order_line(db_session, orden, workstation="LINEA-1")
