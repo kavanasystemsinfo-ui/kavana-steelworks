@@ -124,3 +124,74 @@ def test_h5_link_coil_no_deja_la_bobina_suelta_si_falla(db_session, tenant, user
         "commit parcial: la bobina quedó desvinculada de la orden A y no llegó "
         "a vincularse a la B"
     )
+
+def test_h5_link_coil_fallo_tras_unlink_rollback_completo(db_session, tenant, user, monkeypatch):
+    """Fuerza una excepción después de unlink_coil dentro de link_coil y comprueba
+    con una sesión nueva que la orden anterior sigue con active_coil_id = bobina,
+    la nueva no la tiene, y no hay reembolso (devolucion) ni movimiento confirmado.
+    """
+    from app.services import inventory
+    from app.models import MaterialTransaction
+
+    material = make_material(db_session, tenant, code="M-ROLLBACK", cost=2.0)
+    bobina = make_stock_item(db_session, tenant, material, cantidad=800, lote="L-ROLL")
+    orden_a = make_order(db_session, tenant, numero="OP-ROLL-A")
+    linea_a = make_order_line(db_session, orden_a, workstation="LINEA-1")
+    orden_b = make_order(db_session, tenant, numero="OP-ROLL-B")
+    linea_b = make_order_line(db_session, orden_b, workstation="LINEA-1")
+
+    # Vincular a la orden A
+    inventory.link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=bobina.id, order_id=orden_a.id, line_id=linea_a.id,
+    )
+
+    # Forzar fallo en la validación de material al vincular a la orden B
+    # (esto ocurre DESPUÉS de unlink_coil con commit=False dentro de link_coil)
+    original_validar = inventory.validar_material_compatible
+    def _falla_despues_unlink(db, bob, linea):
+        # Solo falla en la segunda llamada (la de la orden B)
+        if linea.id == linea_b.id:
+            raise RuntimeError("fallo simulado tras unlink_coil")
+        return original_validar(db, bob, linea)
+
+    monkeypatch.setattr(inventory, "validar_material_compatible", _falla_despues_unlink)
+
+    with pytest.raises(RuntimeError, match="fallo simulado tras unlink_coil"):
+        inventory.link_coil(
+            db_session, tenant.id, user.id,
+            stock_item_id=bobina.id, order_id=orden_b.id, line_id=linea_b.id,
+        )
+
+    # IMPORTANTE: usar expire_all + refresh para ver el estado real en BD tras rollback
+    db_session.expire_all()
+    db_session.refresh(linea_a)
+    db_session.refresh(linea_b)
+    db_session.refresh(bobina)
+
+    # Verificaciones:
+    # 1. La orden anterior (A) SIGUE con la bobina montada
+    assert linea_a.active_coil_id == bobina.id, (
+        f"Rollback falló: orden A perdió la bobina (active_coil_id={linea_a.active_coil_id})"
+    )
+
+    # 2. La orden nueva (B) NO tiene la bobina
+    assert linea_b.active_coil_id is None, (
+        f"Rollback falló: orden B tiene la bobina (active_coil_id={linea_b.active_coil_id})"
+    )
+
+    # 3. No hay reembolso (devolucion) confirmado - el unlink_coil(commit=False) crea
+    # una MaterialTransaction tipo "devolucion" que debería haberse deshecho en el rollback
+    devoluciones = db_session.query(MaterialTransaction).filter(
+        MaterialTransaction.stock_item_id == bobina.id,
+        MaterialTransaction.tipo == "devolucion",
+    ).all()
+    assert len(devoluciones) == 0, (
+        f"Hay {len(devoluciones)} transacciones de devolucion que no deberían existir tras rollback"
+    )
+
+    # 4. La bobina sigue en el puesto (no en Retales)
+    assert bobina.ubicacion != "Retales", (
+        f"La bobina se movió a Retales ({bobina.ubicacion}) cuando debería seguir en el puesto"
+    )
+
