@@ -13,6 +13,7 @@ Contrato (la visión de Jorge, corregida 2026-08-14):
 """
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -157,31 +158,33 @@ def test_fin_bobina_registra_merma_en_kardex_y_consumo(db_session, tenant, user)
     assert float(ajustes[0].cantidad_nueva) == pytest.approx(peso_esperado, abs=0.01)
 
 
-def test_fin_bobina_sin_merma_no_crea_consumo(db_session, tenant, user):
-    """Si la medición da MÁS kg que el sistema (sobrante físico): sin merma.
+def test_fin_bobina_con_medida_mayor_que_el_saldo_se_rechaza(db_session, tenant, user):
+    """Si la medición da MÁS kg que el sistema, se rechaza (Jorge, 06-11, T-033 H4).
 
-    El sobrante nunca es merma (visión Jorge): es material FIFO que queda.
+    Una bobina no gana kilos: el operario debe volver a medir o repasar la producción.
     """
     from app.services.inventory import create_retal
 
     material, bobina, order, line = _setup(db_session, tenant, user, peso=800.0)
 
     # radio 250 mm con ancho 122 → 565,12 kg > 500 que cree el sistema
-    resultado = create_retal(
-        db_session,
-        tenant.id,
-        user.id,
-        stock_item_id=bobina.id,
-        radio_mm=250.0,
-        order_id=order.id,
-        line_id=line.id,
-    )
+    with pytest.raises(ValueError, match="vuelve a medir"):
+        create_retal(
+            db_session,
+            tenant.id,
+            user.id,
+            stock_item_id=bobina.id,
+            radio_mm=250.0,
+            order_id=order.id,
+            line_id=line.id,
+        )
 
-    assert resultado["merma_kg"] == 0
+    db_session.refresh(bobina)
+    assert bobina.cantidad_disponible == Decimal("500")
     merma = (
         db_session.query(MaterialConsumo).filter(MaterialConsumo.stock_item_id == bobina.id).all()
     )
-    # Solo el consumo FIFO previo (300 kg), no hay consumo de merma
+    # Solo el consumo FIFO previo (300 kg), nada nuevo
     assert len(merma) == 1
 
 

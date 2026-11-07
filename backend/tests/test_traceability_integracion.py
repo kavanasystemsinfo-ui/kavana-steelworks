@@ -139,7 +139,7 @@ def test_fin_bobina_escribe_log_scrap(db_session, tenant, user):
         tenant.id,
         user.id,
         stock_item_id=bobina.id,
-        radio_mm=250,
+        radio_mm=30,
         order_id=orden.id,
         line_id=linea.id,
     )
@@ -148,5 +148,5 @@ def test_fin_bobina_escribe_log_scrap(db_session, tenant, user):
     logs = db_session.query(ProductionLog).filter_by(order_id=orden.id).all()
     scrap = next(e for e in logs if e.action == "scrap")
     assert scrap.metadata_["reason"] == "fin_bobina"
-    assert scrap.metadata_["radio_mm"] == 250
+    assert scrap.metadata_["radio_mm"] == 30
     assert float(scrap.quantity) == float(res["merma_kg"])

@@ -52,7 +52,11 @@ def medir_bobina(
     momento: datetime | None = None,
 ) -> dict:
     """Mide el radio, apunta la chatarra del operario y deja la bobina montada."""
-    from app.services.coil_math import peso_desde_radio_mm
+    from app.services.coil_math import (
+        medida_supera_saldo,
+        mensaje_medida_supera_saldo,
+        peso_desde_radio_mm,
+    )
     from app.services.traceability import log_event
 
     # FOR UPDATE: una medición no puede pisar el descuento FIFO concurrente
@@ -81,6 +85,8 @@ def medir_bobina(
     )
     real = Decimal(str(peso))
     sistema = bobina.cantidad_disponible
+    if medida_supera_saldo(real, sistema):
+        raise ValueError(mensaje_medida_supera_saldo(real, sistema))
     chatarra = max(Decimal("0"), sistema - real)
     coste = chatarra * bobina.coste_por_unidad
 
@@ -176,7 +182,12 @@ def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> 
     densidad) y cuántos kg pesa un milímetro de carne a ese tamaño: con eso la
     pantalla distingue una merma real de un error del metro.
     """
-    from app.services.coil_math import DIAMETRO_INTERIOR_MM_DEFAULT, peso_desde_radio_mm
+    from app.services.coil_math import (
+        DIAMETRO_INTERIOR_MM_DEFAULT,
+        medida_supera_saldo,
+        mensaje_medida_supera_saldo,
+        peso_desde_radio_mm,
+    )
 
     bobina = db.get(StockItem, stock_item_id)
     if bobina is None or bobina.tenant_id != tenant_id:
@@ -205,6 +216,12 @@ def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> 
         "kg_por_mm": float(kg_por_mm),
         "margen_error_kg": float(margen),
         "merma_dentro_del_margen": merma <= margen,
+        "supera_saldo": medida_supera_saldo(real, sistema),
+        "mensaje_supera_saldo": (
+            mensaje_medida_supera_saldo(real, sistema)
+            if medida_supera_saldo(real, sistema)
+            else None
+        ),
         "coil_code": bobina.coil_id,
         "material_code": bobina.material.code if bobina.material else None,
         "ancho_mm": float(bobina.width_mm),

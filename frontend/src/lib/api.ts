@@ -208,6 +208,9 @@ export interface PrevisionMedida {
   margen_error_kg: number
   /** La merma cabe en el error normal del metro (3 mm). */
   merma_dentro_del_margen: boolean
+  /** Lo medido pesa más de lo que queda según la producción: no se puede confirmar. */
+  supera_saldo?: boolean
+  mensaje_supera_saldo?: string | null
   coil_code: string | null
   material_code: string | null
   ancho_mm: number

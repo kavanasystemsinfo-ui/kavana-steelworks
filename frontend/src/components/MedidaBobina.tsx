@@ -57,6 +57,8 @@ export function MedidaBobina({
     }
   }
 
+  const superaSaldo = prevision?.supera_saldo === true
+
   const mermaReal = prevision !== null && prevision.merma_kg > 0 && !prevision.merma_dentro_del_margen
 
   return (
@@ -107,6 +109,16 @@ export function MedidaBobina({
         </p>
       </div>
 
+      {superaSaldo && (
+        <p
+          role="alert"
+          className="rounded-xl border border-kavana-danger p-3 text-sm text-kavana-danger"
+        >
+          {prevision?.mensaje_supera_saldo ??
+            'Has medido más de lo que puede quedar según la producción. Vuelve a medir o repasa la producción.'}
+        </p>
+      )}
+
       {prevision && (
         <div className={`rounded-xl border p-3 ${mermaReal ? 'border-kavana-warn' : 'border-kavana-border'}`}>
           <div className="grid grid-cols-3 text-center">
@@ -148,7 +160,7 @@ export function MedidaBobina({
         <button
           type="button"
           onClick={confirmar}
-          disabled={!prevision || enviando}
+          disabled={!prevision || enviando || superaSaldo}
           className="min-h-[56px] flex-[2] rounded-xl bg-kavana-orange text-black font-bold disabled:opacity-40"
         >
           {textoConfirmar}
