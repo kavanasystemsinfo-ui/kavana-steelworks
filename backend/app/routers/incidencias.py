@@ -163,25 +163,37 @@ async def subir_foto_movil(
 
 
 @router.get("/upload-session/{session_id}")
-def estado_sesion_subida(session_id: uuid.UUID, db: DbDep):
+def estado_sesion_subida(
+    session_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
     """Estado de la sesión para el polling del modal (incluye foto data URL)."""
     from app.services.incidencia_uploads import UploadError, obtener_sesion_por_id
 
     try:
-        return obtener_sesion_por_id(db, session_id=session_id)
+        return obtener_sesion_por_id(
+            db, tenant_id=current_user.tenant_id, session_id=session_id
+        )
     except UploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get("/upload-session/{session_id}/photo")
-def foto_sesion_subida(session_id: uuid.UUID, db: DbDep):
+def foto_sesion_subida(
+    session_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+):
     """Bytes de la foto para el preview del modal."""
     from fastapi import Response
 
     from app.services.incidencia_uploads import UploadError, obtener_foto_por_id
 
     try:
-        buf, mime = obtener_foto_por_id(db, session_id=session_id)
+        buf, mime = obtener_foto_por_id(
+            db, tenant_id=current_user.tenant_id, session_id=session_id
+        )
     except UploadError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return Response(content=buf, media_type=mime, headers={"Cache-Control": "private, max-age=300"})

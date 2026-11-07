@@ -68,7 +68,7 @@ def test_subida_movil_y_polling_con_data_url(db_session, tenant, user):
 
     app.dependency_overrides[inc_router.get_db] = _override_get_db(db_session)
     try:
-        client = TestClient(app)
+        client = authed_client_for(db_session, user)  # el polling lo hace el operario
         r2 = client.get(f"/api/v1/incidencias/upload-session/{sid}")
     finally:
         app.dependency_overrides.clear()
