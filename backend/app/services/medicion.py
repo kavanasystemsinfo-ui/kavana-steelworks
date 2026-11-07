@@ -55,7 +55,8 @@ def medir_bobina(
     from app.services.coil_math import peso_desde_radio_mm
     from app.services.traceability import log_event
 
-    bobina = db.get(StockItem, stock_item_id)
+    # FOR UPDATE: una medición no puede pisar el descuento FIFO concurrente
+    bobina = db.get(StockItem, stock_item_id, with_for_update=True)
     if bobina is None or bobina.tenant_id != tenant_id:
         raise ValueError("Bobina no encontrada")
     orden = db.get(Order, order_id)
