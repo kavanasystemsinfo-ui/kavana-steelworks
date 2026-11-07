@@ -235,6 +235,93 @@ def set_peso_pieza_terminada(
     }
 
 
+class ModelMaterialIn(BaseModel):
+    workstation_code: str = Field(min_length=1, max_length=100)
+    material_id: uuid.UUID
+
+
+@router.get("/models/{model_id}/materials")
+def get_model_materials(
+    model_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "operator", "supervisor", "admin")),
+    ] = None,
+):
+    """Material que gasta el modelo en cada puesto."""
+    from sqlalchemy import select
+
+    from app.models.quality import ManufacturingModel, ModelWorkstationMaterial
+
+    modelo = db.get(ManufacturingModel, model_id)
+    if modelo is None or modelo.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    filas = db.scalars(
+        select(ModelWorkstationMaterial).where(
+            ModelWorkstationMaterial.manufacturing_model_id == model_id
+        )
+    ).all()
+    return [
+        {"workstation_code": f.workstation_code, "material_id": str(f.material_id)}
+        for f in filas
+    ]
+
+
+@router.put("/models/{model_id}/materials")
+def set_model_materials(
+    model_id: uuid.UUID,
+    body: list[ModelMaterialIn],
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Define el material del modelo en cada puesto indicado (crea o actualiza)."""
+    from sqlalchemy import select
+
+    from app.models import Material, Workstation
+    from app.models.quality import ManufacturingModel, ModelWorkstationMaterial
+
+    tenant_id = current_user.tenant_id
+    modelo = db.get(ManufacturingModel, model_id)
+    if modelo is None or modelo.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    puestos = set(db.scalars(select(Workstation.code).where(Workstation.tenant_id == tenant_id)))
+    for item in body:
+        mat = db.get(Material, item.material_id)
+        if mat is None or mat.tenant_id != tenant_id:
+            raise HTTPException(status_code=400, detail="material_id no pertenece al tenant")
+        if item.workstation_code not in puestos:
+            raise HTTPException(
+                status_code=400, detail=f"Puesto inexistente: {item.workstation_code}"
+            )
+    existentes = {
+        f.workstation_code: f
+        for f in db.scalars(
+            select(ModelWorkstationMaterial).where(
+                ModelWorkstationMaterial.manufacturing_model_id == model_id
+            )
+        )
+    }
+    for item in body:
+        fila = existentes.get(item.workstation_code)
+        if fila is None:
+            db.add(
+                ModelWorkstationMaterial(
+                    tenant_id=tenant_id,
+                    manufacturing_model_id=model_id,
+                    workstation_code=item.workstation_code,
+                    material_id=item.material_id,
+                )
+            )
+        else:
+            fila.material_id = item.material_id
+    db.commit()
+    return {"actualizados": len(body)}
+
+
 def _record_out(r) -> dict:
     """Serialización explícita (mismo patrón que trace.py)."""
     return {

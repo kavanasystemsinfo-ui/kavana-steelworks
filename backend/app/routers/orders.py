@@ -16,12 +16,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import SessionLocal
 from app.core.security import autenticar, require_roles
 from app.models import Material, Order, OrderLine, Product, User, Workstation
-from app.models.quality import ManufacturingModel
+from app.models.quality import ManufacturingModel, ModelWorkstationMaterial
 from app.services.sequences import next_sequence
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
@@ -166,6 +167,25 @@ def _validar_lineas(db: Session, tenant_id: uuid.UUID, lines: list[LineIn]) -> N
             ).first()
             if ok is None:
                 raise HTTPException(status_code=400, detail="product_id no pertenece al tenant")
+        if ln.modelo_id is not None:
+            # El material sale del par (modelo, puesto); no se elige a mano
+            fijado = db.scalar(
+                select(ModelWorkstationMaterial.material_id).where(
+                    ModelWorkstationMaterial.tenant_id == tenant_id,
+                    ModelWorkstationMaterial.manufacturing_model_id == ln.modelo_id,
+                    ModelWorkstationMaterial.workstation_code == ln.workstation_id,
+                )
+            )
+            if fijado is not None:
+                if ln.material_id is not None and ln.material_id != fijado:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "El material de la línea no corresponde al modelo en el puesto "
+                            + ln.workstation_id
+                        ),
+                    )
+                ln.material_id = fijado
         if ln.material_id is not None:
             ok = db.query(Material.id).filter(
                 Material.id == ln.material_id, Material.tenant_id == tenant_id
