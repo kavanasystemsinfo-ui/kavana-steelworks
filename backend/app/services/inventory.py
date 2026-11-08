@@ -301,8 +301,12 @@ def find_coil(
 ):
     """Escaneo de bobina (anexo A): busca por coil_id o lote.
 
-    Devuelve los datos completos para el modo automático (material,
-    dimensiones, peso) o manual. None si no existe.
+    Contrato (T-044):
+    - coil_id: devuelve UNA bobina (formato legacy, compatible).
+    - lote: devuelve TODAS las bobinas del lote del tenant.
+      - Si hay 1 bobina: formato legacy (dict con campos de ficha_bobina + nuevos).
+      - Si hay N bobinas: dict con clave "bobinas" conteniendo lista de fichas.
+    None si no existe.
     """
     from sqlalchemy import select
 
@@ -320,14 +324,28 @@ def find_coil(
     if tenant_id is None:
         raise ValueError("tenant_id es requerido")
 
-    bobina = db.scalar(stmt)
-    if bobina is None:
+    if coil_id:
+        bobina = db.scalar(stmt)
+        if bobina is None:
+            return None
+        return ficha_bobina(db, bobina)
+
+    # lote: devolver todas
+    bobinas = db.scalars(stmt).all()
+    if not bobinas:
         return None
-    return ficha_bobina(bobina)
+    fichas = [ficha_bobina(db, b) for b in bobinas]
+    if len(fichas) == 1:
+        return fichas[0]  # compatibilidad: una sola bobina → formato legacy
+    return {"bobinas": fichas}  # varias bobinas → lista bajo clave "bobinas"
 
 
-def ficha_bobina(bobina) -> dict:
-    """Datos de una bobina para el panel de operario (escaneo o lista)."""
+def ficha_bobina(db, bobina) -> dict:
+    """Datos de una bobina para el panel de operario (escaneo o lista).
+    T-044: incluye origen, pendiente_verificacion, creada_por (nombre)."""
+    from app.models import User
+
+    creador = db.get(User, bobina.creada_por_user_id) if bobina.creada_por_user_id else None
     return {
         "id": str(bobina.id),
         "lote": bobina.lote,
@@ -340,6 +358,10 @@ def ficha_bobina(bobina) -> dict:
         "estado": bobina.estado,
         "ubicacion": bobina.ubicacion,
         "modo": "auto",
+        # T-044 nuevos campos
+        "origen": bobina.origen,
+        "pendiente_verificacion": bobina.pendiente_verificacion,
+        "creada_por": creador.name if creador else None,
     }
 
 

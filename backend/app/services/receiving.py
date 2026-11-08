@@ -15,7 +15,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Material, MaterialTransaction, StockItem
+from app.models import Material, MaterialTransaction, StockItem, User
 
 
 def _system_user(db: Session, tenant_id) -> uuid.UUID:
@@ -54,6 +54,8 @@ def receive_coil(
     heat_number: str | None = None,
     grado_acero: str | None = None,
     supplier_coil_id: str | None = None,
+    origen: str = "recepcion",  # 'recepcion' | 'alta_manual'
+    creada_por_user_id = None,  # opcional, por defecto user_id
 ) -> StockItem:
     """Da de alta una bobina recibida y registra su entrada en Kardex.
 
@@ -88,6 +90,9 @@ def receive_coil(
     if repetida is not None:
         raise ValueError(f"Ya existe una bobina con el código {coil_id_final}")
 
+    # creada_por_user_id: por defecto user_id, pero permite override (alta_manual usa el operario)
+    creada_por_final = creada_por_user_id if creada_por_user_id is not None else user_id
+
     bobina = StockItem(
         tenant_id=tenant_id,
         material_id=material_id,
@@ -107,6 +112,8 @@ def receive_coil(
         grado_acero=grado_acero,
         supplier_coil_id=supplier_coil_id,
         creado_por=user_id,
+        origen=origen,
+        creada_por_user_id=creada_por_final,
     )
     db.add(bobina)
     db.flush()
@@ -132,16 +139,38 @@ def receive_coil(
     # Evento de planta: recepción visible para el panel del operario
     from app.services.events import broker
 
-    broker.publish(
-        tenant_id=tenant_id,
-        tipo="recepcion_material",
-        data={
-            "coil_id": bobina.coil_id,
-            "lote": lote,
-            "peso_kg": float(peso_dec),
-            "material": material.code,
-        },
-    )
+    if origen == "alta_manual":
+        # Alta manual: evento específico con trazabilidad completa
+        broker.publish(
+            tenant_id=tenant_id,
+            tipo="alta_manual_bobina",
+            data={
+                "coil_id": bobina.coil_id,
+                "lote": lote,
+                "peso_kg": float(peso_dec),
+                "material": material.code,
+                "origen": "alta_manual",
+                "creada_por_user_id": str(creada_por_final),
+                "creada_por_nombre": (
+                    db.get(User, creada_por_final).name if creada_por_final else None
+                ),
+                "alta_ubicacion": ubicacion,
+                "pendiente_verificacion": True,
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
+    else:
+        # Recepción normal (Materias Primas)
+        broker.publish(
+            tenant_id=tenant_id,
+            tipo="recepcion_material",
+            data={
+                "coil_id": bobina.coil_id,
+                "lote": lote,
+                "peso_kg": float(peso_dec),
+                "material": material.code,
+            },
+        )
 
     db.commit()
     db.refresh(bobina)

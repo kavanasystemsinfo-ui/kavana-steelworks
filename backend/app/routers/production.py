@@ -66,8 +66,9 @@ def record_production(
     """Registra producción incremental: el FIFO consume el material automático.
 
     Modo auditoría (línea con bobina vinculada): consume por burbuja de
-    vinculación priorizando la bobina activa; el fallo bloquea. Modo simple
-    (sin bobina): FIFO global y el fallo no bloquea (nunca consumos fantasma).
+    vinculación priorizando la bobina activa; el fallo bloquea.
+    Sin bobina vinculada y qty > 0: rechaza con 400.
+    Solo horas (qty == 0): permitido sin bobina.
     """
     from app.services.ficha_operario import horas_automaticas
     from app.services.production import record_production as record_service

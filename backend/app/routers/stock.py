@@ -368,7 +368,7 @@ def bobinas_disponibles(
         return (not en_puesto(b), b.estado != "pico", b.fecha_entrada)
 
     return [
-        {**ficha_bobina(b), "en_puesto": en_puesto(b)}
+        {**ficha_bobina(db, b), "en_puesto": en_puesto(b)}
         for b in sorted(bobinas, key=prioridad)[:8]
     ]
 
@@ -465,7 +465,8 @@ def alta_manual(
 ):
     """Modo manual del operario: da de alta una bobina con los datos de la
     etiqueta del proveedor (el peso de la etiqueta es el que se carga a la
-    línea al vincularla). Pasa por la misma recepción que Materias Primas."""
+    línea al vincularla). Pasa por la misma recepción que Materias Primas.
+    T-044: origen='alta_manual', pendiente_verificacion=true, trazabilidad completa."""
     from datetime import UTC, datetime
 
     from app.services.inventory import find_coil
@@ -486,7 +487,15 @@ def alta_manual(
             thickness_mm=body.thickness_mm,
             coste_real=material.cost_per_unit,
             ubicacion=body.puesto,
+            origen="alta_manual",
+            creada_por_user_id=current_user.id,
         )
+        # receive_coil ya emite el evento alta_manual_bobina con alta_ubicacion
+        # Marcar como pendiente de verificación (receive_coil ya pone origen/creada_por_user_id)
+        bobina.alta_ubicacion = body.puesto
+        bobina.pendiente_verificacion = True
+        db.commit()
+        db.refresh(bobina)
         return find_coil(db, current_user.tenant_id, coil_id=bobina.coil_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -526,6 +535,66 @@ def retirar(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class VerificarBobinaRequest(BaseModel):
+    pass  # solo body vacío, el user sale del token
+
+
+@router.post("/{stock_item_id}/verificar")
+def verificar_bobina(
+    stock_item_id: uuid.UUID,
+    body: VerificarBobinaRequest,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor", "admin")),
+    ] = None,
+):
+    """Marca una bobina de alta_manual como verificada (rol supervisor o admin).
+    Filtra por tenant_id para aislamiento multi-tenant."""
+    from datetime import UTC, datetime
+
+    from app.models import StockItem
+
+    bobina = db.get(StockItem, stock_item_id)
+    if bobina is None or bobina.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Bobina no encontrada")
+
+    if bobina.origen != "alta_manual":
+        raise HTTPException(
+            status_code=400, detail="Solo se pueden verificar bobinas de alta manual"
+        )
+
+    if not bobina.pendiente_verificacion:
+        raise HTTPException(status_code=400, detail="La bobina ya está verificada")
+
+    bobina.pendiente_verificacion = False
+    bobina.verificada_por_user_id = current_user.id
+    bobina.verificada_en = datetime.now(UTC)
+    db.commit()
+    db.refresh(bobina)
+
+    # Evento de trazabilidad: verificación de alta manual
+    from app.services.events import broker
+    broker.publish(
+        tenant_id=current_user.tenant_id,
+        tipo="verificacion_alta_manual",
+        data={
+            "coil_id": bobina.coil_id,
+            "lote": bobina.lote,
+            "verificada_por_user_id": str(current_user.id),
+            "verificada_por_nombre": current_user.name,
+            "verificada_en": bobina.verificada_en.isoformat(),
+        },
+    )
+
+    return {
+        "success": True,
+        "bobina_id": str(bobina.id),
+        "verificada_por": current_user.name,
+        "verificada_en": bobina.verificada_en.isoformat(),
+    }
 
 
 @router.get("", response_model=list[StockItemOut])
