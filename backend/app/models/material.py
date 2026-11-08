@@ -130,4 +130,22 @@ class StockItem(UUIDMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("stock_items.id")
     )  # retales: bobina madre de la que salió
 
+    # Trazabilidad de origen (T-044, D-018)
+    origen: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="recepcion"
+    )  # 'recepcion' | 'alta_manual'
+    creada_por_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    alta_ubicacion: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pendiente_verificacion: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    verificada_por_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    verificada_en: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     material: Mapped[Material] = relationship(back_populates="stock_items")

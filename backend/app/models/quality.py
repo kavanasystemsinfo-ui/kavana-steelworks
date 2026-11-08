@@ -64,6 +64,33 @@ class ManufacturingModel(UUIDMixin, TimestampMixin, Base):
     )
 
 
+class ModelWorkstationMaterial(UUIDMixin, TimestampMixin, Base):
+    """Material que gasta un modelo en un puesto concreto (cada paso de la cascada
+    puede llevar un material distinto). Al crear una línea de orden con modelo y
+    puesto, el material sale de aquí y no se elige a mano."""
+
+    __tablename__ = "model_workstation_materials"
+    __table_args__ = (
+        UniqueConstraint(
+            "manufacturing_model_id", "workstation_code", name="uq_model_workstation_material"
+        ),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    manufacturing_model_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("manufacturing_models.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workstation_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    material_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("materials.id"), nullable=False, index=True
+    )
+
+
 class QualityPlanCheck(UUIDMixin, TimestampMixin, Base):
     """Un control del plan de calidad (spec 04 §2.3)."""
 

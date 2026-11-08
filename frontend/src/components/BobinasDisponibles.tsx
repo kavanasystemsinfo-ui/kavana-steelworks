@@ -30,11 +30,20 @@ export function BobinasDisponibles({
     return <p className="text-sm text-kavana-text-dim">Buscando bobinas disponibles…</p>
   }
 
+  // Picos primero (D-019): se ven antes que la bobina nueva y se avisa de ello
+  const hayPicosLibres = bobinas.some((b) => b.estado === 'pico' && !b.en_puesto)
+  const hayNuevas = bobinas.some((b) => b.estado !== 'pico' && !b.en_puesto)
+
   return (
     <div className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
       <p className="label-industrial text-xs text-kavana-text-dim">
         Bobinas disponibles para esta orden · toca una para vincularla
       </p>
+      {hayPicosLibres && hayNuevas && (
+        <p className="text-sm text-kavana-warn">
+          Hay picos de este material: gástalos primero. Si eliges una bobina nueva te pediremos el motivo.
+        </p>
+      )}
       {bobinas.length === 0 && (
         <p className="text-sm text-kavana-text-dim">
           No hay bobinas registradas de este material. Regístrala a mano con la etiqueta.
@@ -57,12 +66,24 @@ export function BobinasDisponibles({
             {b.en_puesto ? '📍' : b.estado === 'pico' ? '⚡' : i + 1}
           </span>
           <span className="flex-1 min-w-0">
-            <span className="block mono-data font-bold truncate">{b.coil_id ?? b.lote}</span>
+            <span className="block mono-data font-bold truncate">
+              {b.coil_id ?? b.lote}
+              {b.estado === 'pico' && !b.en_puesto && (
+                <span className="ml-2 text-[10px] uppercase tracking-wide text-kavana-warn">
+                  Usar primero
+                </span>
+              )}
+            </span>
             <span className="block text-xs text-kavana-text-dim truncate">
               {b.material_code} · lote {b.lote}
               {b.ancho_mm ? ` · ${b.ancho_mm}x${b.espesor_mm ?? '?'} mm` : ''}
               {' · '}
-              {b.en_puesto ? 'ya en tu puesto' : b.estado === 'pico' ? 'pico / retal' : (b.ubicacion ?? 'sin ubicación')}
+              {b.en_puesto
+                ? 'ya en tu puesto'
+                : `${b.estado === 'pico' ? 'pico / retal · ' : ''}en ${b.ubicacion ?? 'sin ubicación'}`}
+              {b.antiguedad_dias != null && b.antiguedad_dias > 0
+                ? ` · hace ${b.antiguedad_dias} ${b.antiguedad_dias === 1 ? 'día' : 'días'}`
+                : ''}
             </span>
           </span>
           <span className="shrink-0 text-right mono-data font-bold">

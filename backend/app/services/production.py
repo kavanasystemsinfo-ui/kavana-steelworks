@@ -7,8 +7,6 @@ Portado de OrderService.recordProduction del legacy al v2:
   bom_static.
 - Modo auditoría (línea con bobina activa): FIFO por burbuja de vinculación
   + bobina prioritaria; el fallo de deducción BLOQUEA la producción.
-- Modo simple (sin bobina): FIFO global; el fallo NO bloquea (produce sin
-  descuento, nunca consumos fantasma).
 - GUARDIA DE SEGURIDAD: kilos teóricos acumulados <= reales vinculados
   + max(15% del real, 150 kg).
 - WIP waterfall entre líneas en cascada.
@@ -132,6 +130,13 @@ def record_production(
     material, bobina_activa = _resolve_active_material(db, linea)
     modo_auditoria = bobina_activa is not None and qty > 0
 
+    # D-018: si qty > 0 y no hay bobina vinculada, rechazar
+    if qty > 0 and bobina_activa is None:
+        raise ValueError(
+            "No hay bobina vinculada a esta línea. "
+            "Vincula una bobina antes de registrar producción."
+        )
+
     consumed_amount = Decimal("0")
     consumption_unit = "uds"
     calculation_method = "none"
@@ -220,15 +225,10 @@ def record_production(
                 )
                 material_consumo_ids = [c["stock_item_id"] for c in resultado["consumos"]]
             except ValueError as exc:
-                if modo_auditoria:
-                    raise ValueError(
-                        f"Error en deducción de material (Modo Auditoría): {exc}"
-                    ) from exc
-                # Modo simple: produce sin descuento (nunca consumos fantasma)
-                consumed_amount = Decimal("0")
-                incremental_material_cost = Decimal("0")
-                kg_por_pieza = Decimal("0")
-                calculation_method = "none"
+                # D-018: siempre bloquea, no hay modo simple tolerante
+                raise ValueError(
+                    f"Error en deducción de material: {exc}"
+                ) from exc
         else:
             # Sin consumo calculable (sin dimensiones ni BOM): no descuenta
             calculation_method = "none"
@@ -256,6 +256,8 @@ def record_production(
         # El material ya se cargó en bulk al vincular (linkCoil); solo labor
         linea.real_cost = (linea.real_cost or Decimal("0")) + incremental_labor_cost
     else:
+        # Sin bobina pero con qty > 0 no llega aquí (se rechazó arriba)
+        # Solo llega aquí qty == 0 y hours > 0 (solo horas)
         linea.real_cost = (
             (linea.real_cost or Decimal("0")) + incremental_material_cost + incremental_labor_cost
         )

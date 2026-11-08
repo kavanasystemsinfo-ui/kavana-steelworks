@@ -140,47 +140,93 @@ const ordersBody = [
   { id: 'OP2', numero: 'OP-DEMO-002', estado: 'completed', cliente: 'Cliente demo', fecha_entrega: '2026-08-18T00:00:00Z' },
 ]
 
-const traceOP1 = [
+function fichaDe(
+  numero: string,
+  eventos: unknown[],
+  resumen: Record<string, unknown> = {},
+) {
+  return {
+    resumen: {
+      numero,
+      estado: 'active',
+      cliente: null,
+      piezas_producidas: 10,
+      piezas_objetivo: 100,
+      merma_kg: 0,
+      kg_consumidos: 12.5,
+      kg_por_bobina: [
+        {
+          stock_item_id: 's1',
+          coil_id: 'COIL-DEMO-001',
+          lote: 'L1',
+          kg: 12.5,
+          origen: 'alta_manual',
+          pendiente_verificacion: true,
+        },
+      ],
+      personas: [{ id: 'u1', nombre: 'Operario Demo', eventos: 3, piezas: 10 }],
+      paradas_minutos: 0,
+      paradas_abiertas: 0,
+      incidencias: 0,
+      eficiencia_media_uds_h: null,
+      lineas: [],
+      generada_en: '2026-08-15T10:00:00Z',
+      ...resumen,
+    },
+    linea_tiempo: eventos,
+    categorias: ['produccion', 'calidad', 'bobina', 'parada', 'incidencia', 'estado'],
+  }
+}
+
+const traceOP1 = fichaDe('OP-DEMO-001', [
   {
-    id: 'e1',
-    action: 'start',
-    quantity: '0.000',
-    timestamp: '2026-08-15T08:00:00Z',
-    metadata: {},
-    shift: null,
-    operator: { id: 'u1', name: 'Operario Demo' },
+    id: 'e3',
+    timestamp: '2026-08-15T09:00:00Z',
+    categoria: 'estado',
+    titulo: 'Línea terminada',
+    detalle: '',
+    quien: 'Operario Demo',
+    cantidad: null,
+    unidad: null,
   },
   {
     id: 'e2',
-    action: 'produce',
-    quantity: '10.000',
     timestamp: '2026-08-15T08:01:00Z',
-    metadata: { consumedAmount: '12.5', activeCoilCode: 'COIL-DEMO-001' },
-    shift: null,
-    operator: { id: 'u1', name: 'Operario Demo' },
+    categoria: 'produccion',
+    titulo: 'Producción',
+    detalle: 'bobina COIL-DEMO-001 · 12,5 kg consumidos',
+    quien: 'Operario Demo',
+    cantidad: 10,
+    unidad: 'uds',
   },
   {
-    id: 'e3',
-    action: 'finish',
-    quantity: '0.000',
-    timestamp: '2026-08-15T09:00:00Z',
-    metadata: {},
-    shift: null,
-    operator: { id: 'u1', name: 'Operario Demo' },
+    id: 'e1',
+    timestamp: '2026-08-15T08:00:00Z',
+    categoria: 'bobina',
+    titulo: 'Bobina COIL-DEMO-001 dada de alta a mano',
+    detalle: 'en LINEA-1 · pendiente de verificar',
+    quien: 'Operario Demo',
+    cantidad: 500,
+    unidad: 'kg',
   },
-]
+])
 
-const traceOP2 = [
-  {
-    id: 'f1',
-    action: 'close_shift',
-    quantity: '0.000',
-    timestamp: '2026-08-15T14:00:00Z',
-    metadata: { reason: 'fin de jornada' },
-    shift: 'afternoon',
-    operator: { id: 'u1', name: 'Operario Demo' },
-  },
-]
+const traceOP2 = fichaDe(
+  'OP-DEMO-002',
+  [
+    {
+      id: 'f1',
+      timestamp: '2026-08-15T14:00:00Z',
+      categoria: 'estado',
+      titulo: 'Cierre de turno',
+      detalle: 'motivo: fin de jornada',
+      quien: 'Operario Demo',
+      cantidad: null,
+      unidad: null,
+    },
+  ],
+  { kg_por_bobina: [], personas: [] },
+)
 
 function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown>; costes?: boolean } = {}) {
   const { orders = ordersBody, trace = {}, costes = true } = opts
@@ -239,8 +285,12 @@ function stubApi(opts: { orders?: unknown; trace?: Record<string, unknown>; cost
       return Promise.resolve({ ok: true, json: async () => orders })
     }
     if (url.includes('/api/v1/trace/orders/')) {
-      const id = url.split('/').pop()
-      return Promise.resolve({ ok: true, json: async () => trace[id ?? ''] ?? [] })
+      const partes = url.split('/')
+      const id = partes[partes.length - 2]
+      return Promise.resolve({
+        ok: true,
+        json: async () => trace[id ?? ''] ?? fichaDe('vacía', []),
+      })
     }
     return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
   }))
@@ -418,37 +468,95 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
 })
 
 describe('Trazabilidad ISO 9001 en el panel Supervisor', () => {
-  it('carga la primera orden y muestra su serie de eventos', async () => {
+  it('carga la primera orden y muestra su ficha con el resumen y la línea de tiempo', async () => {
     stubApi({ trace: { OP1: traceOP1 } })
 
     renderPage()
 
     expect(await screen.findByText('OP-DEMO-001 · active')).toBeInTheDocument()
-    expect(await screen.findByText('Inicio de sesión')).toBeInTheDocument()
-    expect(screen.getByText('Producción')).toBeInTheDocument()
-    expect(screen.getByText('10.000 uds')).toBeInTheDocument()
-    expect(screen.getByText(/COIL-DEMO-001/)).toBeInTheDocument()
-    expect(screen.getByText('Fin de bobina')).toBeInTheDocument()
-    expect(screen.getAllByText(/Operario Demo/).length).toBeGreaterThanOrEqual(3)
+    const resumen = await screen.findByRole('region', { name: 'Resumen de la orden' })
+    expect(resumen).toHaveTextContent('10 de 100')
+    expect(resumen).toHaveTextContent('12,5 kg')
+    expect(screen.getByRole('region', { name: 'Bobinas de la orden' })).toHaveTextContent(
+      'Alta manual · sin verificar',
+    )
+    expect(screen.getByRole('region', { name: 'Personas que intervinieron' })).toHaveTextContent('Operario Demo')
+    expect(screen.getByText('10 uds')).toBeInTheDocument()
+    expect(screen.getByText(/bobina COIL-DEMO-001 · 12,5 kg consumidos/)).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
-  it('al cambiar de orden carga la traza de la nueva orden', async () => {
+  it('con varias líneas aclara que las piezas terminadas son las de la última y desglosa cada línea', async () => {
+    const dosLineas = fichaDe('OP-DEMO-001', [], {
+      piezas_producidas: 0,
+      piezas_objetivo: 12,
+      lineas: [
+        { numero: 1, puesto: 'PL-220', estado: 'in_progress', producidas: 11, total: 12 },
+        { numero: 2, puesto: 'RB-1', estado: 'pending', producidas: 0, total: 12 },
+      ],
+    })
+    stubApi({ trace: { OP1: dosLineas } })
+
+    renderPage()
+
+    const resumen = await screen.findByRole('region', { name: 'Resumen de la orden' })
+    expect(resumen).toHaveTextContent('Piezas terminadas')
+    expect(resumen).toHaveTextContent('0 de 12')
+    expect(resumen).toHaveTextContent('las de la última línea')
+    const lineas = screen.getByRole('region', { name: 'Líneas de la orden' })
+    expect(lineas).toHaveTextContent('Línea 1 · PL-220')
+    expect(lineas).toHaveTextContent('en curso')
+    expect(lineas).toHaveTextContent('11 de 12')
+    expect(lineas).toHaveTextContent('Línea 2 · RB-1')
+    vi.unstubAllGlobals()
+  })
+
+  it('la línea de tiempo va de más reciente a más antiguo', async () => {
+    stubApi({ trace: { OP1: traceOP1 } })
+
+    renderPage()
+
+    const lineaTiempo = await screen.findByRole('region', { name: 'Línea de tiempo' })
+    const titulos = Array.from(lineaTiempo.querySelectorAll('li p:first-child')).map((p) => p.textContent)
+    expect(titulos).toEqual([
+      'Línea terminada',
+      'Producción',
+      'Bobina COIL-DEMO-001 dada de alta a mano',
+    ])
+    vi.unstubAllGlobals()
+  })
+
+  it('filtrar por categoría deja solo esos eventos y Todo los devuelve', async () => {
+    stubApi({ trace: { OP1: traceOP1 } })
+
+    renderPage()
+
+    await screen.findByText('Línea terminada')
+    fireEvent.click(screen.getByRole('button', { name: /Bobinas \(1\)/ }))
+    expect(screen.getByText('Bobina COIL-DEMO-001 dada de alta a mano')).toBeInTheDocument()
+    expect(screen.queryByText('Línea terminada')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Todo \(3\)/ }))
+    expect(screen.getByText('Línea terminada')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('al cambiar de orden carga la ficha de la nueva orden', async () => {
     stubApi({ trace: { OP1: traceOP1, OP2: traceOP2 } })
 
     renderPage()
 
-    await screen.findByText('Producción')
+    await screen.findByText('Línea terminada')
     fireEvent.change(screen.getByLabelText('Orden'), { target: { value: 'OP2' } })
 
     expect(await screen.findByText('Cierre de turno')).toBeInTheDocument()
-    expect(screen.queryByText('Producción')).not.toBeInTheDocument()
+    expect(screen.queryByText('Línea terminada')).not.toBeInTheDocument()
     expect(screen.getByText(/fin de jornada/)).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 
   it('orden sin eventos muestra mensaje vacío, no inventa eventos', async () => {
-    stubApi({ trace: { OP1: [] } })
+    stubApi({ trace: { OP1: fichaDe('OP-DEMO-001', [], { kg_por_bobina: [], personas: [] }) } })
 
     renderPage()
 

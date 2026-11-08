@@ -172,5 +172,11 @@ def test_subida_movil_sigue_siendo_publica(db_session, tenant, user):
     db_session.commit()
 
     client = _client(db_session)  # sin token
-    r = client.get(f"/api/v1/incidencias/upload-session/{sesion.session_id}")
+    r = client.post(
+        f"/api/v1/incidencias/upload-mobile/{sesion.session_id}",
+        files={"foto": ("foto.png", b"\x89PNG\r\n\x1a\n" + b"data-de-prueba", "image/png")},
+    )
     assert r.status_code == 200, r.text
+    # El estado/foto de la sesión NO es público (auditoría T-029, H1).
+    r2 = client.get(f"/api/v1/incidencias/upload-session/{sesion.session_id}")
+    assert r2.status_code in (401, 403), r2.text

@@ -378,6 +378,9 @@ def seed_estanterias(db: Session) -> dict:
 
             asegurar_planta_realista(db, tenant.id)
             asegurar_flujo_demo(db, tenant.id, RECETAS_PLANTA)
+            from app.services.seed_planta import asegurar_asignaciones_modelo_puesto
+
+            asegurar_asignaciones_modelo_puesto(db, tenant.id, RECETAS_PLANTA)
         except Exception:  # noqa: BLE001
             db.rollback()
             logging.getLogger(__name__).exception(

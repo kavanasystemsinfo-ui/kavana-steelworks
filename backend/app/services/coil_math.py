@@ -55,3 +55,26 @@ def peso_desde_radio_mm(
     volumen_m3 = math.pi * (float(R_ext_m) ** 2 - float(R_int_m) ** 2) * float(ancho_m)
     peso_kg = Decimal(str(volumen_m3)) * Decimal(str(densidad_kgm3))
     return float(peso_kg.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+# Tolerancia numérica (ruido de coma flotante), no tolerancia de medida.
+TOLERANCIA_EXCESO_KG = 0.01
+
+
+def medida_supera_saldo(real_kg, saldo_kg) -> bool:
+    """True si lo medido pesa más que lo que queda según la producción.
+
+    Una bobina no puede ganar kilos: si el metro da más de lo que queda tras
+    descontar lo consumido, la medición o la producción registrada están mal.
+    """
+    return float(real_kg) > float(saldo_kg) + TOLERANCIA_EXCESO_KG
+
+
+def mensaje_medida_supera_saldo(real_kg, saldo_kg) -> str:
+    """Tip para el operario cuando la medida supera el saldo (se enseña en pantalla)."""
+    return (
+        f"Has medido {float(real_kg):.1f} kg, pero según la producción registrada "
+        f"solo pueden quedar {float(saldo_kg):.1f} kg. Introduce un valor de "
+        f"{float(saldo_kg):.1f} kg o inferior: vuelve a medir la carne o repasa "
+        "la producción registrada."
+    )
+

@@ -117,13 +117,19 @@ def obtener_sesion(
     return _serializar_sesion(sesion)
 
 
-def obtener_sesion_por_id(db: Session, *, session_id: uuid.UUID) -> dict:
-    """Estado de la sesión resolviendo el tenant desde la propia sesión.
+def obtener_sesion_por_id(
+    db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID
+) -> dict:
+    """Estado de la sesión del tenant autenticado (polling del modal del operario).
 
-    El polling del móvil va sin token (solo conoce el session_id); la sesión
-    guarda su tenant_id, así que no hay que adivinar el tenant.
+    El móvil solo sube la foto (endpoint público); leer el estado o la foto
+    exige token y la sesión debe pertenecer a la misma empresa.
     """
-    sesion = _buscar_por_session_id(db, session_id)
+    sesion = (
+        db.query(IncidenciaUploadSession)
+        .filter_by(session_id=session_id, tenant_id=tenant_id)
+        .first()
+    )
     if sesion is None:
         raise UploadError("Sesión de subida no encontrada", 404)
     return _serializar_sesion(sesion)
@@ -160,12 +166,11 @@ def obtener_foto(
     return sesion.photo, sesion.photo_mime
 
 
-def obtener_foto_por_id(db: Session, *, session_id: uuid.UUID) -> tuple[bytes, str]:
-    """Bytes de la foto resolviendo el tenant desde la propia sesión (móvil)."""
-    sesion = _buscar_por_session_id(db, session_id)
-    if sesion is None or sesion.photo is None:
-        raise UploadError("Foto no encontrada", 404)
-    return sesion.photo, sesion.photo_mime
+def obtener_foto_por_id(
+    db: Session, *, tenant_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[bytes, str]:
+    """Bytes de la foto de una sesión del tenant autenticado."""
+    return obtener_foto(db, tenant_id=tenant_id, session_id=session_id)
 
 
 def finalizar(

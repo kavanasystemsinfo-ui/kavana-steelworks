@@ -168,7 +168,66 @@ def asegurar_planta_realista(db: Session, tenant_id) -> dict:
             cuenta.name = nombre
     db.flush()
     cambios["ordenes_cerradas"] = _cerrar_ordenes_de_puestos_antiguos(db, tenant_id)
+    cambios["bobinas_reubicadas"] = _reubicar_bobinas_de_puestos_antiguos(db, tenant_id)
     return cambios
+
+
+def _reubicar_bobinas_de_puestos_antiguos(db: Session, tenant_id) -> int:
+    """Las bobinas libres que quedaron en un puesto desactivado vuelven al almacén
+    (así no salen con una ubicación que ya no existe). Las montadas en una línea no se tocan."""
+    from app.models import OrderLine, StockItem
+
+    montadas = select(OrderLine.active_coil_id).where(OrderLine.active_coil_id.is_not(None))
+    bobinas = db.scalars(
+        select(StockItem).where(
+            StockItem.tenant_id == tenant_id,
+            StockItem.ubicacion.in_(PUESTOS_ANTIGUOS),
+            StockItem.id.not_in(montadas),
+        )
+    ).all()
+    for b in bobinas:
+        b.ubicacion = "ALMACEN"
+    db.flush()
+    return len(bobinas)
+
+
+def asegurar_asignaciones_modelo_puesto(db: Session, tenant_id, recetas) -> int:
+    """Asigna a cada puesto los modelos que fabrica, con el material del modelo
+    (lo que en el panel de admin hace el supervisor). Idempotente: no pisa lo ya definido."""
+    from app.models import Material
+    from app.models.quality import ManufacturingModel, ModelWorkstationMaterial
+
+    creadas = 0
+    for _num, _cli, _prod, pieza, mat_code, _m, _t, puestos in recetas:
+        modelo = db.scalar(
+            select(ManufacturingModel).where(
+                ManufacturingModel.tenant_id == tenant_id, ManufacturingModel.code == pieza
+            )
+        )
+        material = db.scalar(
+            select(Material).where(Material.tenant_id == tenant_id, Material.code == mat_code)
+        )
+        if modelo is None or material is None:
+            continue
+        for puesto in puestos:
+            existe = db.scalar(
+                select(ModelWorkstationMaterial.id).where(
+                    ModelWorkstationMaterial.manufacturing_model_id == modelo.id,
+                    ModelWorkstationMaterial.workstation_code == puesto,
+                )
+            )
+            if existe is None:
+                db.add(
+                    ModelWorkstationMaterial(
+                        tenant_id=tenant_id,
+                        manufacturing_model_id=modelo.id,
+                        workstation_code=puesto,
+                        material_id=material.id,
+                    )
+                )
+                creadas += 1
+    db.flush()
+    return creadas
 
 
 # Recetas que recorren los 8 puestos (como RECETAS_FLUJO, con los puestos nuevos)

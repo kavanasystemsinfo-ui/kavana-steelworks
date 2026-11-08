@@ -18,6 +18,16 @@ with Session(engine) as db:
     print(f"[seed] created={resultado['created']} tenant={resultado['tenant']}")
     resultado2 = seed_estanterias(db)
     print(f"[seed-estanterias] created={resultado2['created']} tenant={resultado2['tenant']}")
+
+    # Reparación idempotente de la demo: códigos de bobina SIM- repetidos. Si falla, no
+    # debe impedir que la API arranque.
+    try:
+        from app.services.inventory import reparar_codigos_duplicados_demo
+
+        print(f"[repair] codigos SIM- renombrados={reparar_codigos_duplicados_demo(db)}")
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        print(f"[repair] omitido: {exc}")
 PY
 
 echo "[entrypoint] arrancando uvicorn en 0.0.0.0:8000"

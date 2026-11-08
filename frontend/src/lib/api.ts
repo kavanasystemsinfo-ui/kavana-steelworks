@@ -208,6 +208,9 @@ export interface PrevisionMedida {
   margen_error_kg: number
   /** La merma cabe en el error normal del metro (3 mm). */
   merma_dentro_del_margen: boolean
+  /** Lo medido pesa más de lo que queda según la producción: no se puede confirmar. */
+  supera_saldo?: boolean
+  mensaje_supera_saldo?: string | null
   coil_code: string | null
   material_code: string | null
   ancho_mm: number
@@ -408,6 +411,14 @@ export interface OrderDetailOut {
   lines: OrderLineOut[]
 }
 
+export interface WorkstationModel {
+  id: string
+  code: string
+  name: string
+  material_id: string
+  material_code: string
+}
+
 export interface OrderLineIn {
   workstation_id: string
   total_quantity: number
@@ -479,14 +490,66 @@ export interface QualityRecordOut {
   measurements: QualityMeasurementOut[]
 }
 
-export interface TraceEvent {
+/** Motivos de un toque para elegir una bobina nueva habiendo picos (D-019). */
+export type MotivoSaltoPico = 'pico_corto' | 'pico_danado' | 'no_localizado' | 'otro'
+
+export interface PicoMaterial {
+  material_id: string
+  material_code: string
+  material_name: string
+  picos: number
+  kg_total: number
+  mas_antiguo_dias: number | null
+  items: {
+    id: string
+    coil_id: string | null
+    lote: string
+    peso_kg: number
+    ubicacion: string | null
+    antiguedad_dias: number | null
+  }[]
+}
+
+export type CategoriaTraza = 'produccion' | 'calidad' | 'bobina' | 'parada' | 'incidencia' | 'estado'
+
+export interface EventoTraza {
   id: string
-  action: string
-  quantity: string
   timestamp: string
-  metadata: Record<string, unknown> | null
-  shift: string | null
-  operator: { id: string; name: string } | null
+  categoria: CategoriaTraza
+  titulo: string
+  detalle: string
+  quien: string | null
+  cantidad: number | null
+  unidad: string | null
+}
+
+export interface FichaTrazabilidad {
+  resumen: {
+    numero: string
+    estado: string
+    cliente: string | null
+    piezas_producidas: number
+    piezas_objetivo: number
+    merma_kg: number
+    kg_consumidos: number
+    kg_por_bobina: {
+      stock_item_id: string | null
+      coil_id: string | null
+      lote: string | null
+      kg: number
+      origen: string | null
+      pendiente_verificacion: boolean
+    }[]
+    personas: { id: string; nombre: string; eventos: number; piezas: number }[]
+    paradas_minutos: number
+    paradas_abiertas: number
+    incidencias: number
+    eficiencia_media_uds_h: number | null
+    lineas: { numero: number; puesto: string | null; estado: string; producidas: number; total: number }[]
+    generada_en: string
+  }
+  linea_tiempo: EventoTraza[]
+  categorias: CategoriaTraza[]
 }
 
 // Admin types
@@ -734,9 +797,12 @@ const BASE = '/api/v1'
 /** Error de la API con su código HTTP (409: falta medir la bobina, etc.). */
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Detalle tal cual lo manda el servidor (texto, lista u objeto con código). */
+  detail?: unknown
+  constructor(message: string, status: number, detail?: unknown) {
     super(message)
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -755,7 +821,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.detail ?? `Error ${res.status}`, res.status)
+    const d = body.detail
+    const mensaje =
+      d !== null && typeof d === 'object' && !Array.isArray(d) && typeof d.mensaje === 'string'
+        ? d.mensaje
+        : (d ?? `Error ${res.status}`)
+    throw new ApiError(mensaje, res.status, d)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -949,12 +1020,20 @@ export const api = {
     return request(`/orders/${orderId}`)
   },
 
-  getTrace(orderId: string): Promise<TraceEvent[]> {
-    return request(`/trace/orders/${orderId}`)
+  getPicosPorMaterial(): Promise<PicoMaterial[]> {
+    return request('/stock-items/picos-por-material')
+  },
+
+  getFichaTrazabilidad(orderId: string): Promise<FichaTrazabilidad> {
+    return request(`/trace/orders/${orderId}/ficha`)
   },
 
   getQualityModels(): Promise<QualityModel[]> {
     return request('/quality/models')
+  },
+
+  getWorkstationModels(code: string): Promise<WorkstationModel[]> {
+    return request(`/quality/workstations/${encodeURIComponent(code)}/models`)
   },
 
   setPesoPiezaTerminada(modelId: string, kg: number | null): Promise<{ id: string; peso_pieza_terminada_kg: number | null }> {
@@ -1035,7 +1114,7 @@ export const api = {
   },
 
   /** Bobinas que el operario puede vincular sin saberse el código. */
-  bobinasDisponibles(lineId: string): Promise<Array<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string; en_puesto: boolean }>> {
+  bobinasDisponibles(lineId: string): Promise<Array<{ id: string; lote: string; coil_id: string | null; peso_kg: number; ancho_mm: number | null; espesor_mm: number | null; material_code: string | null; material_name: string | null; estado: string; ubicacion: string | null; modo: string; en_puesto: boolean; antiguedad_dias?: number | null }>> {
     return request(`/stock-items/disponibles?line_id=${encodeURIComponent(lineId)}`)
   },
 
@@ -1071,7 +1150,7 @@ export const api = {
     });
   },
 
-  linkCoil(data: { stock_item_id: string; order_id: string; line_id: string }): Promise<{ success: boolean; coil_weight: number; order: string }> {
+  linkCoil(data: { stock_item_id: string; order_id: string; line_id: string; motivo_salto_pico?: MotivoSaltoPico }): Promise<{ success: boolean; coil_weight: number; order: string }> {
     return request('/stock-items/link', {
       method: 'POST',
       body: JSON.stringify(data),

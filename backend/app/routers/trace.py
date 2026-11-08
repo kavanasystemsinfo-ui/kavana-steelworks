@@ -88,3 +88,22 @@ def get_order_trace(
         )
         for log in logs
     ]
+
+
+@router.get("/orders/{order_id}/ficha")
+def get_order_ficha(
+    order_id: uuid.UUID,
+    db: DbDep,
+    current_user: Annotated[
+        User,
+        Depends(require_roles(get_current_user, "supervisor")),
+    ] = None,
+):
+    """Ficha de la orden (T-045): resumen y línea de tiempo unificada, de más
+    reciente a más antiguo."""
+    from app.services.ficha_orden import ficha_orden
+
+    ficha = ficha_orden(db, current_user.tenant_id, order_id)
+    if ficha is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return ficha

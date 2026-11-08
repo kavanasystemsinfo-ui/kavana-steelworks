@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { FichaTrazabilidadVista } from '../components/FichaTrazabilidadVista'
 import { InformeTurno } from '../components/InformeTurno'
 import { ModoTv } from '../components/ModoTv'
 import { VistaCostes } from '../components/VistaCostes'
@@ -18,8 +19,10 @@ import type {
   OrderLineIn,
   ProductOut,
   QualityModel,
+  WorkstationModel,
   QualityRecordOut,
   WorkstationOut,
+  FichaTrazabilidad,
 } from '../lib/api'
 
 interface IncidenciaItem {
@@ -39,31 +42,6 @@ interface IncidenciaItem {
   responsable: { id: string; name: string } | null
 }
 
-interface TraceEvent {
-  id: string
-  action: string
-  quantity: string
-  timestamp: string
-  metadata: Record<string, unknown> | null
-  shift: string | null
-  operator: { id: string; name: string } | null
-}
-
-/** Etiquetas humanas de las acciones del ProductionLog (spec 04 §2.1). */
-const ACCIONES_TRACE: Record<string, string> = {
-  start: 'Inicio de sesión',
-  pause: 'Pausa',
-  resume: 'Reanudar',
-  finish: 'Fin de bobina',
-  produce: 'Producción',
-  scrap: 'Merma',
-  setup_start: 'Setup: inicio',
-  setup_finish: 'Setup: fin',
-  close_shift: 'Cierre de turno',
-  stopped: 'Parada',
-  quality_check: 'Control de calidad',
-}
-
 /** Panel de Supervisor: "planta en un vistazo" (filosofía Jorge).
  *  OEE y KPIs reales del backend (spec 03), polling cada 10 s.
  *  Trazabilidad ISO 9001 (spec 04): selector de orden + serie temporal
@@ -76,7 +54,7 @@ export function SupervisorPage() {
 
   const [orders, setOrders] = useState<OrderItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState('')
-  const [trace, setTrace] = useState<TraceEvent[] | null>(null)
+  const [ficha, setFicha] = useState<FichaTrazabilidad | null>(null)
   const [traceError, setTraceError] = useState('')
 
   // Incidencias de planta (spec 04 §3.3): listado y resolución
@@ -172,13 +150,13 @@ export function SupervisorPage() {
 
   useEffect(() => {
     if (!selectedOrder) {
-      setTrace(null)
+      setFicha(null)
       return
     }
-    setTrace(null)
+    setFicha(null)
     setTraceError('')
-    api.getTrace(selectedOrder)
-      .then(setTrace)
+    api.getFichaTrazabilidad(selectedOrder)
+      .then(setFicha)
       .catch(() => setTraceError('No se pudo cargar la trazabilidad'))
   }, [selectedOrder])
 
@@ -261,39 +239,7 @@ export function SupervisorPage() {
           <p className="text-kavana-text-dim text-sm">Sin órdenes disponibles.</p>
         )}
 
-        {selectedOrder && !traceError && trace !== null && trace.length === 0 && (
-          <p className="text-kavana-text-dim text-sm">
-            Sin eventos de trazabilidad para esta orden.
-          </p>
-        )}
-
-        {selectedOrder && trace !== null && trace.length > 0 && (
-          <ol className="space-y-2">
-            {trace.map((ev) => (
-              <li
-                key={ev.id}
-                className="flex items-start justify-between gap-3 border-t border-kavana-border pt-2 text-sm"
-              >
-                <div>
-                  <p className="font-semibold">
-                    {ACCIONES_TRACE[ev.action] ?? ev.action}
-                  </p>
-                  <p className="text-kavana-text-dim text-xs">
-                    {new Date(ev.timestamp).toLocaleString('es-ES')} ·{' '}
-                    {ev.operator?.name ?? '—'}
-                    {ev.shift ? ` · turno ${ev.shift}` : ''}
-                  </p>
-                  <DetalleEvento evento={ev} />
-                </div>
-                {Number(ev.quantity) > 0 && (
-                  <p className="mono-data whitespace-nowrap">
-                    {ev.quantity} {ev.action === 'scrap' ? 'kg' : 'uds'}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
+        {selectedOrder && !traceError && ficha !== null && <FichaTrazabilidadVista ficha={ficha} />}
       </div>
 
       {/* Bandeja de calidad (Fase A3): últimos autocontroles de la planta */}
@@ -446,18 +392,6 @@ export function SupervisorPage() {
   )
 }
 
-function DetalleEvento({ evento }: { evento: TraceEvent }) {
-  const m = evento.metadata ?? {}
-  const partes: string[] = []
-  if (m.consumedAmount != null) partes.push(`${m.consumedAmount} kg consumidos`)
-  if (m.activeCoilCode != null) partes.push(`bobina ${m.activeCoilCode}`)
-  if (m.reason != null) partes.push(`motivo: ${m.reason}`)
-  if (m.efficiency != null) partes.push(`eficiencia ${m.efficiency} %`)
-
-  if (partes.length === 0) return null
-  return <p className="text-kavana-text-dim text-xs">{partes.join(' · ')}</p>
-}
-
 const ESTADOS_ORDEN: Record<string, { label: string; badge: string }> = {
   draft: { label: 'Borrador', badge: 'border-kavana-border text-kavana-text-dim' },
   active: { label: 'Activa', badge: 'border-kavana-orange text-kavana-orange' },
@@ -512,6 +446,8 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
   const [lines, setLines] = useState<LineDraft[]>([{ ...LINEA_VACIA }])
   const [workstations, setWorkstations] = useState<WorkstationOut[]>([])
   const [models, setModels] = useState<QualityModel[]>([])
+  // Cascada: modelos asignados a cada puesto (se piden al elegir el puesto)
+  const [modelosPuesto, setModelosPuesto] = useState<Record<string, WorkstationModel[]>>({})
   const [products, setProducts] = useState<ProductOut[]>([])
   const [materials, setMaterials] = useState<MaterialOut[]>([])
   const [detalle, setDetalle] = useState<OrderDetailOut | null>(null)
@@ -671,6 +607,31 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
     setLines((prev) => prev.map((ln, i) => (i === idx ? { ...ln, [campo]: valor } : ln)))
   }
 
+  // Elegir puesto desbloquea sus modelos y limpia lo que dependía del anterior
+  const cambiarPuesto = (idx: number, code: string) => {
+    setLines((prev) =>
+      prev.map((ln, i) =>
+        i === idx ? { ...ln, workstation_id: code, modelo_id: '', material_id: '' } : ln,
+      ),
+    )
+    if (code && !modelosPuesto[code]) {
+      api
+        .getWorkstationModels(code)
+        .then((ms) => setModelosPuesto((prev) => ({ ...prev, [code]: ms })))
+        .catch(() => setModelosPuesto((prev) => ({ ...prev, [code]: [] })))
+    }
+  }
+
+  // Elegir modelo fija solo su material en ese puesto
+  const cambiarModelo = (idx: number, modeloId: string) => {
+    const modelo = (modelosPuesto[lines[idx].workstation_id] ?? []).find((m) => m.id === modeloId)
+    setLines((prev) =>
+      prev.map((ln, i) =>
+        i === idx ? { ...ln, modelo_id: modeloId, material_id: modelo?.material_id ?? '' } : ln,
+      ),
+    )
+  }
+
   return (
     <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -756,7 +717,7 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                     required
                     className={selectCls}
                     value={ln.workstation_id}
-                    onChange={(e) => setLinea(idx, 'workstation_id', e.target.value)}
+                    onChange={(e) => cambiarPuesto(idx, e.target.value)}
                   >
                     <option value="">—</option>
                     {workstations.map((w) => (
@@ -771,10 +732,17 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                   <select
                     className={selectCls}
                     value={ln.modelo_id}
-                    onChange={(e) => setLinea(idx, 'modelo_id', e.target.value)}
+                    disabled={!ln.workstation_id}
+                    onChange={(e) => cambiarModelo(idx, e.target.value)}
                   >
-                    <option value="">—</option>
-                    {models.map((m) => (
+                    <option value="">
+                      {!ln.workstation_id
+                        ? 'Elige puesto'
+                        : (modelosPuesto[ln.workstation_id] ?? []).length === 0
+                          ? 'Sin modelos asignados'
+                          : '—'}
+                    </option>
+                    {(modelosPuesto[ln.workstation_id] ?? []).map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.code}
                       </option>
@@ -802,18 +770,24 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                   <span className="label-industrial text-[10px] text-kavana-text-dim">
                     Material
                   </span>
-                  <select
-                    className={selectCls}
-                    value={ln.material_id}
-                    onChange={(e) => setLinea(idx, 'material_id', e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.code}
-                      </option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const modelo = (modelosPuesto[ln.workstation_id] ?? []).find((m) => m.id === ln.modelo_id)
+                    const stock = modelo ? materials.find((m) => m.id === modelo.material_id)?.stock_current : undefined
+                    return (
+                      <div className={`${selectCls} flex flex-col justify-center mono-data`}>
+                        <span>{modelo?.material_code ?? '—'}</span>
+                        {modelo && stock != null && (
+                          <span
+                            className={`text-[10px] ${stock > 0 ? 'text-kavana-text-dim' : 'text-kavana-warn'}`}
+                          >
+                            {stock > 0
+                              ? `${Number(stock).toLocaleString('es-ES', { maximumFractionDigits: 0 })} kg en stock`
+                              : 'Sin stock registrado'}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </label>
                 <label className="block">
                   <span className="label-industrial text-[10px] text-kavana-text-dim">Cant.</span>

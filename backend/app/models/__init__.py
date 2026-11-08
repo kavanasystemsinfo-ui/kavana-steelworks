@@ -17,6 +17,7 @@ from app.models.parada import Parada  # noqa: F401
 from app.models.product import Product, ProductComponent  # noqa: F401
 from app.models.quality import (  # noqa: F401
     ManufacturingModel,
+    ModelWorkstationMaterial,
     QualityMeasurement,
     QualityPlanCheck,
     QualityRecord,
@@ -47,6 +48,7 @@ __all__ = [
     "TenantFeature",
     "ProductionLog",
     "ManufacturingModel",
+    "ModelWorkstationMaterial",
     "QualityPlanCheck",
     "QualityRecord",
     "QualityMeasurement",
