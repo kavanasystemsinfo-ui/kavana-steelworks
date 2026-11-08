@@ -662,6 +662,50 @@ def retirar_pico(
     }
 
 
+# Motivos de un toque para elegir una bobina nueva habiendo picos (D-019)
+MOTIVOS_SALTO_PICO = {
+    "pico_corto": "El pico no llega para la orden",
+    "pico_danado": "El pico está en mal estado",
+    "no_localizado": "No encuentro el pico",
+    "otro": "Otro motivo",
+}
+
+
+def picos_pendientes(db, tenant_id, linea, bobina) -> list:
+    """Picos del mismo material que se podrían usar antes de abrir ``bobina``.
+
+    Lista vacía si no hay nada que avisar: la bobina ya es un pico, ya está montada
+    en la línea o ya está en su puesto (la dejó allí el turno anterior), o no hay
+    picos libres de ese material. Un pico montado en otra máquina no cuenta.
+    """
+    from sqlalchemy import select
+
+    from app.models import OrderLine, StockItem
+
+    if bobina.estado == "pico" or bobina.id == linea.active_coil_id:
+        return []
+    if linea.workstation_id and bobina.ubicacion == linea.workstation_id:
+        return []
+    montadas_fuera = select(OrderLine.active_coil_id).where(
+        OrderLine.active_coil_id.is_not(None),
+        OrderLine.id != linea.id,
+    )
+    return list(
+        db.scalars(
+            select(StockItem)
+            .where(
+                StockItem.tenant_id == tenant_id,
+                StockItem.material_id == bobina.material_id,
+                StockItem.estado == "pico",
+                StockItem.cantidad_disponible > 0,
+                StockItem.id != bobina.id,
+                StockItem.id.not_in(montadas_fuera),
+            )
+            .order_by(StockItem.fecha_entrada.asc())
+        ).all()
+    )
+
+
 def link_coil(db, tenant_id, user_id, **kwargs) -> dict:
     """Vincula la bobina a la orden con cobro BULK por adelantado (spec 01 3.6).
 

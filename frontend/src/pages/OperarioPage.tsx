@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, getJwtPayload, getTenantId, type Desglose, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
+import { api, ApiError, getJwtPayload, getTenantId, type Desglose, type MotivoSaltoPico, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
 import { AltaManualBobina } from '../components/AltaManualBobina'
 import { BobinasDisponibles } from '../components/BobinasDisponibles'
+import { AvisoPicos, type PicoAviso } from '../components/AvisoPicos'
 import { MedirCierre } from '../components/MedirCierre'
 import { FichaOrden } from '../components/FichaOrden'
 import { CalculadoraBotones, type Unidad } from '../components/CalculadoraBotones'
@@ -208,7 +209,10 @@ export function OperarioPage() {
     ? Math.max(0, Math.round((ahora - new Date(ficha.tramo_desde).getTime()) / 60000))
     : null
 
-  const handleLink = async () => {
+  // Picos primero (D-019): si hay picos del material, se pide el motivo de un toque
+  const [picosAviso, setPicosAviso] = useState<PicoAviso[] | null>(null)
+
+  const handleLink = async (motivo?: MotivoSaltoPico) => {
     showToast("error", '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
@@ -220,10 +224,17 @@ export function OperarioPage() {
         stock_item_id: scan.id,
         order_id: ordenDetalle.id,
         line_id: ordenDetalle.line_id,
+        ...(motivo ? { motivo_salto_pico: motivo } : {}),
       })
+      setPicosAviso(null)
       setVinculada(true)
       refrescarFicha()
     } catch (err) {
+      const detalle = err instanceof ApiError ? (err.detail as { codigo?: string; picos?: PicoAviso[] } | undefined) : undefined
+      if (err instanceof ApiError && err.status === 409 && detalle?.codigo === 'MOTIVO_PICO_REQUERIDO') {
+        setPicosAviso(detalle.picos ?? [])
+        return
+      }
       showToast("error", err instanceof Error ? err.message : 'Error al vincular')
     }
   }
@@ -916,7 +927,7 @@ export function OperarioPage() {
               </div>
               <button
                 type="button"
-                onClick={handleLink}
+                onClick={() => handleLink()}
                 className="w-full min-h-[64px] bg-kavana-orange text-black font-bold rounded-xl hover:opacity-90 transition-opacity"
               >
                 Vincular a mi orden
@@ -934,6 +945,17 @@ export function OperarioPage() {
             </button>
           )}
         </form>
+        {picosAviso && (
+          <AvisoPicos
+            picos={picosAviso}
+            onMotivo={(m) => handleLink(m)}
+            onUsarPico={() => {
+              setPicosAviso(null)
+              setScan(null)
+              setCoilId('')
+            }}
+          />
+        )}
         {!scan && ordenDetalle?.line_id && (
           <BobinasDisponibles
             lineId={ordenDetalle.line_id}

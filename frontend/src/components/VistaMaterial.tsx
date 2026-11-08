@@ -4,6 +4,7 @@ import type { PanelCostes, PeriodoPanel } from '../lib/api'
 import { fmtNum, plural } from '../panel/formato'
 import type { Tono } from '../panel/tokens'
 import { EstadoBanner, KpiCard, Seccion, Selector } from '../panel/ui'
+import { PicosAcumulados } from './PicosAcumulados'
 
 const PERIODOS: { valor: PeriodoPanel; texto: string }[] = [
   { valor: 'semana', texto: 'Semana' },
@@ -168,6 +169,8 @@ export function VistaMaterial() {
           )}
         </>
       )}
+
+      <PicosAcumulados />
     </div>
   )
 }
