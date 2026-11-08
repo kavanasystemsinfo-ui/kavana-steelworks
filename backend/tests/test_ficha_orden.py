@@ -9,13 +9,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app.main import app
-from app.models import Incidencia, MaterialConsumo, Parada
+from app.models import Incidencia, MaterialConsumo, MaterialTransaction, Parada
 from app.routers import trace as trace_router
 from app.services import traceability
 from app.services.ficha_orden import ficha_orden
 from tests.helpers import (
     authed_client,
-    link_coil,
     make_material,
     make_order,
     make_order_line,
@@ -47,7 +46,16 @@ def _escenario(db, tenant, user):
     linea.produced_quantity = 40
     db.commit()
     bobina = make_stock_item(db, tenant, material, cantidad=500, lote="L-FICHA", coil_id="B-FICHA")
-    link_coil(db, tenant, bobina, orden, linea)
+    db.add(
+        MaterialTransaction(
+            tenant_id=tenant.id, material_id=material.id, stock_item_id=bobina.id,
+            orden_id=orden.id, linea_orden_id=linea.id, tipo="salida_produccion",
+            cantidad=500, cantidad_anterior=500, cantidad_nueva=500,
+            motivo="Bobina vinculada a la Línea. Carga total de Entrada: 500.00kg",
+            realizado_por=user.id,
+        )
+    )
+    db.commit()
 
     _log(db, tenant, user, orden, linea, "start", 1)
     _log(
@@ -98,6 +106,8 @@ def test_ficha_une_fuentes_y_ordena_de_mas_reciente_a_mas_antiguo(db_session, te
     assert {"produccion", "calidad", "bobina", "parada", "incidencia", "estado"} <= categorias
     titulos = [e["titulo"] for e in ficha["linea_tiempo"]]
     assert "Bobina B-FICHA vinculada" in titulos
+    vinculada = next(e for e in ficha["linea_tiempo"] if e["titulo"] == "Bobina B-FICHA vinculada")
+    assert vinculada["quien"] == user.name
     assert "Merma de bobina B-FICHA" in titulos
     assert "Autocontrol de calidad: ok" in titulos
     assert "Parada en LINEA-1" in titulos

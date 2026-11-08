@@ -21,9 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
-    CoilLink,
     Incidencia,
     MaterialConsumo,
+    MaterialTransaction,
     Order,
     OrderLine,
     Parada,
@@ -187,13 +187,24 @@ def ficha_orden(db: Session, tenant_id, order_id) -> dict | None:
             )
         ).all()
     )
+    # Vinculación de bobinas: queda en el kardex (MaterialTransaction), que es lo que
+    # escribe siempre el flujo de planta al vincular.
     vinculos = list(
         db.scalars(
-            select(CoilLink).where(CoilLink.tenant_id == tenant_id, CoilLink.order_id == orden.id)
+            select(MaterialTransaction).where(
+                MaterialTransaction.tenant_id == tenant_id,
+                MaterialTransaction.orden_id == orden.id,
+                MaterialTransaction.tipo == "salida_produccion",
+                MaterialTransaction.motivo.contains("Bobina vinculada"),
+            )
         ).all()
     )
 
-    ids_usuarios = {p.operario_id for p in paradas} | {i.operario_id for i in incidencias}
+    ids_usuarios = (
+        {p.operario_id for p in paradas}
+        | {i.operario_id for i in incidencias}
+        | {v.realizado_por for v in vinculos if v.realizado_por}
+    )
     nombres = {
         u.id: u.name
         for u in db.scalars(select(User).where(User.id.in_(ids_usuarios))).all()
@@ -319,8 +330,11 @@ def ficha_orden(db: Session, tenant_id, order_id) -> dict | None:
         b = bobinas.get(v.stock_item_id)
         codigo = b.coil_id if b else "?"
         eventos.append(
-            _evento(f"vinculo-{v.id}", v.created_at, "bobina", f"Bobina {codigo} vinculada",
-                    f"estado: {v.estado}")
+            _evento(
+                f"vinculo-{v.id}", v.created_at, "bobina", f"Bobina {codigo} vinculada",
+                f"carga de {_fmt(_num(v.cantidad), 1)} kg a la orden",
+                nombres.get(v.realizado_por),
+            )
         )
 
     for b in bobinas.values():
