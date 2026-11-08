@@ -662,6 +662,60 @@ def retirar_pico(
     }
 
 
+def reparar_codigos_duplicados_demo(db, tenant_id=None) -> int:
+    """Renombra los códigos de bobina de simulador (``SIM-…``) que están repetidos.
+
+    Antes de que el código fuese único (PR 57) el simulador dejó pares con el mismo
+    código, y escanear uno es ambiguo. Se conserva el código en la bobina más antigua
+    y a las demás se les añade ``-2``, ``-3``… No borra nada, solo toca códigos que
+    empiezan por ``SIM-`` (los del simulador de la demo) y es idempotente.
+    Devuelve cuántas bobinas se han renombrado.
+    """
+    from sqlalchemy import func, select
+
+    from app.models import OrderLine, StockItem
+
+    consulta = (
+        select(StockItem.tenant_id, StockItem.coil_id)
+        .where(StockItem.coil_id.like("SIM-%"))
+        .group_by(StockItem.tenant_id, StockItem.coil_id)
+        .having(func.count() > 1)
+    )
+    if tenant_id is not None:
+        consulta = consulta.where(StockItem.tenant_id == tenant_id)
+
+    renombradas = 0
+    for tenant, codigo in db.execute(consulta).all():
+        bobinas = db.scalars(
+            select(StockItem)
+            .where(StockItem.tenant_id == tenant, StockItem.coil_id == codigo)
+            .order_by(StockItem.fecha_entrada.asc(), StockItem.created_at.asc(), StockItem.id)
+        ).all()
+        usados = {
+            c
+            for c in db.scalars(
+                select(StockItem.coil_id).where(
+                    StockItem.tenant_id == tenant, StockItem.coil_id.like(f"{codigo}-%")
+                )
+            ).all()
+        }
+        for bobina in bobinas[1:]:
+            n = 2
+            while f"{codigo}-{n}" in usados:
+                n += 1
+            nuevo = f"{codigo}-{n}"
+            usados.add(nuevo)
+            bobina.coil_id = nuevo
+            for linea in db.scalars(
+                select(OrderLine).where(OrderLine.active_coil_id == bobina.id)
+            ).all():
+                linea.active_coil_code = nuevo
+            renombradas += 1
+    if renombradas:
+        db.commit()
+    return renombradas
+
+
 # Motivos de un toque para elegir una bobina nueva habiendo picos (D-019)
 MOTIVOS_SALTO_PICO = {
     "pico_corto": "El pico no llega para la orden",
