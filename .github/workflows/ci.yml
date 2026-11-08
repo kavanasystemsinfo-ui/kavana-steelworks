@@ -43,6 +43,14 @@ jobs:
       - name: "Lint (ruff) — gate: app/ y tests/"
         run: uv run ruff check app/ tests/
 
+      - name: Migrations check (PostgreSQL real)
+        env:
+          STEELWORKS_DATABASE_URL: postgresql+psycopg://postgres:pw@localhost:5432/sw_test
+        run: |
+          uv run alembic upgrade head
+          uv run alembic current
+          uv run alembic heads
+
       - name: Test (pytest)
         run: uv run pytest tests/ -v
 
