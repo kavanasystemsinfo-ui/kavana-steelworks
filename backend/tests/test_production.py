@@ -130,8 +130,8 @@ def test_produccion_auditoria_consume_por_burbuja(db_session, tenant, user):
     assert float(consumos[0].consumed_quantity) == pytest.approx(consumido, abs=0.01)
 
 
-def test_produccion_sin_bobina_modo_simple_no_bloquea(db_session, tenant, user):
-    """Sin bobina activa: FIFO global; si no hay stock, produce sin descuento."""
+def test_produccion_sin_bobina_rechaza_si_qty_positivo(db_session, tenant, user):
+    """D-018: qty > 0 sin bobina vinculada → ValueError claro."""
     from app.services.production import record_production
 
     make_material(db_session, tenant, code="ACERO-SIMPLE", cost=2.0)
@@ -139,7 +139,29 @@ def test_produccion_sin_bobina_modo_simple_no_bloquea(db_session, tenant, user):
     line = make_order_line(db_session, order, workstation="LINEA-1", total_quantity=10.0)
     line.meters_per_piece = Decimal("2.0")
     db_session.commit()
-    # Sin bobina, sin stock de material
+    # Sin bobina vinculada
+
+    with pytest.raises(ValueError, match="No hay bobina vinculada a esta l"):
+        record_production(
+            db_session,
+            tenant.id,
+            user.id,
+            order_id=order.id,
+            line_id=line.id,
+            incremental_quantity=3,
+        )
+
+
+def test_produccion_solo_horas_sin_bobina_permitido(db_session, tenant, user):
+    """qty == 0 y hours > 0 se permite sin bobina (solo registrar horas)."""
+    from app.services.production import record_production
+
+    make_material(db_session, tenant, code="ACERO-SIMPLE", cost=2.0)
+    order = make_order(db_session, tenant, numero="OP-HORAS")
+    line = make_order_line(db_session, order, workstation="LINEA-1", total_quantity=10.0)
+    line.meters_per_piece = Decimal("2.0")
+    db_session.commit()
+    # Sin bobina vinculada
 
     result = record_production(
         db_session,
@@ -147,15 +169,16 @@ def test_produccion_sin_bobina_modo_simple_no_bloquea(db_session, tenant, user):
         user.id,
         order_id=order.id,
         line_id=line.id,
-        incremental_quantity=3,
+        incremental_quantity=0,
+        hours_worked=2.5,
     )
 
     db_session.refresh(line)
-    # Produce igual (modo simple tolerante), sin descuento ni coste fantasma
-    assert line.produced_quantity == 3
+    assert line.produced_quantity == 0
+    assert float(line.real_time) == pytest.approx(150.0, abs=0.01)  # 2.5h * 60
+    assert result["incremental_quantity"] == 0
     assert result["consumed_amount"] == 0
     assert result["calculation_method"] == "none"
-    assert float(line.real_material_qty) == 0
 
 
 def test_produccion_completa_la_linea(db_session, tenant, user):
@@ -246,13 +269,24 @@ def test_produccion_registra_turno_abc_en_trazabilidad(db_session, tenant, user)
     from sqlalchemy import select
 
     from app.models import ProductionLog
+    from app.services.inventory import link_coil
     from app.services.production import record_production
 
-    make_material(db_session, tenant, code="ACERO-TURNO", cost=2.0)
+    material = make_material(db_session, tenant, code="ACERO-TURNO", cost=2.0)
+    bobina = make_stock_item(
+        db_session, tenant, material, cantidad=100.0, lote="L-TURNO",
+        ancho=122.0, espesor=0.5, ubicacion="LINEA-1"
+    )
     order = make_order(db_session, tenant, numero="OP-TURNO")
     line = make_order_line(db_session, order, workstation="LINEA-1", total_quantity=10.0)
     line.meters_per_piece = Decimal("2.0")
     db_session.commit()
+
+    link_coil(
+        db_session, tenant.id, user.id,
+        stock_item_id=bobina.id, order_id=order.id, line_id=line.id
+    )
+    db_session.refresh(bobina)
 
     record_production(
         db_session,
