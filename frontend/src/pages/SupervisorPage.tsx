@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { FichaTrazabilidadVista } from '../components/FichaTrazabilidadVista'
 import { InformeTurno } from '../components/InformeTurno'
 import { ModoTv } from '../components/ModoTv'
 import { VistaCostes } from '../components/VistaCostes'
@@ -21,6 +22,7 @@ import type {
   WorkstationModel,
   QualityRecordOut,
   WorkstationOut,
+  FichaTrazabilidad,
 } from '../lib/api'
 
 interface IncidenciaItem {
@@ -40,31 +42,6 @@ interface IncidenciaItem {
   responsable: { id: string; name: string } | null
 }
 
-interface TraceEvent {
-  id: string
-  action: string
-  quantity: string
-  timestamp: string
-  metadata: Record<string, unknown> | null
-  shift: string | null
-  operator: { id: string; name: string } | null
-}
-
-/** Etiquetas humanas de las acciones del ProductionLog (spec 04 §2.1). */
-const ACCIONES_TRACE: Record<string, string> = {
-  start: 'Inicio de sesión',
-  pause: 'Pausa',
-  resume: 'Reanudar',
-  finish: 'Fin de bobina',
-  produce: 'Producción',
-  scrap: 'Merma',
-  setup_start: 'Setup: inicio',
-  setup_finish: 'Setup: fin',
-  close_shift: 'Cierre de turno',
-  stopped: 'Parada',
-  quality_check: 'Control de calidad',
-}
-
 /** Panel de Supervisor: "planta en un vistazo" (filosofía Jorge).
  *  OEE y KPIs reales del backend (spec 03), polling cada 10 s.
  *  Trazabilidad ISO 9001 (spec 04): selector de orden + serie temporal
@@ -77,7 +54,7 @@ export function SupervisorPage() {
 
   const [orders, setOrders] = useState<OrderItem[]>([])
   const [selectedOrder, setSelectedOrder] = useState('')
-  const [trace, setTrace] = useState<TraceEvent[] | null>(null)
+  const [ficha, setFicha] = useState<FichaTrazabilidad | null>(null)
   const [traceError, setTraceError] = useState('')
 
   // Incidencias de planta (spec 04 §3.3): listado y resolución
@@ -173,13 +150,13 @@ export function SupervisorPage() {
 
   useEffect(() => {
     if (!selectedOrder) {
-      setTrace(null)
+      setFicha(null)
       return
     }
-    setTrace(null)
+    setFicha(null)
     setTraceError('')
-    api.getTrace(selectedOrder)
-      .then(setTrace)
+    api.getFichaTrazabilidad(selectedOrder)
+      .then(setFicha)
       .catch(() => setTraceError('No se pudo cargar la trazabilidad'))
   }, [selectedOrder])
 
@@ -262,39 +239,7 @@ export function SupervisorPage() {
           <p className="text-kavana-text-dim text-sm">Sin órdenes disponibles.</p>
         )}
 
-        {selectedOrder && !traceError && trace !== null && trace.length === 0 && (
-          <p className="text-kavana-text-dim text-sm">
-            Sin eventos de trazabilidad para esta orden.
-          </p>
-        )}
-
-        {selectedOrder && trace !== null && trace.length > 0 && (
-          <ol className="space-y-2">
-            {trace.map((ev) => (
-              <li
-                key={ev.id}
-                className="flex items-start justify-between gap-3 border-t border-kavana-border pt-2 text-sm"
-              >
-                <div>
-                  <p className="font-semibold">
-                    {ACCIONES_TRACE[ev.action] ?? ev.action}
-                  </p>
-                  <p className="text-kavana-text-dim text-xs">
-                    {new Date(ev.timestamp).toLocaleString('es-ES')} ·{' '}
-                    {ev.operator?.name ?? '—'}
-                    {ev.shift ? ` · turno ${ev.shift}` : ''}
-                  </p>
-                  <DetalleEvento evento={ev} />
-                </div>
-                {Number(ev.quantity) > 0 && (
-                  <p className="mono-data whitespace-nowrap">
-                    {ev.quantity} {ev.action === 'scrap' ? 'kg' : 'uds'}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
+        {selectedOrder && !traceError && ficha !== null && <FichaTrazabilidadVista ficha={ficha} />}
       </div>
 
       {/* Bandeja de calidad (Fase A3): últimos autocontroles de la planta */}
@@ -445,18 +390,6 @@ export function SupervisorPage() {
       </PanelLayout>
     </>
   )
-}
-
-function DetalleEvento({ evento }: { evento: TraceEvent }) {
-  const m = evento.metadata ?? {}
-  const partes: string[] = []
-  if (m.consumedAmount != null) partes.push(`${m.consumedAmount} kg consumidos`)
-  if (m.activeCoilCode != null) partes.push(`bobina ${m.activeCoilCode}`)
-  if (m.reason != null) partes.push(`motivo: ${m.reason}`)
-  if (m.efficiency != null) partes.push(`eficiencia ${m.efficiency} %`)
-
-  if (partes.length === 0) return null
-  return <p className="text-kavana-text-dim text-xs">{partes.join(' · ')}</p>
 }
 
 const ESTADOS_ORDEN: Record<string, { label: string; badge: string }> = {

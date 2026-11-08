@@ -490,14 +490,46 @@ export interface QualityRecordOut {
   measurements: QualityMeasurementOut[]
 }
 
-export interface TraceEvent {
+export type CategoriaTraza = 'produccion' | 'calidad' | 'bobina' | 'parada' | 'incidencia' | 'estado'
+
+export interface EventoTraza {
   id: string
-  action: string
-  quantity: string
   timestamp: string
-  metadata: Record<string, unknown> | null
-  shift: string | null
-  operator: { id: string; name: string } | null
+  categoria: CategoriaTraza
+  titulo: string
+  detalle: string
+  quien: string | null
+  cantidad: number | null
+  unidad: string | null
+}
+
+export interface FichaTrazabilidad {
+  resumen: {
+    numero: string
+    estado: string
+    cliente: string | null
+    piezas_producidas: number
+    piezas_objetivo: number
+    merma_kg: number
+    kg_consumidos: number
+    kg_por_bobina: {
+      stock_item_id: string | null
+      coil_id: string | null
+      lote: string | null
+      kg: number
+      origen: string | null
+      pendiente_verificacion: boolean
+    }[]
+    personas: { id: string; nombre: string; eventos: number; piezas: number }[]
+    paradas_minutos: number
+    paradas_abiertas: number
+    incidencias: number
+    eficiencia_media_uds_h: number | null
+    lineas: { numero: number; puesto: string | null; estado: string; producidas: number; total: number }[]
+    generada_en: string
+  }
+  linea_tiempo: EventoTraza[]
+  categorias: CategoriaTraza[]
 }
 
 // Admin types
@@ -960,8 +992,8 @@ export const api = {
     return request(`/orders/${orderId}`)
   },
 
-  getTrace(orderId: string): Promise<TraceEvent[]> {
-    return request(`/trace/orders/${orderId}`)
+  getFichaTrazabilidad(orderId: string): Promise<FichaTrazabilidad> {
+    return request(`/trace/orders/${orderId}/ficha`)
   },
 
   getQualityModels(): Promise<QualityModel[]> {
