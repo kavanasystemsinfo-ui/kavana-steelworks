@@ -144,6 +144,17 @@ def _evento_de_log(log: ProductionLog) -> dict:
             f"log-{log.id}", log.timestamp, "calidad", titulo, " · ".join(detalle), quien
         )
 
+    if log.action == "setup_start" and razon == "salto_pico":
+        detalle.append(f"motivo: {meta.get('motivo_texto') or meta.get('motivo')}")
+        if meta.get("picos_omitidos"):
+            detalle.append("picos sin usar: " + ", ".join(str(c) for c in meta["picos_omitidos"]))
+        titulo = f"Bobina nueva {bobina} con picos disponibles" if bobina else (
+            "Bobina nueva con picos disponibles"
+        )
+        return _evento(
+            f"log-{log.id}", log.timestamp, "bobina", titulo, " · ".join(detalle), quien
+        )
+
     titulo = _TITULOS_ACCION.get(log.action, log.action)
     if meta.get("reason"):
         detalle.append(f"motivo: {meta['reason']}")

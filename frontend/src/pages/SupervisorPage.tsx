@@ -770,9 +770,24 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
                   <span className="label-industrial text-[10px] text-kavana-text-dim">
                     Material
                   </span>
-                  <div className={`${selectCls} flex items-center mono-data`}>
-                    {(modelosPuesto[ln.workstation_id] ?? []).find((m) => m.id === ln.modelo_id)?.material_code ?? '—'}
-                  </div>
+                  {(() => {
+                    const modelo = (modelosPuesto[ln.workstation_id] ?? []).find((m) => m.id === ln.modelo_id)
+                    const stock = modelo ? materials.find((m) => m.id === modelo.material_id)?.stock_current : undefined
+                    return (
+                      <div className={`${selectCls} flex flex-col justify-center mono-data`}>
+                        <span>{modelo?.material_code ?? '—'}</span>
+                        {modelo && stock != null && (
+                          <span
+                            className={`text-[10px] ${stock > 0 ? 'text-kavana-text-dim' : 'text-kavana-warn'}`}
+                          >
+                            {stock > 0
+                              ? `${Number(stock).toLocaleString('es-ES', { maximumFractionDigits: 0 })} kg en stock`
+                              : 'Sin stock registrado'}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </label>
                 <label className="block">
                   <span className="label-industrial text-[10px] text-kavana-text-dim">Cant.</span>
