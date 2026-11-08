@@ -10,6 +10,13 @@ const ETIQUETAS: Record<CategoriaTraza, string> = {
   estado: 'Estados',
 }
 
+const ESTADOS_LINEA: Record<string, string> = {
+  pending: 'pendiente',
+  in_progress: 'en curso',
+  stopped: 'parada',
+  completed: 'completada',
+}
+
 const fmt = (n: number, dec = 1) => n.toLocaleString('es-ES', { maximumFractionDigits: dec })
 
 const fecha = (iso: string) =>
@@ -51,8 +58,9 @@ export function FichaTrazabilidadVista({ ficha }: { ficha: FichaTrazabilidad }) 
     <div className="space-y-4">
       <section aria-label="Resumen de la orden" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <Dato
-          etiqueta="Piezas"
+          etiqueta={resumen.lineas.length > 1 ? 'Piezas terminadas' : 'Piezas'}
           valor={`${fmt(resumen.piezas_producidas, 0)} de ${fmt(resumen.piezas_objetivo, 0)}`}
+          nota={resumen.lineas.length > 1 ? 'las de la última línea' : undefined}
         />
         <Dato etiqueta="Merma" valor={`${fmt(resumen.merma_kg)} kg`} />
         <Dato etiqueta="Material usado" valor={`${fmt(resumen.kg_consumidos)} kg`} />
@@ -67,6 +75,26 @@ export function FichaTrazabilidadVista({ ficha }: { ficha: FichaTrazabilidad }) 
           valor={resumen.eficiencia_media_uds_h != null ? `${fmt(resumen.eficiencia_media_uds_h)} uds/h` : 'Sin datos'}
         />
       </section>
+
+      {resumen.lineas.length > 1 && (
+        <section aria-label="Líneas de la orden">
+          <h3 className="m-0 mb-1 text-sm font-semibold text-p-texto">Líneas</h3>
+          <ul className="m-0 p-0 list-none space-y-1">
+            {resumen.lineas.map((l) => (
+              <li key={l.numero} className="flex justify-between gap-2 text-sm">
+                <span>
+                  Línea {l.numero}
+                  {l.puesto ? ` · ${l.puesto}` : ''}
+                  <span className="ml-2 text-xs text-p-texto2">{ESTADOS_LINEA[l.estado] ?? l.estado}</span>
+                </span>
+                <span className="mono-data">
+                  {fmt(l.producidas, 0)} de {fmt(l.total, 0)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {resumen.kg_por_bobina.length > 0 && (
         <section aria-label="Bobinas de la orden">

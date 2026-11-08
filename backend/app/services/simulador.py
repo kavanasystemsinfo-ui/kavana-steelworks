@@ -140,8 +140,9 @@ def _reponer_bobina(db: Session, tenant_id, material_id, user_id) -> StockItem |
     )
     if ultima is None:
         return None
-    # Sufijo aleatorio: dos reposiciones en el mismo segundo no pueden repetir el código
-    marca = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+    # Sufijo aleatorio de 32 bits: cientos de reposiciones en el mismo segundo no repiten
+    # código (con 16 bits el test de muchos ticks chocaba de vez en cuando)
+    marca = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8].upper()}"
     return receive_coil(
         db, tenant_id, user_id,
         material_id=material_id,

@@ -486,6 +486,31 @@ describe('Trazabilidad ISO 9001 en el panel Supervisor', () => {
     vi.unstubAllGlobals()
   })
 
+  it('con varias líneas aclara que las piezas terminadas son las de la última y desglosa cada línea', async () => {
+    const dosLineas = fichaDe('OP-DEMO-001', [], {
+      piezas_producidas: 0,
+      piezas_objetivo: 12,
+      lineas: [
+        { numero: 1, puesto: 'PL-220', estado: 'in_progress', producidas: 11, total: 12 },
+        { numero: 2, puesto: 'RB-1', estado: 'pending', producidas: 0, total: 12 },
+      ],
+    })
+    stubApi({ trace: { OP1: dosLineas } })
+
+    renderPage()
+
+    const resumen = await screen.findByRole('region', { name: 'Resumen de la orden' })
+    expect(resumen).toHaveTextContent('Piezas terminadas')
+    expect(resumen).toHaveTextContent('0 de 12')
+    expect(resumen).toHaveTextContent('las de la última línea')
+    const lineas = screen.getByRole('region', { name: 'Líneas de la orden' })
+    expect(lineas).toHaveTextContent('Línea 1 · PL-220')
+    expect(lineas).toHaveTextContent('en curso')
+    expect(lineas).toHaveTextContent('11 de 12')
+    expect(lineas).toHaveTextContent('Línea 2 · RB-1')
+    vi.unstubAllGlobals()
+  })
+
   it('la línea de tiempo va de más reciente a más antiguo', async () => {
     stubApi({ trace: { OP1: traceOP1 } })
 
