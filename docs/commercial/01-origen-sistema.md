@@ -1,16 +1,13 @@
 # Origen del sistema: la historia de por qué existe
 
-> **Borrador para revisión de Jorge.** Narrativa de portafolio basada en
-> experiencia real verificada: 8 años en fábricas metalúrgicas (CNC, turnos),
-> varias empresas medianas y grandes, sin nombres inventados. Revisar antes
-> de publicar en README público, landing o LinkedIn.
-
 ## El punto de partida: 8 años dentro de la fábrica
 
 Este sistema no nació en un aula ni en un despacho de consultoría. Nació en el
 suelo de la fábrica, del día a día de 8 años trabajando como operario en
 fábricas metalúrgicas de distintos tamaños: CNC, líneas de producción, turnos
 de mañana, tarde y noche.
+
+En 2023, antes de usar IA, hice por mi cuenta VistaProd: una app con MIT App Inventor, sin IA, para apuntar mi propia producción en la empresa donde trabajaba como operario. No llegó a usarse en la empresa, pero de aquella idea, que fue evolucionando, nacieron Kavana Manufacturing y, después, Kavana Steelworks.
 
 En ese tiempo se ven cosas que nadie desde fuera puede ver. Se ve cómo se
 pierde el tiempo, dónde se pierde, y cuánto cuesta en dinero real.
@@ -106,13 +103,3 @@ No es un ERP. No es un software de oficina adaptado a planta. Es software
 construido desde la planta, por un operario que pasó 8 años viendo dónde se
 perdía el tiempo y el material, y que decidió replicar lo que funcionaba y
 arreglar lo que no.
-
-## Notas para el portafolio
-
-- La historia es real y verificable en la experiencia laboral de Jorge
-  (8 años en metalurgia, CNC, turnos, varias empresas, sin nombres).
-- No se inventan empresas, clientes ni anécdotas específicas.
-- El tono es el de un ingeniero de producto con experiencia de planta, no el
-  de un consultor vendiendo humo.
-- Esta narrativa alimenta: README público, landing del proyecto, caso de
-  estudio, post de LinkedIn y respuestas en entrevistas.
