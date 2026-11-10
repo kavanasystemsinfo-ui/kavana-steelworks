@@ -254,7 +254,8 @@ def test_responder_prueba_el_siguiente_modelo_gratis(monkeypatch):
 
     monkeypatch.setattr(assistant, "llamar_openrouter", _llm)
     monkeypatch.setattr(assistant, "_leer_contexto_base", lambda: "contexto")
-    monkeypatch.setattr(assistant, "buscar", lambda *a, **k: [{"fuente": "README.md", "texto": "x" * 200, "score": 1}])
+    docs = [{"fuente": "README.md", "texto": "x" * 200, "score": 1}]
+    monkeypatch.setattr(assistant, "buscar", lambda *a, **k: docs)
     r = asyncio.run(assistant.responder("k", "que es esto"))
     assert r["respuesta"] == "respuesta"
     assert len(usados) == 2 and all(m.endswith(":free") for m in usados)
