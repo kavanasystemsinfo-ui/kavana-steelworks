@@ -198,3 +198,62 @@ def test_el_cambio_de_turno_mide_la_bobina_y_la_deja_montada(db_session):
             codigo in a and a.startswith(("fin de bobina", "desvincula")) for a in acciones
         )
         assert codigo in sigue or acabada, (codigo, acciones)
+
+
+def _orden_manual(db, tenant, notas="ES LO QUE HAY"):
+    """Orden como la crea un supervisor desde el formulario (no es del simulador)."""
+    from app.models import Order, OrderLine, Workstation
+
+    puesto = db.scalars(
+        select(Workstation)
+        .where(Workstation.tenant_id == tenant.id, Workstation.is_active.is_(True))
+        .order_by(Workstation.code)
+    ).first()
+    assert puesto is not None
+    orden = Order(
+        tenant_id=tenant.id, numero="OP-MANUAL-1", estado="active", cliente="PRUEBA", notas=notas
+    )
+    db.add(orden)
+    db.flush()
+    db.add(
+        OrderLine(
+            order_id=orden.id,
+            linea_numero=1,
+            workstation_id=puesto.code,
+            estado="pending",
+            total_quantity=10,
+        )
+    )
+    db.commit()
+    db.refresh(orden)
+    return orden
+
+
+def test_el_simulador_no_toca_las_ordenes_creadas_a_mano(db_session):
+    """T-095: una orden de un visitante en la demo debe seguir activa y pendiente
+    para que el operario la vea; antes el simulador la arrancaba y la cerraba."""
+    tenant = _demo(db_session)
+    orden = _orden_manual(db_session, tenant)
+
+    rng = random.Random(7)
+    for _ in range(40):
+        simular_tick(db_session, rng)
+
+    db_session.refresh(orden)
+    assert orden.estado == "active"
+    assert [ln.estado for ln in orden.lines] == ["pending"]
+    assert all(ln.produced_quantity in (None, 0) for ln in orden.lines)
+
+
+def test_el_simulador_sigue_trabajando_con_ordenes_propias(db_session):
+    """El arreglo no debe dejar la demo parada: sus órdenes siguen produciendo."""
+    tenant = _demo(db_session)
+    _orden_manual(db_session, tenant)
+
+    resultado = None
+    produjo = False
+    rng = random.Random(42)
+    for _ in range(20):
+        resultado = simular_tick(db_session, rng)
+        produjo = produjo or any(a.startswith("produce") for a in resultado["acciones"])
+    assert produjo, resultado

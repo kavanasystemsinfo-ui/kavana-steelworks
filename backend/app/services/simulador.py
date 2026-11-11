@@ -42,7 +42,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
@@ -52,6 +52,21 @@ from app.services.shifts import en_horario_laboral
 MINUTOS_POR_PIEZA = Decimal("3")
 ORDENES_ACTIVAS_MIN = 5  # suficientes para que la mayoría de los puestos tengan trabajo
 
+# Solo las órdenes de la propia demo (simulador y semillas) las mueve el simulador.
+# Una orden creada a mano por un visitante (formulario del supervisor) no lleva estas
+# notas y se queda como está: así el operario puede verla y trabajarla (T-095).
+MARCAS_ORDEN_DEMO = (
+    "Orden generada por el simulador",
+    "Orden de demostración",
+    "Orden del catalogo",
+    "Plantilla de flujo",
+)
+
+
+def _es_orden_de_demo():
+    """Condición SQL: la orden es de la demo y no creada a mano."""
+    return or_(*(Order.notas.startswith(m) for m in MARCAS_ORDEN_DEMO))
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +75,9 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
     from app.services.sequences import next_sequence
 
     activas = db.scalars(
-        select(Order).where(Order.tenant_id == tenant_id, Order.estado == "active")
+        select(Order).where(
+            Order.tenant_id == tenant_id, Order.estado == "active", _es_orden_de_demo()
+        )
     ).all()
     activos = {
         w.code
@@ -78,6 +95,7 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
                 Order.tenant_id == tenant_id,
                 Order.estado == "completed",
                 Order.cliente != "Cliente demo",
+                _es_orden_de_demo(),
             )
             .order_by(Order.created_at.asc())
         )
@@ -431,7 +449,7 @@ def simular_tick(
     lineas = db.execute(
         select(OrderLine, Order)
         .join(Order, Order.id == OrderLine.order_id)
-        .where(Order.tenant_id == tenant.id, Order.estado == "active")
+        .where(Order.tenant_id == tenant.id, Order.estado == "active", _es_orden_de_demo())
         .order_by(Order.created_at.asc(), OrderLine.linea_numero.asc())
     ).all()
 
