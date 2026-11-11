@@ -6,6 +6,30 @@
 export const MAX_COMPRESSED_BYTES = 4 * 1024 * 1024 // objetivo de peso tras comprimir
 export const MAX_COMPRESSED_DIMENSION = 1600 // lado mayor en px (suficiente para evidencia)
 
+/** Formatos de imagen soportados por el backend (magic bytes). */
+export const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+/** Extensiones HEIC/HEIF de iPhone. */
+export const HEIC_EXTENSIONS = ['.heic', '.heif']
+
+/** ¿Es un archivo HEIC/HEIF? Se detecta por extensión o MIME type declarado. */
+export function isHeicFile(file: File): boolean {
+  const name = file.name.toLowerCase()
+  const type = file.type.toLowerCase()
+  return HEIC_EXTENSIONS.some((ext) => name.endsWith(ext)) || type === 'image/heic' || type === 'image/heif'
+}
+
+/** Lanza error claro si es HEIC (no soportado por compresión nativa ni backend). */
+export function assertNotHeic(file: File): void {
+  if (isHeicFile(file)) {
+    throw new Error(
+      'El formato HEIC/HEIF de iPhone no es compatible. ' +
+      "Cambia a 'Más compatibles' en Ajustes > Cámara > Formato, " +
+      'o selecciona una foto en JPEG/PNG desde la galería.'
+    )
+  }
+}
+
 /** Dimensiones de destino preservando el aspect ratio; sin escalado si ya caben. */
 export function computeTargetSize(
   width: number,
@@ -52,6 +76,7 @@ export async function compressImage(
   maxDim: number = MAX_COMPRESSED_DIMENSION,
   maxBytes: number = MAX_COMPRESSED_BYTES,
 ): Promise<File> {
+  assertNotHeic(file)
   const bitmap = await createImageBitmap(file)
   try {
     const target = computeTargetSize(bitmap.width, bitmap.height, maxDim)
