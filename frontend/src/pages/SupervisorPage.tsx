@@ -174,6 +174,7 @@ export function SupervisorPage() {
             error={turno.error}
             onIr={irDesdeTurno}
             onFicha={(codigo) => setParams({ vista: 'planta', puesto: codigo })}
+            onNuevaOrden={() => setParams({ vista: 'gestion', nueva: '1' })}
           />}
         {vista === 'material' && <VistaMaterial />}
         {vista === 'costes' && <VistaCostes />}
@@ -461,6 +462,18 @@ function OrdersManager({ onCambio }: { onCambio: () => void }) {
 
   useEffect(() => {
     cargar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Acceso directo desde el panel de turno (?nueva=1): abre el formulario y baja a él
+  const [paramsOrden, setParamsOrden] = useSearchParams()
+  useEffect(() => {
+    if (paramsOrden.get('nueva') !== '1') return
+    abrirForm()
+    setParamsOrden({ vista: 'gestion' }, { replace: true })
+    setTimeout(() => {
+      document.getElementById('ordenes')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

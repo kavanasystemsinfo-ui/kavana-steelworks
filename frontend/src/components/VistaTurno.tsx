@@ -42,12 +42,15 @@ export function VistaTurno({
   error,
   onIr,
   onFicha,
+  onNuevaOrden,
 }: {
   datos: PanelTurno | null
   error: string
   onIr: (destino: DestinoTurno) => void
   /** Abre la ficha del puesto (vista Planta). */
   onFicha?: (codigo: string) => void
+  /** Acceso directo al formulario de nueva orden (T-094). */
+  onNuevaOrden?: () => void
 }) {
   if (!datos) {
     return (
@@ -79,6 +82,17 @@ export function VistaTurno({
 
   return (
     <>
+      {onNuevaOrden && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onNuevaOrden}
+            className="min-h-[44px] px-5 border border-kavana-orange text-kavana-orange text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-kavana-orange hover:text-white transition-colors"
+          >
+            + Nueva orden
+          </button>
+        </div>
+      )}
       {error && (
         <p className="m-0 text-sm text-p-mal">Sin conexión: se muestran los últimos datos. {error}</p>
       )}

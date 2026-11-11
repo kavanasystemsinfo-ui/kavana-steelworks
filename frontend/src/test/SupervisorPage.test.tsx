@@ -338,6 +338,20 @@ describe('Panel de Supervisor (planta en un vistazo)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('T-094: el panel de turno tiene "+ Nueva orden" y abre el formulario en Gestión', async () => {
+    stubApi()
+    const user = userEvent.setup()
+
+    renderTurno()
+    await user.click(await screen.findByRole('button', { name: '+ Nueva orden' }))
+
+    expect(screen.getByRole('link', { name: 'Gestión' })).toHaveAttribute('aria-current', 'page')
+    // El formulario ya está abierto (su botón pasa a "Cerrar") y se puede crear la orden
+    expect(await screen.findByRole('button', { name: 'Crear orden' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
   it('sin ritmo en los puestos lo dice en vez de inventar un plan', async () => {
     stubApi()
     const original = { ...turnoBody }
