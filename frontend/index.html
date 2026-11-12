@@ -5,7 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
-  <script defer src="https://stats.kavanasystems.com/a.js" data-website-id="b383f20b-3b25-44e4-ae8d-582023687322" data-exclude-search="false"></script>
+  <script>
+    // Analitica (Umami): se carga cuando la pagina ya esta lista y nunca bloquea la app.
+    // Un script "defer" retrasa el arranque de la app si su servidor no responde.
+    window.addEventListener('load', function () {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://stats.kavanasystems.com/a.js';
+      s.setAttribute('data-website-id', 'b383f20b-3b25-44e4-ae8d-582023687322');
+      s.setAttribute('data-exclude-search', 'false');
+      s.onerror = function () {};
+      document.head.appendChild(s);
+    });
+  </script>
   </head>
   <body>
     <div id="root"></div>
