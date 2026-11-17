@@ -1159,7 +1159,7 @@ export function AdminPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 border-b border-kavana-border pb-2">
+      <div data-tour-step="ad-tabs" className="flex gap-1 border-b border-kavana-border pb-2">
         {tabs.map((t) => (
           <button
             key={t.id}

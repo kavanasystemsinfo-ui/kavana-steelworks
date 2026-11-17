@@ -128,3 +128,142 @@ body {
 .tema-panel .rounded-sm {
   border-radius: 8px;
 }
+
+/* ===== Tour guiado ===== */
+.tour-velo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9998;
+}
+
+.tour-recuadro {
+  position: fixed;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.6),
+    0 0 0 2px var(--color-kavana-orange);
+  z-index: 9999;
+  pointer-events: none;
+  transition: all 0.25s ease;
+}
+
+.tour-tooltip {
+  position: fixed;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #fff;
+  color: #111827;
+  border-radius: 12px;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.25),
+    0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+  padding: 20px;
+}
+
+.tour-cab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.tour-cab h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tour-contador {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tour-cerrar {
+  border: 0;
+  background: none;
+  padding: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.tour-texto {
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tour-texto p {
+  margin: 0 0 8px;
+}
+
+.tour-botones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tour-botones-fin {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tour-botones-der {
+  display: flex;
+  gap: 12px;
+}
+
+.tour-omitir {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #6b7280;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.tour-sec,
+.tour-prim {
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tour-sec {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: inherit;
+}
+
+.tour-prim {
+  border: 0;
+  background: var(--color-kavana-orange);
+  color: #fff;
+}
+
+.tour-tooltip button:focus-visible {
+  outline: 3px solid var(--color-kavana-orange);
+  outline-offset: 2px;
+}
+
+@media print {
+  .tour-velo,
+  .tour-recuadro,
+  .tour-tooltip {
+    display: none !important;
+  }
+}

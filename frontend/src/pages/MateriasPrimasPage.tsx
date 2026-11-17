@@ -86,7 +86,7 @@ export function MateriasPrimasPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <div className="step-guide">
+      <div data-tour-step="mp-cab" className="step-guide">
         <p className="label-industrial text-xs text-kavana-text-dim">
           Recepción de material
         </p>
@@ -106,6 +106,7 @@ export function MateriasPrimasPage() {
 
       <form
         onSubmit={handleSubmit}
+        data-tour-step="mp-form"
         className="bg-kavana-surface border border-kavana-border rounded-sm p-6 space-y-4"
       >
         <div className="grid grid-cols-2 gap-4">

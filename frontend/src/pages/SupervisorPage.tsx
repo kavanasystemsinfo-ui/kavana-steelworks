@@ -205,7 +205,7 @@ export function SupervisorPage() {
       </div>
 
       {/* Trazabilidad ISO 9001 (spec 04) */}
-      <div className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
+      <div data-tour-step="sv-trazabilidad" className="bg-p-tarjeta border border-p-borde rounded-[14px] p-5 sm:px-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="m-0 text-lg font-bold text-p-texto">
             Trazabilidad ISO 9001

@@ -734,13 +734,13 @@ export function OperarioPage() {
     const activos = puestos.filter((w) => w.is_active !== false)
     return (
       <div className="max-w-3xl mx-auto space-y-4">
-        <div className="step-guide">
+        <div data-tour-step="op-guia" className="step-guide">
           <p className="label-industrial text-xs text-kavana-text-dim">
             Paso 1 de 3
           </p>
           <p className="text-lg font-bold">Selecciona tu puesto de trabajo</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div data-tour-step="op-puestos" className="grid gap-3 sm:grid-cols-2">
           {activos.map((w) => (
             <button
               key={w.id}
@@ -776,7 +776,7 @@ export function OperarioPage() {
             Cola de órdenes{wsSel ? ` · ${wsSel}` : ''}
           </p>
         </div>
-        <div className="grid gap-3">
+        <div data-tour-step="op-cola" className="grid gap-3">
           {cola.map((o) => (
             <button
               key={o.id}
@@ -804,6 +804,7 @@ export function OperarioPage() {
         <button
           type="button"
           onClick={cambiarPuesto}
+          data-tour-step="op-volver"
           className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange transition-colors"
         >
           ← Cambiar puesto
@@ -843,7 +844,7 @@ export function OperarioPage() {
 
       {/* Guía de acción: el siguiente paso siempre identificable */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div>
+        <div data-tour-step="op-paso">
           <p className="text-xs text-p-texto2">Paso actual</p>
           <p className="text-lg font-bold">{parada ? 'Máquina parada' : vinculada ? 'Producir piezas' : 'Vincular bobina'}</p>
         </div>
@@ -852,6 +853,7 @@ export function OperarioPage() {
         <button
           type="button"
           onClick={cambiarOrden}
+          data-tour-step="op-orden"
           className="min-h-[40px] rounded-lg border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
         >
           Cambiar orden
@@ -859,6 +861,7 @@ export function OperarioPage() {
         <button
           type="button"
           onClick={cambiarPuesto}
+          data-tour-step="op-puesto"
           className="min-h-[40px] rounded-lg border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
         >
           Cambiar puesto
@@ -887,6 +890,7 @@ export function OperarioPage() {
             <>
         <form
           onSubmit={handleScan}
+          data-tour-step="op-bobina"
           className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
         >
           <label className="block">
@@ -1280,6 +1284,7 @@ export function OperarioPage() {
           <button
             type="button"
             onClick={() => setConfirmarCierre(true)}
+            data-tour-step="op-cerrar"
             className="w-full min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl hover:border-kavana-orange hover:text-kavana-orange transition-colors"
           >
             Cerrar jornada
@@ -1459,7 +1464,7 @@ export function OperarioPage() {
       </details>
 
       {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}
-      <div className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
+      <div data-tour-step="op-alertas" className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <p className="label-industrial text-xs text-kavana-text-dim">
             Alertas de almacén
