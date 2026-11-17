@@ -108,7 +108,7 @@ export function VistaTurno({
         }}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div data-tour-step="sv-kpis" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
           label="Piezas buenas"
           valor={fmtNum(d.piezas)}

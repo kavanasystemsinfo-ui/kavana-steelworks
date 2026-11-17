@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, getJwtPayload } from '../../lib/api'
 import { navForRole, type Role } from '../../lib/roles'
+import { TOUR_DE_VISTA, TOUR_INICIAL, crearTours, tourDelOperario } from '../../lib/tours'
+import { useTour } from '../useTour'
 
 function currentRole(): Role | null {
   const payload = getJwtPayload()
@@ -18,6 +20,33 @@ export function Layout() {
   const navItems = navForRole(role)
 
   const [aviso, setAviso] = useState('')
+
+  // Tour guiado: uno por rol (y por pantalla en el operario y por pestaña en el supervisor).
+  // Se abre solo la primera vez que un visitante de la demo entra con cada rol, y se repite
+  // con el botón de la barra. La pantalla en la que está se lee de la URL en el momento de
+  // pulsar: el operario la cambia con replaceState y el router no se entera.
+  const claveVisto = `steelworks-tour-visto-${role ?? 'sin-rol'}`
+  const tour = useTour(crearTours({ ir: (ruta) => navigate(ruta) }), claveVisto)
+  const claveTourAhora = (): string | null => {
+    if (!role) return null
+    const params = new URLSearchParams(window.location.search)
+    if (role === 'supervisor') return TOUR_DE_VISTA[params.get('vista') ?? 'turno'] ?? 'turno'
+    if (role === 'operator') return tourDelOperario(params)
+    return TOUR_INICIAL[role]
+  }
+  useEffect(() => {
+    if (!role || !getJwtPayload()?.demo) return
+    let visto = false
+    try {
+      visto = localStorage.getItem(claveVisto) === 'true'
+    } catch {
+      /* sin almacenamiento: se abre */
+    }
+    if (visto) return
+    const retraso = setTimeout(() => tour.start(claveTourAhora() ?? TOUR_INICIAL[role]), 1200)
+    return () => clearTimeout(retraso)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role])
 
   const handleLogout = async () => {
     try {
@@ -68,6 +97,20 @@ export function Layout() {
                 {role}
               </span>
             )}
+            {role && (
+              <button
+                type="button"
+                onClick={() => {
+                  const clave = claveTourAhora()
+                  if (clave) tour.start(clave)
+                }}
+                title="Tour guiado de esta pantalla"
+                aria-label="Tour guiado"
+                className="px-3 py-2 text-sm uppercase tracking-wider rounded-sm border border-kavana-orange text-kavana-orange hover:bg-kavana-orange hover:text-black transition-colors"
+              >
+                🧭<span className="hidden sm:inline"> Tour</span>
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="px-3 py-2 text-sm uppercase tracking-wider rounded-sm border border-kavana-border text-kavana-text-dim hover:text-kavana-text hover:border-kavana-orange transition-colors"
@@ -91,6 +134,7 @@ export function Layout() {
       <main className="p-4">
         <Outlet />
       </main>
+      <tour.TourComponent {...tour.tourProps} />
     </div>
   )
 }
