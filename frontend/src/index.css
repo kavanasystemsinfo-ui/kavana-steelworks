@@ -109,6 +109,35 @@ body {
 .tema-operario {
   --color-kavana-orange: #c4521a;
 }
+/* Variante oscura del panel de operario (selector claro/oscuro, vuelve el
+   tema del legacy). Va en el mismo elemento que .tema-panel para que los
+   tokens kavana-* se resuelvan con la paleta oscura. */
+.tema-panel.tema-oscuro {
+  color-scheme: dark;
+  --color-p-fondo: #0b0d10;
+  --color-p-tarjeta: #14181f;
+  --color-p-borde: #2a313b;
+  --color-p-linea: #1f252d;
+  --color-p-texto: #eef1f5;
+  --color-p-texto2: #b4bcc8;
+  --color-p-etiqueta: #98a2b0;
+  --color-p-plan: #5b8def;
+  --color-p-ok: #4cc27a;
+  --color-p-ok-bg: #12301f;
+  --color-p-ok-borde: #1f5a37;
+  --color-p-aviso: #f0b04f;
+  --color-p-aviso-bg: #33250c;
+  --color-p-aviso-borde: #6b4a14;
+  --color-p-mal: #ff7b70;
+  --color-p-mal-bg: #3a1512;
+  --color-p-mal-borde: #7a2a24;
+  --color-p-gris: #b4bcc8;
+  --color-p-gris-bg: #1f252d;
+  --color-p-gris-borde: #2a313b;
+}
+.tema-operario.tema-oscuro {
+  --color-kavana-orange: #e56b2e;
+}
 .tema-panel .label-industrial {
   font-family: var(--font-panel);
   font-weight: 600;

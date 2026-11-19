@@ -67,7 +67,34 @@ function estadoCalidad(estado: string): string {
  *  la orden siempre arriba, registrar a la izquierda y la bobina, el
  *  autocontrol y la jornada a la derecha; las horas se apuntan solas.
  */
+const CLAVE_TEMA_OPERARIO = 'steelworks-operario-tema'
+
+/** Tema del panel de operario (claro por defecto, oscuro opcional). La
+ *  elección se recuerda en este navegador; sin localStorage sigue en claro. */
+function useTemaOperario() {
+  const [oscuro, setOscuro] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_TEMA_OPERARIO) === 'oscuro'
+    } catch {
+      return false
+    }
+  })
+  const alternar = () => {
+    setOscuro((actual) => {
+      const nuevo = !actual
+      try {
+        localStorage.setItem(CLAVE_TEMA_OPERARIO, nuevo ? 'oscuro' : 'claro')
+      } catch {
+        /* sin almacenamiento: el cambio vale solo para esta sesión */
+      }
+      return nuevo
+    })
+  }
+  return { oscuro, alternar }
+}
+
 export function OperarioPage() {
+  const { oscuro, alternar: alternarTema } = useTemaOperario()
   const [coilId, setCoilId] = useState('')
   const [scan, setScan] = useState<CoilScan | null>(null)
   const [vinculada, setVinculada] = useState(false)
@@ -814,8 +841,19 @@ export function OperarioPage() {
   }
 
   return (
-    <div className="tema-panel tema-operario -m-4 min-h-[calc(100vh-3.5rem)] bg-p-fondo text-p-texto font-panel tabular-nums">
+    <div className={`tema-panel tema-operario ${oscuro ? 'tema-oscuro' : ''} -m-4 min-h-[calc(100vh-3.5rem)] bg-p-fondo text-p-texto font-panel tabular-nums`}>
     <div className="max-w-[1400px] mx-auto px-4 py-4 lg:px-6 space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={alternarTema}
+          aria-pressed={oscuro}
+          title="Cambiar entre tema claro y oscuro"
+          className="rounded-lg border border-p-borde bg-p-tarjeta px-3 py-1.5 text-sm font-semibold text-p-texto2 hover:text-p-texto"
+        >
+          {oscuro ? '☀ Tema claro' : '☾ Tema oscuro'}
+        </button>
+      </div>
       {/* Toast container for success/error */}
       <div className="top-6 right-6 fixed z-[90]">
         {toasts.map((toast) => (
