@@ -1071,11 +1071,35 @@ export const api = {
     return request(`/stock-items/scan?coil_id=${coil_id ?? ''}&lote=${lote ?? ''}`)
   },
 
-  recordProduction(data: { order_id: string; line_id: string; incremental_quantity: number; hours_worked?: number; observaciones?: string; desglose?: Desglose | null }): Promise<{ incremental_quantity: number; consumed_amount: number; consumption_unit: string; calculation_method: string }> {
-    return request('/production/record', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async recordProduction(
+    data: {
+      order_id: string
+      line_id: string
+      incremental_quantity: number
+      hours_worked?: number
+      observaciones?: string
+      desglose?: Desglose | null
+      /** H1: clave de idempotencia generada una vez por parte en la tablet. */
+      client_request_id?: string
+      /** H8: hora real del parte en la tablet (cola sin conexión). */
+      ocurrido_en?: string
+    },
+    opciones?: { timeoutMs?: number },
+  ): Promise<{ success?: boolean; duplicate?: boolean; incremental_quantity: number; consumed_amount: number; consumption_unit: string; calculation_method: string; produced_quantity?: number }> {
+    // Timeout por defecto: la cola offline corta a los 15 s para seguir con
+    // el siguiente parte; el registro en línea usa el mismo límite.
+    const timeoutMs = opciones?.timeoutMs ?? 15000
+    const ctrl = new AbortController()
+    const temporizador = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      return await request('/production/record', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        signal: ctrl.signal,
+      })
+    } finally {
+      clearTimeout(temporizador)
+    }
   },
 
   finBobina(data: { stock_item_id: string; order_id: string; line_id: string; radio_mm: number }): Promise<{ msg: string; peso_restante_kg: number; merma_kg: number; merma_cost: number }> {
