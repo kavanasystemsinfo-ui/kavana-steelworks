@@ -466,6 +466,7 @@ export function OperarioPage() {
   const [pasoManual, setPasoManual] = useState<'puesto' | 'orden' | null>(null)
   const puestosRef = useRef<WorkstationItem[]>([])
   const ordenWsRef = useRef<string | null>(null)
+  const wsSelRef = useRef<string | null>(null)
 
   useEffect(() => {
     api.getQualityModels()
@@ -491,6 +492,10 @@ export function OperarioPage() {
   useEffect(() => {
     ordenWsRef.current = ordenWs
   }, [ordenWs])
+
+  useEffect(() => {
+    wsSelRef.current = wsSel
+  }, [wsSel])
 
   useEffect(() => {
     if (!puestosCargados) return
@@ -558,9 +563,13 @@ export function OperarioPage() {
           Array.isArray(orderDetail.lines) &&
           orderDetail.lines.length > 0
         ) {
-          // La línea de este puesto (una orden pasa por varios puestos). Al
-          // entrar por la URL aún no se conoce la orden de la cola: manda ?ws=
-          const ws = ordenWsRef.current ?? new URLSearchParams(window.location.search).get('ws')
+          // La línea de este puesto (una orden pasa por varios puestos). Manda el
+          // puesto que ha elegido el operario (T-160: el puesto que traía la cola
+          // podía ser el de otra línea y los partes se apuntaban en otra máquina).
+          const ws =
+            wsSelRef.current ??
+            new URLSearchParams(window.location.search).get('ws') ??
+            ordenWsRef.current
           const line =
             orderDetail.lines.find((l: { workstation_id?: string | null }) => ws && l.workstation_id === ws) ??
             orderDetail.lines[0]

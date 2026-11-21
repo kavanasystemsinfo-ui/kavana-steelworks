@@ -48,8 +48,11 @@ class Order(UUIDMixin, TimestampMixin, Base):
         Numeric(14, 4), nullable=False, default=Decimal("0")
     )
 
+    # Ordenadas por paso (linea_numero): lines[0] es siempre el primer puesto
     lines: Mapped[list["OrderLine"]] = relationship(
-        back_populates="order", cascade="all, delete-orphan"
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderLine.linea_numero",
     )
 
 

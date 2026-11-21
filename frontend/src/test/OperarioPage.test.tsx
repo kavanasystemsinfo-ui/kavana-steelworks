@@ -1737,3 +1737,68 @@ describe('T-159 remate: pendientes visibles y aviso al cerrar jornada', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('T-160: el panel trabaja sobre la línea del puesto elegido', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.history.replaceState({}, '', '/')
+  })
+
+  it('aunque la cola diga otro puesto, la ficha y los registros van a la línea de P-K300', async () => {
+    const user = userEvent.setup()
+    const llamadas: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const u = String(url)
+        llamadas.push(u)
+        if (u.includes('/admin/workstations')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => [
+              { id: 'w1', code: 'P-K300', name: 'Perfiladora', color: '#333', group_id: null, is_active: true },
+              { id: 'w2', code: 'RB-1', name: 'Robot', color: '#333', group_id: null, is_active: true },
+            ],
+          })
+        }
+        if (u.includes('/orders/available')) {
+          // Dato engañoso como el de producción del 21-11: la cola de P-K300
+          // ofrecía la orden con el puesto de otra línea (RB-1)
+          return Promise.resolve({
+            ok: true,
+            json: async () => [
+              { id: 'OPM', numero: 'OP-MULTI', estado: 'active', cliente: 'C', fecha_entrega: null, workstation_id: 'RB-1' },
+            ],
+          })
+        }
+        if (u.includes('/orders/OPM')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: 'OPM',
+              numero: 'OP-MULTI',
+              estado: 'active',
+              lines: [
+                { id: 'L-RB1', linea_numero: 3, workstation_id: 'RB-1' },
+                { id: 'L-PK300', linea_numero: 1, workstation_id: 'P-K300' },
+              ],
+            }),
+          })
+        }
+        if (u.includes('/quality/models')) {
+          return Promise.resolve({ ok: true, json: async () => [] })
+        }
+        return Promise.resolve({ ok: true, json: async () => null })
+      }),
+    )
+    renderPage()
+    await screen.findByText('Selecciona tu puesto de trabajo')
+    await user.click(screen.getByRole('button', { name: /P-K300/ }))
+    await user.click(await screen.findByText('OP-MULTI'))
+
+    await waitFor(() => {
+      expect(llamadas.some((u) => u.includes('/production/ficha') && u.includes('line_id=L-PK300'))).toBe(true)
+    })
+    expect(llamadas.some((u) => u.includes('line_id=L-RB1'))).toBe(false)
+  })
+})
