@@ -25,7 +25,6 @@ import {
   descartar,
   CLAVE_COLA,
   type ElementoCola,
-  type ResultadoEnvio,
 } from '../lib/colaProduccion'
 
 function elemento(parcial: Partial<ElementoCola> = {}): ElementoCola {
@@ -235,7 +234,9 @@ describe('colaProduccion', () => {
     const enviar = vi.fn().mockResolvedValue({ success: true, incremental_quantity: 5 })
     const res = await encolarYEnviar(elemento(), enviar)
     expect(res.tipo).toBe('aceptado')
-    expect(res.respuesta).toEqual({ success: true, incremental_quantity: 5 })
+    if (res.tipo === 'aceptado') {
+      expect(res.respuesta).toEqual({ success: true, incremental_quantity: 5 })
+    }
     expect(cargarCola()).toEqual([])
   })
 
@@ -243,7 +244,9 @@ describe('colaProduccion', () => {
     const enviar = vi.fn().mockResolvedValue({ success: true, duplicate: true })
     const res = await encolarYEnviar(elemento(), enviar)
     expect(res.tipo).toBe('aceptado')
-    expect((res.respuesta as { duplicate?: boolean }).duplicate).toBe(true)
+    if (res.tipo === 'aceptado') {
+      expect((res.respuesta as { duplicate?: boolean }).duplicate).toBe(true)
+    }
   })
 
   it('R2: fallo de red → resultado "pendiente" (sin respuesta)', async () => {
