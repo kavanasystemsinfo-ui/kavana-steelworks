@@ -23,6 +23,7 @@ import {
   reintentar,
   reintentarTodos,
   esperaSiguienteReintento,
+  reiniciarEsperas,
   type ElementoCola,
   type ResumenCola,
 } from '../lib/colaProduccion'
@@ -154,6 +155,11 @@ export function OperarioPage() {
   const [bandejaFallidos, setBandejaFallidos] = useState<ElementoCola[]>([])
   const [idDescartar, setIdDescartar] = useState<string | null>(null)
   const [abiertaDescartar, setAbiertaDescartar] = useState(false)
+  // 401 al enviar: la cola espera a que el operario vuelva a entrar
+  const [colaPausada, setColaPausada] = useState(false)
+  // Sube al volver la red para reprogramar el reintento desde 5 s
+  const [vueltaRed, setVueltaRed] = useState(0)
+  const procesandoColaRef = useRef(false)
 
   const sincronizarCola = useCallback(() => {
     const r = estadoCola(userSub)
@@ -177,29 +183,51 @@ export function OperarioPage() {
 
   /** Intenta enviar la cola del operario conectado (al volver la red). */
   const reenviarCola = useCallback(async () => {
-    if (!userSub) return
-    await procesarCola(userSub, enviarPorApi)
-    sincronizarCola()
+    if (!userSub || procesandoColaRef.current) return
+    procesandoColaRef.current = true
+    try {
+      const resultado = await procesarCola(userSub, enviarPorApi)
+      setColaPausada(resultado.pausada)
+      // La ficha de la orden tiene que enseñar lo que acaba de llegar al servidor
+      if (resultado.enviados > 0) setFichaVersion((v) => v + 1)
+      sincronizarCola()
+    } finally {
+      procesandoColaRef.current = false
+    }
   }, [userSub, sincronizarCola])
 
   useEffect(() => {
     sincronizarCola()
-    const enLinea = () => {
-      reenviarCola()
+    // Al entrar con partes guardados y red, se envían ya
+    if (navigator.onLine && estadoCola(userSub).pendientesMios > 0) reenviarCola()
+    const enLinea = async () => {
+      await reenviarCola()
+      // Si el servidor aún no responde, se vuelve a probar desde 5 s
+      reiniciarEsperas(userSub)
+      setVueltaRed((v) => v + 1)
     }
     window.addEventListener('online', enLinea)
     return () => window.removeEventListener('online', enLinea)
   }, [userSub, sincronizarCola, reenviarCola])
 
-  // R4: temporizador con esperaSiguienteReintento() para reintento automático
+  // Reintento automático con espera creciente mientras queden pendientes. Se
+  // reprograma siempre: el wifi puede volver antes que el servidor.
   useEffect(() => {
-    if (!hayPendientesMios || !navigator.onLine) return
-    const intervalo = esperaSiguienteReintento()
-    const timer = setInterval(() => {
-      reenviarCola()
-    }, intervalo)
-    return () => clearInterval(timer)
-  }, [hayPendientesMios, reenviarCola])
+    if (!hayPendientesMios || colaPausada) return
+    let cancelado = false
+    let timer: ReturnType<typeof setTimeout>
+    const programar = () => {
+      timer = setTimeout(async () => {
+        if (navigator.onLine) await reenviarCola()
+        if (!cancelado) programar()
+      }, esperaSiguienteReintento(userSub))
+    }
+    programar()
+    return () => {
+      cancelado = true
+      clearTimeout(timer)
+    }
+  }, [hayPendientesMios, colaPausada, vueltaRed, userSub, reenviarCola])
 
   // R6: beforeunload si hay pendientes
   useEffect(() => {
@@ -833,8 +861,12 @@ export function OperarioPage() {
     try {
       const resultado = await encolarYEnviar(el, enviarPorApi)
       clientRequestIdRef.current = null
-      setPiezas('')
-      setDesglose(null)
+      // Un parte rechazado conserva la cantidad para corregir y volver a enviar
+      if (resultado.tipo !== 'rechazado') {
+        setPiezas('')
+        setDesglose(null)
+      }
+      if (resultado.tipo === 'pausada') setColaPausada(true)
       sincronizarCola()
       refrescarFicha()
       if (resultado.tipo === 'aceptado') {
@@ -857,7 +889,7 @@ export function OperarioPage() {
       } else if (resultado.tipo === 'pausada') {
         showToast(
           'error',
-          'Sesión expirada: vuelve a entrar para reenviar los partes guardados.',
+          'Tu sesión ha caducado: vuelve a entrar para enviar los partes guardados.',
         )
       } else if (resultado.tipo === 'rechazado') {
         showToast('error', `Rechazado: ${resultado.mensaje}`)
@@ -1101,7 +1133,9 @@ export function OperarioPage() {
       {resumenCola.pendientesMios > 0 && (
         <div className="flex items-center justify-between gap-3 mb-2">
           <p className="label-industrial text-xs text-amber-700 font-bold">
-            {textoSinEnviar(resumenCola.pendientesMios)}
+            {colaPausada
+              ? `Tu sesión ha caducado: vuelve a entrar para enviar ${resumenCola.pendientesMios} ${resumenCola.pendientesMios === 1 ? 'parte' : 'partes'}`
+              : textoSinEnviar(resumenCola.pendientesMios)}
           </p>
           <button
             type="button"

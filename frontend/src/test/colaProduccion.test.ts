@@ -23,6 +23,8 @@ import {
   reintentar,
   reintentarTodos,
   descartar,
+  esperaSiguienteReintento,
+  reiniciarEsperas,
   CLAVE_COLA,
   type ElementoCola,
 } from '../lib/colaProduccion'
@@ -290,5 +292,20 @@ describe('colaProduccion', () => {
     const res = await encolarYEnviar(elemento(), enviar)
     expect(res).toEqual({ tipo: 'rechazado', mensaje: 'BLOQUEO DE SEGURIDAD' })
     expect(cargarCola()).toEqual([])
+  })
+
+  it('T-161: reiniciarEsperas pone a cero solo los pendientes de ese operario', () => {
+    localStorage.setItem(
+      CLAVE_COLA,
+      JSON.stringify([
+        elemento({ user_sub: 'u1', intentos: 5 }),
+        elemento({ user_sub: 'u2', intentos: 5 }),
+        elemento({ user_sub: 'u1', intentos: 5, estado: 'fallido' }),
+      ]),
+    )
+    reiniciarEsperas('u1')
+    expect(cargarCola().map((e) => e.intentos)).toEqual([0, 5, 5])
+    expect(esperaSiguienteReintento('u1')).toBe(5000)
+    expect(esperaSiguienteReintento('u2')).toBe(120000)
   })
 })

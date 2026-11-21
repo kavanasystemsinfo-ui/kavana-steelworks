@@ -230,8 +230,19 @@ export async function procesarCola(
 }
 
 /** Milisegundos de espera recomendada antes del próximo reintento automático. */
-export function esperaSiguienteReintento(): number {
-  const pendientes = cargarCola().filter((e) => e.estado === 'pendiente')
+export function esperaSiguienteReintento(userSub: string | null): number {
+  const pendientes = cargarCola().filter(
+    (e) => e.user_sub === userSub && e.estado === 'pendiente',
+  )
   const maxIntentos = pendientes.reduce((m, e) => Math.max(m, e.intentos), 0)
   return esperaReintento(maxIntentos)
+}
+
+/** Al volver la red, los pendientes del operario reintentan otra vez desde 5 s. */
+export function reiniciarEsperas(userSub: string | null): void {
+  guardarCola(
+    cargarCola().map((e) =>
+      e.user_sub === userSub && e.estado === 'pendiente' ? { ...e, intentos: 0 } : e,
+    ),
+  )
 }
