@@ -134,3 +134,34 @@ def test_available_sin_estacion_devuelve_vacio(db_session, tenant):
 
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_available_devuelve_el_puesto_pedido_y_no_el_de_otra_linea(db_session, tenant):
+    """T-160: una orden que pasa por varios puestos se ofrece con el puesto de la
+    cola. Antes devolvía el de lines[0] (RB-1 en la demo del 21-11) y el panel
+    apuntaba los partes de P-K300 en otra línea."""
+    o = make_order(db_session, tenant, numero="OP-AV-MULTI")
+    make_order_line(db_session, o, workstation="P-K300", linea_numero=1)
+    make_order_line(db_session, o, workstation="PL-220", linea_numero=2)
+    make_order_line(db_session, o, workstation="RB-1", linea_numero=3)
+    operario = make_user(db_session, tenant, email="op-avail-multi@test.local", role="operator")
+    db_session.commit()
+
+    app.dependency_overrides[orders_router.get_db] = _override_get_db(db_session)
+    try:
+        client = authed_client_for(db_session, operario)
+        por_puesto = {}
+        for ws in ("P-K300", "PL-220", "RB-1"):
+            from app.models import Workstation
+
+            if not db_session.query(Workstation).filter_by(tenant_id=tenant.id, code=ws).first():
+                db_session.add(Workstation(tenant_id=tenant.id, code=ws, name=ws))
+                db_session.commit()
+            r = client.get(f"/api/v1/orders/available?workstation={ws}")
+            assert r.status_code == 200, r.text
+            item = next(i for i in r.json() if i["numero"] == "OP-AV-MULTI")
+            por_puesto[ws] = item["workstation_id"]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert por_puesto == {"P-K300": "P-K300", "PL-220": "PL-220", "RB-1": "RB-1"}

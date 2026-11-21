@@ -282,7 +282,9 @@ def list_available_orders(
             estado=o.estado,
             cliente=o.cliente,
             fecha_entrega=o.fecha_entrega,
-            workstation_id=o.lines[0].workstation_id if o.lines else None,
+            # T-160: el puesto de ESTA cola, no el de la primera línea. Una orden
+            # pasa por varios puestos y el panel busca su línea con este dato.
+            workstation_id=ws_code,
         )
         for o in ordenes
     ]
