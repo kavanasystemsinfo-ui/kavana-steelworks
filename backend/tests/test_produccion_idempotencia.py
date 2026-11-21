@@ -132,9 +132,7 @@ def test_producir_en_orden_cancelada_rechaza(db_session, tenant, user):
 
 
 def test_producir_en_orden_draft_rechaza(db_session, tenant, user):
-    """ANTES de R1: draft rechazaba. Tras R1: draft PERMITIDO (test mantenido como referencia histórica)."""
-    # Este test verifica el comportamiento ANTERIOR a R1.
-    # Tras R1, draft SÍ permite producir (ver test_producir_en_orden_draft_permitida).
+    """ANTES de R1: draft rechazaba. Tras R1: draft PERMITIDO (ref. histórica)."""
     import pytest
     pytest.skip("Comportamiento cambiado por R1: draft ahora permitido")
 
