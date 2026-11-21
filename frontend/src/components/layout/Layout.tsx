@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, getJwtPayload } from '../../lib/api'
+import { estadoCola } from '../../lib/colaProduccion'
 import { navForRole, type Role } from '../../lib/roles'
 import { TOUR_DE_VISTA, TOUR_INICIAL, crearTours, tourDelOperario } from '../../lib/tours'
 import { useTour } from '../useTour'
@@ -20,6 +21,8 @@ export function Layout() {
   const navItems = navForRole(role)
 
   const [aviso, setAviso] = useState('')
+  // Partes sin enviar en esta tablet al pulsar Salir (null: sin aviso abierto)
+  const [partesAlSalir, setPartesAlSalir] = useState<number | null>(null)
 
   // Tour guiado: uno por rol (y por pantalla en el operario y por pestaña en el supervisor).
   // Se abre solo la primera vez que un visitante de la demo entra con cada rol, y se repite
@@ -48,7 +51,18 @@ export function Layout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role])
 
+  const pulsarSalir = () => {
+    const cola = estadoCola(getJwtPayload()?.sub ?? null)
+    const sinEnviar = cola.pendientesMios + cola.fallidosMios
+    if (sinEnviar > 0) {
+      setPartesAlSalir(sinEnviar)
+      return
+    }
+    handleLogout()
+  }
+
   const handleLogout = async () => {
+    setPartesAlSalir(null)
     try {
       await api.logout()
     } catch (err) {
@@ -112,7 +126,7 @@ export function Layout() {
               </button>
             )}
             <button
-              onClick={handleLogout}
+              onClick={pulsarSalir}
               className="px-3 py-2 text-sm uppercase tracking-wider rounded-sm border border-kavana-border text-kavana-text-dim hover:text-kavana-text hover:border-kavana-orange transition-colors"
             >
               Salir
@@ -120,6 +134,33 @@ export function Layout() {
           </div>
         </nav>
       </header>
+      {partesAlSalir !== null && (
+        <div
+          role="alertdialog"
+          aria-label="Partes sin enviar"
+          className="border-b border-kavana-warn bg-kavana-surface px-4 py-3 text-sm text-kavana-warn flex flex-wrap items-center justify-between gap-3"
+        >
+          <span>
+            {`Quedan ${partesAlSalir} ${partesAlSalir === 1 ? 'parte' : 'partes'} sin enviar en esta tablet. Se conservan y podrás enviarlos cuando vuelvas a entrar.`}
+          </span>
+          <span className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPartesAlSalir(null)}
+              className="min-h-[44px] px-3 rounded-sm border border-kavana-border text-kavana-text font-semibold"
+            >
+              Seguir aquí
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="min-h-[44px] px-3 rounded-sm border border-kavana-warn text-kavana-warn font-semibold"
+            >
+              Salir igualmente
+            </button>
+          </span>
+        </div>
+      )}
       {aviso && (
         <div
           role="alert"

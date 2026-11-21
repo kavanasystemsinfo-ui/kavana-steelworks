@@ -1590,6 +1590,31 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     vi.unstubAllGlobals()
   })
 
+  it('T-161: un parte rechazado conserva la cantidad escrita para corregir y reenviar', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn()
+    stubOffline(fetchMock)
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    setupPanelOffline(fetchMock, false)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Vincular bobina')).toBeInTheDocument())
+    await user.type(screen.getByPlaceholderText(/escanea la etiqueta/i), 'COIL-L-DEMO')
+    await user.click(screen.getByRole('button', { name: /escanear bobina/i }))
+    await user.click(await screen.findByRole('button', { name: /vincular a mi orden/i }))
+    const previo = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      String(url).includes('/production/record')
+        ? Promise.resolve({ ok: false, status: 400, json: async () => ({ detail: 'BLOQUEO DE SEGURIDAD' }) })
+        : previo(url, init),
+    )
+    const piezas = await screen.findByPlaceholderText(/piezas/i)
+    await user.type(piezas, '7')
+    await user.click(screen.getByRole('button', { name: /registrar 7 piezas/i }))
+    expect(await screen.findByText(/Rechazado: BLOQUEO DE SEGURIDAD/)).toBeInTheDocument()
+    expect(piezas).toHaveValue(7)
+    vi.unstubAllGlobals()
+  })
+
   it('R6: plural correcto (1 parte / N partes) y aviso al cerrar pestaña con pendientes', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()
