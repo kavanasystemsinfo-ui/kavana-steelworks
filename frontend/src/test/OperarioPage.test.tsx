@@ -1474,7 +1474,7 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     await waitFor(() => {
       const fixedDivs = screen.getAllByRole('status')
       const avisoFijo = fixedDivs.find(el => 
-        el.textContent?.includes('1 parte guardada en esta tablet') &&
+        el.textContent?.includes('1 parte guardado en esta tablet') &&
         el.closest('div')?.className?.includes('fixed top-6 left-1/2 -translate-x-1/2 z-')
       )
       expect(avisoFijo).toBeInTheDocument()
@@ -1530,7 +1530,7 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     await waitFor(() => {
       const fixedDivs = screen.getAllByRole('status')
       const avisoFijo = fixedDivs.find(el => 
-        el.textContent?.includes('partes guardadas en esta tablet') &&
+        el.textContent?.includes('partes guardados en esta tablet') &&
         el.closest('div')?.className?.includes('fixed top-6 left-1/2 -translate-x-1/2 z-')
       )
       expect(avisoFijo).toBeInTheDocument()
@@ -1543,7 +1543,8 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     // Disparar evento online
     window.dispatchEvent(new Event('online'))
     await waitFor(() => {
-      const fixedDivs = screen.getAllByRole('status')
+      // queryAll: al vaciarse la cola puede no quedar ningún status en pantalla
+      const fixedDivs = screen.queryAllByRole('status')
       const avisoFijo = fixedDivs.find(el => 
         el.textContent?.includes('guardados en esta tablet') &&
         el.closest('div')?.className?.includes('fixed top-6 left-1/2 -translate-x-1/2 z-')
@@ -1622,7 +1623,7 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
 
-    // 1 parte → "1 parte guardada"
+    // 1 parte → "1 parte guardado"
     const piezas = await screen.findByPlaceholderText(/piezas/i)
     await user.clear(piezas)
     await user.type(piezas, '1')
@@ -1630,20 +1631,20 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     await waitFor(() => {
       const fixedDivs = screen.getAllByRole('status')
       const avisoFijo = fixedDivs.find(el => 
-        el.textContent?.includes('1 parte guardada en esta tablet') &&
+        el.textContent?.includes('1 parte guardado en esta tablet') &&
         el.closest('div')?.className?.includes('fixed top-6 left-1/2 -translate-x-1/2 z-')
       )
       expect(avisoFijo).toBeInTheDocument()
     })
 
-    // 2ª parte → "2 partes guardadas"
+    // 2º parte → "2 partes guardados"
     await user.clear(piezas)
     await user.type(piezas, '1')
     await user.click(screen.getByRole('button', { name: /registrar 1 piezas/i }))
     await waitFor(() => {
       const fixedDivs = screen.getAllByRole('status')
       const avisoFijo = fixedDivs.find(el => 
-        el.textContent?.includes('2 partes guardadas en esta tablet') &&
+        el.textContent?.includes('2 partes guardados en esta tablet') &&
         el.closest('div')?.className?.includes('fixed top-6 left-1/2 -translate-x-1/2 z-')
       )
       expect(avisoFijo).toBeInTheDocument()
@@ -1655,5 +1656,84 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     expect(true).toBe(true)
 
     vi.unstubAllGlobals()
+  })
+})
+
+describe('T-159 remate: pendientes visibles y aviso al cerrar jornada', () => {
+  const token = (() => {
+    const b64 = (s: string) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    return `x.${b64(JSON.stringify({ sub: 'u1', tenant_id: 'T1', role: 'operator', exp: 9999999999 }))}.sig`
+  })()
+
+  function pendiente(n: number) {
+    return Array.from({ length: n }, () => ({
+      client_request_id: crypto.randomUUID(),
+      user_sub: 'u1',
+      order_id: 'OP1',
+      line_id: 'line-1',
+      incremental_quantity: 3,
+      desglose: null,
+      ocurrido_en: new Date().toISOString(),
+      intentos: 0,
+      ultimo_error: null,
+      estado: 'pendiente',
+    }))
+  }
+
+  function montar(nPendientes: number) {
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url)
+      if (u.includes('/admin/workstations')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'w1', code: 'LINEA-1', name: 'Linea Uno', color: '#333', group_id: null, is_active: true }] })
+      }
+      if (u.includes('/orders/available')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'OP1', numero: 'OP-DEMO-001', estado: 'active', cliente: 'Cliente A', fecha_entrega: null, workstation_id: 'LINEA-1' }] })
+      }
+      if (u.includes('/mediciones-pendientes')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      if (u.includes('/production/record')) {
+        // API caída: el parte sigue pendiente
+        return Promise.resolve({ ok: false, status: 503, json: async () => ({ detail: 'Servicio no disponible' }) })
+      }
+      if (u.includes('/api/v1/events/')) {
+        return Promise.resolve({ ok: true, json: async () => ({ events: [] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    sessionStorage.clear()
+    sessionStorage.setItem('kavana_token', token)
+    localStorage.clear()
+    localStorage.setItem('steelworks-cola-produccion', JSON.stringify(pendiente(nPendientes)))
+    renderPage()
+    return fetchMock
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('con 1 pendiente dice «1 parte sin enviar en esta tablet» y «Enviar ahora» lo reenvía', async () => {
+    const user = userEvent.setup()
+    const fetchMock = montar(1)
+    expect(await screen.findByText(/^1 parte sin enviar en esta tablet$/)).toBeInTheDocument()
+    const antes = fetchMock.mock.calls.filter(([u]) => String(u).includes('/production/record')).length
+    await user.click(screen.getByRole('button', { name: /enviar ahora/i }))
+    await waitFor(() => {
+      const despues = fetchMock.mock.calls.filter(([u]) => String(u).includes('/production/record')).length
+      expect(despues).toBeGreaterThan(antes)
+    })
+  })
+
+  it('al abrir «Cerrar jornada» con 2 pendientes avisa de que quedan 2 partes sin enviar', async () => {
+    const user = userEvent.setup()
+    montar(2)
+    await user.click(await screen.findByRole('button', { name: /cerrar jornada/i }))
+    expect(
+      await screen.findByText(/Quedan 2 partes sin enviar en esta tablet; se enviarán cuando vuelvas a entrar/),
+    ).toBeInTheDocument()
   })
 })

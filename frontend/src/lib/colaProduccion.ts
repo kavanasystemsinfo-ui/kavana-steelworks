@@ -9,8 +9,9 @@
  * - Error de red, timeout (AbortController 15 s), 5xx o 429: sigue pendiente.
  * - 401: la cola se PAUSA (nada se borra); al volver a entrar el MISMO
  *   usuario (mismo user_sub del JWT) se reanuda.
- * - 400, 409 o 422: pasa a «fallido» con el mensaje del servidor y la cola
- *   SIGUE con el siguiente (lección PR #84: nunca se detiene en el primero).
+ * - 400, 409 o 422 al enviar en el momento: sale de la cola y se enseña el motivo.
+ *   Al reenviar desde la cola: pasa a «fallido» con el mensaje del servidor y la
+ *   cola SIGUE con el siguiente (lección PR #84: nunca se detiene en el primero).
  *
  * Sin dependencias nuevas: solo localStorage, todo envuelto en try/catch
  * (una tablet sin almacenamiento no puede romper el registro en línea).
@@ -151,7 +152,8 @@ function esReintentable(err: unknown): boolean {
  * Guarda el parte en la cola y lo intenta enviar ya. Devuelve 4 resultados:
  * - 'aceptado': éxito o duplicate (sale de la cola con respuesta)
  * - 'pendiente': error de red / timeout / 5xx / 429 (reintentará)
- * - 'rechazado': 400 / 409 / 422 (pasa a fallido con mensaje, cola sigue)
+ * - 'rechazado': 400 / 409 / 422 en el envío inmediato (sale de la cola con su mensaje;
+ *   en el reenvío desde la cola, procesarCola lo pasa a fallido)
  * - 'pausada': 401 (cola pausada, nada se borra)
  */
 export type ResultadoEnvio =
@@ -185,8 +187,10 @@ async function enviarYRegistrar(el: ElementoCola, enviar: EnviarFn): Promise<Res
       // Pausa: queda pendiente; se reanuda al volver a entrar el mismo usuario
       return { tipo: 'pausada' }
     } else {
+      // Envío inmediato rechazado (400/409/422): el operario está delante y ve
+      // el motivo, así que el parte SALE de la cola (no va a la bandeja).
       const mensaje = err instanceof Error ? err.message : 'Error al registrar'
-      marcarFallido(el.client_request_id, mensaje)
+      quitar(el.client_request_id)
       return { tipo: 'rechazado', mensaje }
     }
   }

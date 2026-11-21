@@ -118,6 +118,11 @@ function useTemaOperario() {
   return { oscuro, alternar }
 }
 
+/** «1 parte sin enviar en esta tablet» / «N partes sin enviar en esta tablet» (el parte). */
+function textoSinEnviar(n: number): string {
+  return `${n} ${n === 1 ? 'parte' : 'partes'} sin enviar en esta tablet`
+}
+
 export function OperarioPage() {
   const { oscuro, alternar: alternarTema } = useTemaOperario()
   const [coilId, setCoilId] = useState('')
@@ -838,7 +843,7 @@ export function OperarioPage() {
       } else if (resultado.tipo === 'pendiente') {
         showToast(
           'error',
-          `Sin conexión: ${qty} parte${qty === 1 ? '' : 's'} guardada${qty === 1 ? '' : 's'} en esta tablet; se enviarán al volver la red.`,
+          'Sin conexión: parte guardado en esta tablet; se enviará solo al volver la red.',
         )
       } else if (resultado.tipo === 'pausada') {
         showToast(
@@ -1020,7 +1025,7 @@ export function OperarioPage() {
           </div>
         ))}
       </div>
-      {/* Aviso fijo: partes guardadas en esta tablet SIN red (T-159, auditoría H8).
+      {/* Aviso fijo: partes guardados en esta tablet SIN red (T-159, auditoría H8).
           Solo aparece cuando NO hay red (navigator.onLine = false).
           Con red, solo aparece toast puntual. */}
       {!navigator.onLine && hayPendientesMios && (
@@ -1029,8 +1034,8 @@ export function OperarioPage() {
           className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] border border-amber-400 bg-amber-50 text-amber-900 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
         >
           {resumenCola.pendientesMios === 1
-            ? 'Sin conexión: 1 parte guardada en esta tablet; se enviará sola al volver la red.'
-            : `Sin conexión: ${resumenCola.pendientesMios} partes guardadas en esta tablet; se enviarán solas al volver la red.`}
+            ? 'Sin conexión: 1 parte guardado en esta tablet; se enviará solo al volver la red.'
+            : `Sin conexión: ${resumenCola.pendientesMios} partes guardados en esta tablet; se enviarán solos al volver la red.`}
         </div>
       )}
       {/* Recordatorio de autocontrol NO bloqueante (spec 04 §3.2.5): toast
@@ -1085,10 +1090,18 @@ export function OperarioPage() {
       <>
       <FichaOrden ficha={ficha} numero={ordenNumero} />
       {resumenCola.pendientesMios > 0 && (
-        <p className="label-industrial text-xs text-amber-700 font-bold mb-2">
-          {resumenCola.pendientesMios} parte{'s'}
-          sin enviar en esta tablet
-        </p>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <p className="label-industrial text-xs text-amber-700 font-bold">
+            {textoSinEnviar(resumenCola.pendientesMios)}
+          </p>
+          <button
+            type="button"
+            onClick={() => reenviarCola()}
+            className="min-h-[44px] rounded-xl border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+          >
+            Enviar ahora
+          </button>
+        </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] items-start">
@@ -1559,6 +1572,11 @@ export function OperarioPage() {
             <p className="text-sm text-kavana-text-dim">
               ¿Cerrar turno? Se registrará la hora de salida y las horas trabajadas.
             </p>
+            {resumenCola.pendientesMios > 0 && (
+              <p className="text-sm font-semibold text-amber-700">
+                {`Quedan ${textoSinEnviar(resumenCola.pendientesMios)}; se enviarán cuando vuelvas a entrar.`}
+              </p>
+            )}
             <MedirCierre onPendientes={setSinMedir} />
             <div className="grid grid-cols-2 gap-2">
               <button

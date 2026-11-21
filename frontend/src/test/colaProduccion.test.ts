@@ -284,4 +284,11 @@ describe('colaProduccion', () => {
     expect(cola[0].estado).toBe('fallido')
     expect(cola[0].ultimo_error).toBe('No hay bobina vinculada')
   })
+
+  it('400 en el envío inmediato: el parte SALE de la cola y vuelve «rechazado» con el motivo', async () => {
+    const enviar = vi.fn().mockRejectedValue(new ApiError('BLOQUEO DE SEGURIDAD', 400))
+    const res = await encolarYEnviar(elemento(), enviar)
+    expect(res).toEqual({ tipo: 'rechazado', mensaje: 'BLOQUEO DE SEGURIDAD' })
+    expect(cargarCola()).toEqual([])
+  })
 })
