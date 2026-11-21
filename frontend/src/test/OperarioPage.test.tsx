@@ -1488,9 +1488,9 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     const fetchMock = vi.fn()
     stubOffline(fetchMock)
 
-    // Sin red desde el principio
-    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
-    setupPanelOffline(fetchMock, true)
+    // Con red para scan/link
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    setupPanelOffline(fetchMock, false)
 
     renderPage()
     await waitFor(() => expect(screen.getByText('Vincular bobina')).toBeInTheDocument())
@@ -1499,6 +1499,19 @@ describe('R3-R6: Cola de producción offline en OperarioPage', () => {
     await user.type(input, 'COIL-L-DEMO')
     await user.click(screen.getByRole('button', { name: /escanear bobina/i }))
     await user.click(await screen.findByRole('button', { name: /vincular a mi orden/i }))
+
+    // AHORA pasamos a offline para registrar producción
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.includes('/production/record')) {
+        return Promise.reject(new TypeError('NetworkError'))
+      }
+      if (u.includes('/api/v1/events/')) {
+        return Promise.resolve({ ok: true, json: async () => ({ events: [] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
 
     // Registrar 2 partes offline
     for (let i = 0; i < 2; i++) {
