@@ -96,16 +96,17 @@ def is_revoked(db: Session, token: str) -> bool:
     return db.scalar(select(RevokedToken).where(RevokedToken.token == token)) is not None
 
 
-def logout(db: Session, token: str) -> None:
+def logout(db: Session, token: str, *, mermar_sin_medir: bool = False) -> None:
     """Revoca el token en la lista negra server-side (idempotente)."""
     payload = verify_token(token)
     if payload is None:
         return
     if is_revoked(db, token):
         return  # ya revocado: evita IntegrityError por unique(token)
-    from app.services.medicion import exigir_mediciones
+    from app.services.medicion import resolver_mediciones
 
-    exigir_mediciones(db, uuid.UUID(payload["sub"]))  # MedicionPendiente si falta medir
+    # MedicionPendiente si quedan 20 kg o más sin medir y el operario no ha elegido
+    resolver_mediciones(db, uuid.UUID(payload["sub"]), mermar_sin_medir=mermar_sin_medir)
     from app.services.paradas import cerrar_paradas_de
 
     cerrar_paradas_de(db, uuid.UUID(payload["sub"]))
@@ -152,7 +153,7 @@ def find_user_by_email_in_tenant(db: Session, tenant_id: uuid.UUID, email: str):
     return db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == email))
 
 
-def close_shift(db: Session, token: str) -> dict:
+def close_shift(db: Session, token: str, *, mermar_sin_medir: bool = False) -> dict:
     """Cierra el turno activo con total_hours y turno A/B/C (spec 02 3.11)."""
     payload = verify_token(token)
     if payload is None or is_revoked(db, token):
@@ -166,9 +167,10 @@ def close_shift(db: Session, token: str) -> dict:
     )
     if turno is None:
         raise LookupError("No hay turno activo para cerrar")
-    from app.services.medicion import exigir_mediciones
+    from app.services.medicion import resolver_mediciones
 
-    exigir_mediciones(db, user_id)  # MedicionPendiente si falta medir
+    # MedicionPendiente si quedan 20 kg o más sin medir y el operario no ha elegido
+    merma_kg = resolver_mediciones(db, user_id, mermar_sin_medir=mermar_sin_medir)
     from app.services.paradas import cerrar_paradas_de
 
     cerrar_paradas_de(db, user_id)
@@ -184,4 +186,5 @@ def close_shift(db: Session, token: str) -> dict:
         "total_hours": float(turno.total_hours),
         "turno": turno_desde(turno.login_time),
         "logout_time": turno.logout_time.isoformat(),
+        "merma_sin_medir_kg": merma_kg,
     }

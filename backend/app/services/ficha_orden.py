@@ -48,6 +48,7 @@ _TITULOS_ACCION = {
 _MOTIVOS_MERMA = {
     "fin_bobina": "fin de bobina",
     "cierre_turno": "cierre de turno",
+    "cierre_sin_medir": "cierre de jornada sin medir",
 }
 
 
