@@ -224,6 +224,8 @@ export interface MedicionPendiente {
   order_id: string
   line_id: string
   puesto: string | null
+  /** Kg que quedan según el sistema: menos de 20 van a merma al cerrar. */
+  kg_restantes?: number
 }
 
 /** Informe de un turno A/B/C (GET /supervisor/informe-turno). */
@@ -848,10 +850,13 @@ export const api = {
     })
   },
 
-  /** Cierra la sesión. Con bobinas sin medir (409) la sesión sigue abierta. */
-  async logout(): Promise<void> {
+  /** Cierra la sesión. Con 20 kg o más sin medir (409) sigue abierta hasta que se elija. */
+  async logout(opciones?: { mermarSinMedir?: boolean }): Promise<void> {
     try {
-      await request<void>('/auth/logout', { method: 'POST', body: JSON.stringify({}) })
+      await request<void>('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ mermar_sin_medir: opciones?.mermarSinMedir ?? false }),
+      })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) throw err
     }
@@ -1188,9 +1193,10 @@ export const api = {
     });
   },
 
-  closeShift(): Promise<{ success: boolean; status: string; total_hours: number; turno: string; logout_time: string }> {
+  closeShift(opciones?: { mermarSinMedir?: boolean }): Promise<{ success: boolean; status: string; total_hours: number; turno: string; logout_time: string; merma_sin_medir_kg?: number }> {
     return request('/auth/close-shift', {
       method: 'POST',
+      body: JSON.stringify({ mermar_sin_medir: opciones?.mermarSinMedir ?? false }),
     });
   },
 

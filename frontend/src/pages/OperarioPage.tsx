@@ -426,17 +426,36 @@ export function OperarioPage() {
   const [cerrandoJornada, setCerrandoJornada] = useState(false)
   // Bobinas montadas sin medir: con alguna, no se puede cerrar (Jorge, 28-10)
   const [sinMedir, setSinMedir] = useState<number | null>(null)
+  const [kgSinMedir, setKgSinMedir] = useState(0)
+  const [confirmarMerma, setConfirmarMerma] = useState(false)
+  const alCambiarPendientes = useCallback((n: number, kg: number) => {
+    setSinMedir(n)
+    setKgSinMedir(kg)
+    if (n === 0) setConfirmarMerma(false)
+  }, [])
 
-  const handleCerrarJornada = async () => {
+  const handleCerrarJornada = async (mermarSinMedir = false) => {
+    if (!requireConexion('cerrar la jornada')) return
     setCerrandoJornada(true)
-     if (!requireConexion('cerrar la jornada')) return
-     try {
-      const res = await api.closeShift()
+    try {
+      const res = await api.closeShift({ mermarSinMedir })
       setJornadaCerrada({ total_hours: res.total_hours, turno: res.turno })
       setConfirmarCierre(false)
+      setConfirmarMerma(false)
+      const merma = res.merma_sin_medir_kg ?? 0
+      if (merma > 0) {
+        // La bobina ha quedado agotada y fuera de la máquina
+        setVinculada(false)
+        setScan(null)
+        refrescarFicha()
+      }
       showToast(
         "success",
-        `Jornada cerrada: ${res.total_hours.toLocaleString('es-ES')} h \u00b7 Turno ${res.turno}`,
+        `Jornada cerrada: ${res.total_hours.toLocaleString('es-ES')} h \u00b7 Turno ${res.turno}${
+          merma > 0
+            ? ` \u00b7 ${merma.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg a merma`
+            : ''
+        }`,
       )
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : 'Error al cerrar la jornada')
@@ -1620,7 +1639,41 @@ export function OperarioPage() {
                 {`Quedan ${textoSinEnviar(resumenCola.pendientesMios)}; se enviarán cuando vuelvas a entrar.`}
               </p>
             )}
-            <MedirCierre onPendientes={setSinMedir} />
+            <MedirCierre onPendientes={alCambiarPendientes} />
+            {sinMedir !== null && sinMedir > 0 && (
+              confirmarMerma ? (
+                <div className="border border-kavana-danger rounded-xl p-3 space-y-2">
+                  <p className="text-sm font-semibold text-kavana-danger">
+                    {`Se anotarán ${kgSinMedir.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg como merma y la bobina quedará agotada. No se puede deshacer.`}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmarMerma(false)}
+                      className="min-h-[52px] border border-kavana-border text-kavana-text-dim font-bold rounded-xl"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCerrarJornada(true)}
+                      disabled={cerrandoJornada}
+                      className="min-h-[52px] bg-kavana-danger text-white font-bold rounded-xl disabled:opacity-40"
+                    >
+                      Sí, mandar a merma
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmarMerma(true)}
+                  className="w-full min-h-[52px] border border-kavana-danger text-kavana-danger font-bold rounded-xl"
+                >
+                  {`No medir: mandar ${kgSinMedir.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg a merma y cerrar`}
+                </button>
+              )
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1631,7 +1684,7 @@ export function OperarioPage() {
               </button>
               <button
                 type="button"
-                onClick={handleCerrarJornada}
+                onClick={() => handleCerrarJornada()}
                 disabled={cerrandoJornada || sinMedir !== 0}
                 className="min-h-[52px] bg-kavana-orange text-black font-bold rounded-xl disabled:opacity-40 hover:opacity-90 transition-opacity"
               >

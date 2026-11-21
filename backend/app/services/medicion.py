@@ -10,10 +10,11 @@ y no están en piezas buenas, es decir, su chatarra.
 A diferencia del fin de bobina (create_retal), la bobina NO se desvincula:
 sigue en la máquina, con lo medido como punto de partida del relevo.
 
-La medición es obligatoria: un operario que ha producido con una bobina
-desde su última medición no puede cerrar la jornada ni la sesión
-(mediciones_pendientes). Cambiar de orden con el mismo material no obliga a
-medir: la chatarra se reconcilia en la siguiente medición.
+Al cerrar la jornada o la sesión con una bobina usada y sin medir (Jorge,
+21-11): si le quedan menos de 20 kg van a merma directamente; desde 20 kg el
+operario elige entre medirla o mandar esos kg a merma. Cambiar de orden con
+el mismo material no obliga a medir: la chatarra se reconcilia en la
+siguiente medición.
 """
 
 import uuid
@@ -34,10 +35,25 @@ from app.models import (
 )
 
 OBSERVACION_SIMULADOR = "simulador demo"
+# Por debajo de estos kg, una bobina sin medir va a merma sin preguntar
+UMBRAL_MERMA_DIRECTA_KG = Decimal("20")
 
 
 class MedicionPendiente(Exception):
-    """El operario tiene bobinas sin medir y no puede cerrar el turno."""
+    """Quedan bobinas con 20 kg o más sin medir: el operario tiene que elegir."""
+
+    def __init__(self, mensaje: str, bobinas: list[dict] | None = None):
+        super().__init__(mensaje)
+        self.bobinas = bobinas or []
+
+    @property
+    def detalle(self) -> dict:
+        return {
+            "codigo": "medicion_pendiente",
+            "mensaje": str(self),
+            "bobinas": self.bobinas,
+            "kg_total": round(sum(b["kg_restantes"] for b in self.bobinas), 4),
+        }
 
 
 def medir_bobina(
@@ -292,6 +308,7 @@ def mediciones_pendientes(db: Session, tenant_id, user_id) -> list[dict]:
         if medida is not None and _utc(medida) >= ultima_pieza:
             continue
         linea = montadas[coil]
+        bobina = db.get(StockItem, uuid.UUID(coil))
         pendientes.append(
             {
                 "stock_item_id": coil,
@@ -299,21 +316,139 @@ def mediciones_pendientes(db: Session, tenant_id, user_id) -> list[dict]:
                 "order_id": str(linea.order_id),
                 "line_id": str(linea.id),
                 "puesto": linea.workstation_id,
+                "kg_restantes": float(bobina.cantidad_disponible) if bobina else 0.0,
             }
         )
     return pendientes
 
 
-def exigir_mediciones(db: Session, user_id: uuid.UUID) -> None:
-    """Corta el cierre de turno o de sesión si quedan bobinas sin medir."""
+def _anotar_merma_sin_medir(db: Session, usuario, bobina: StockItem, linea: OrderLine) -> dict:
+    """Pasa a merma lo que queda de la bobina y la deja agotada y desmontada.
+
+    Los kg ya están cargados en la línea desde que se vinculó: no hay reembolso.
+    No confirma: lo hace resolver_mediciones, todo o nada.
+    """
+    kg = bobina.cantidad_disponible
+    coste = kg * bobina.coste_por_unidad
+    if kg > 0:
+        db.add(
+            MaterialConsumo(
+                tenant_id=usuario.tenant_id,
+                order_id=linea.order_id,
+                order_line_id=linea.id,
+                workstation_id="reconciliacion",
+                material_id=bobina.material_id,
+                stock_item_id=bobina.id,
+                lote=bobina.lote,
+                consumed_quantity=kg,
+                unit=bobina.unit or "kg",
+                produced_quantity=Decimal("0"),
+                kg_por_pieza=Decimal("0"),
+                calculation_method="coil_end_scrap",
+                cost_per_unit=bobina.coste_por_unidad,
+                total_cost=coste,
+                tipo="merma_puntas",
+                observaciones=(
+                    f"Cierre sin medir: {bobina.lote}. Quedaban {kg}kg según el sistema "
+                    f"y pasan a merma ({coste:.2f}€)"
+                ),
+                operator_id=usuario.id,
+            )
+        )
+        linea.scrap_material_qty = (linea.scrap_material_qty or Decimal("0")) + kg
+    db.add(
+        MaterialTransaction(
+            tenant_id=usuario.tenant_id,
+            material_id=bobina.material_id,
+            stock_item_id=bobina.id,
+            tipo="ajuste_inventario",
+            cantidad=Decimal("0"),
+            cantidad_anterior=kg,
+            cantidad_nueva=Decimal("0"),
+            motivo=f"Cierre de jornada sin medir: {kg}kg a merma ({coste:.2f}€).",
+            realizado_por=usuario.id,
+        )
+    )
+    bobina.cantidad_disponible = Decimal("0")
+    bobina.estado = "agotado"
+    bobina.es_pico = False
+    linea.active_coil_id = None
+    linea.active_coil_code = None
+    return {
+        "order_id": linea.order_id,
+        "line_id": linea.id,
+        "kg": kg,
+        "coste": coste,
+        "coil_id": str(bobina.id),
+        "coil_code": bobina.coil_id,
+    }
+
+
+def resolver_mediciones(
+    db: Session, user_id: uuid.UUID, *, mermar_sin_medir: bool = False
+) -> float:
+    """Aplica la regla de cierre sin medir y devuelve los kg enviados a merma.
+
+    Menos de 20 kg: merma directa. Desde 20 kg, sin la elección del operario,
+    lanza MedicionPendiente y no cambia nada.
+    """
     from app.models import User
+    from app.services.traceability import log_event
 
     usuario = db.get(User, user_id)
     if usuario is None or usuario.role != "operator":
-        return
+        return 0.0
     pendientes = mediciones_pendientes(db, usuario.tenant_id, usuario.id)
-    if pendientes:
-        codigos = ", ".join(p["coil_code"] or "?" for p in pendientes)
-        raise MedicionPendiente(
-            f"Antes de salir, mide el radio de la bobina montada: {codigos}."
+    if not pendientes:
+        return 0.0
+
+    # FOR UPDATE: los kg decididos son los de ahora, no los de una lectura anterior
+    bloqueadas = [
+        (
+            p,
+            db.get(
+                StockItem,
+                uuid.UUID(p["stock_item_id"]),
+                with_for_update=True,
+                populate_existing=True,
+            ),
         )
+        for p in pendientes
+    ]
+    grandes = [
+        {**p, "kg_restantes": float(b.cantidad_disponible)}
+        for p, b in bloqueadas
+        if b.cantidad_disponible >= UMBRAL_MERMA_DIRECTA_KG
+    ]
+    if grandes and not mermar_sin_medir:
+        db.rollback()
+        texto = ", ".join(f"{b['coil_code'] or '?'} ({b['kg_restantes']:.1f} kg)" for b in grandes)
+        raise MedicionPendiente(
+            f"Quedan kg sin medir en {texto}. Mide la bobina o manda esos kg a merma.",
+            grandes,
+        )
+
+    anotadas = [
+        _anotar_merma_sin_medir(db, usuario, b, db.get(OrderLine, uuid.UUID(p["line_id"])))
+        for p, b in bloqueadas
+    ]
+    db.commit()
+    for a in anotadas:
+        log_event(
+            db,
+            tenant_id=usuario.tenant_id,
+            order_id=a["order_id"],
+            line_id=a["line_id"],
+            operator_id=usuario.id,
+            action="scrap",
+            quantity=float(a["kg"]),
+            metadata={
+                "peso_restante_kg": 0.0,
+                "system_remaining_kg": float(a["kg"]),
+                "merma_cost": float(a["coste"]),
+                "reason": "cierre_sin_medir",
+                "activeCoilId": a["coil_id"],
+                "activeCoilCode": a["coil_code"],
+            },
+        )
+    return round(sum(float(a["kg"]) for a in anotadas), 4)

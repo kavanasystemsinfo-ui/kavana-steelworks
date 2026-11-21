@@ -23,6 +23,9 @@ export function Layout() {
   const [aviso, setAviso] = useState('')
   // Partes sin enviar en esta tablet al pulsar Salir (null: sin aviso abierto)
   const [partesAlSalir, setPartesAlSalir] = useState<number | null>(null)
+  // Kg sin medir que impiden salir (null: el aviso no ofrece mandarlos a merma)
+  const [kgSinMedir, setKgSinMedir] = useState<number | null>(null)
+  const [confirmarMerma, setConfirmarMerma] = useState(false)
 
   // Tour guiado: uno por rol (y por pantalla en el operario y por pestaña en el supervisor).
   // Se abre solo la primera vez que un visitante de la demo entra con cada rol, y se repite
@@ -61,12 +64,15 @@ export function Layout() {
     handleLogout()
   }
 
-  const handleLogout = async () => {
+  const handleLogout = async (mermarSinMedir = false) => {
     setPartesAlSalir(null)
     try {
-      await api.logout()
+      await api.logout({ mermarSinMedir })
     } catch (err) {
-      // 409: el operario tiene una bobina sin medir; la sesión sigue abierta
+      // 409: quedan 20 kg o más sin medir; la sesión sigue abierta hasta que elija
+      const detalle = (err as { detail?: { codigo?: string; kg_total?: number } }).detail
+      setKgSinMedir(detalle?.codigo === 'medicion_pendiente' ? (detalle.kg_total ?? null) : null)
+      setConfirmarMerma(false)
       setAviso(err instanceof Error ? err.message : 'No se pudo cerrar la sesión')
       return
     }
@@ -153,7 +159,7 @@ export function Layout() {
             </button>
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => handleLogout()}
               className="min-h-[44px] px-3 rounded-sm border border-kavana-warn text-kavana-warn font-semibold"
             >
               Salir igualmente
@@ -166,10 +172,43 @@ export function Layout() {
           role="alert"
           className="border-b border-kavana-warn bg-kavana-surface px-4 py-2 text-sm text-kavana-warn flex items-center justify-between gap-3"
         >
-          <span>{aviso} Hazlo en «Cerrar jornada» del panel de operario.</span>
-          <button type="button" className="underline" onClick={() => setAviso('')}>
-            Entendido
-          </button>
+          <span>
+            {confirmarMerma
+              ? `Se anotarán ${(kgSinMedir ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg como merma y la bobina quedará agotada. No se puede deshacer.`
+              : `${aviso} Para medirla, ve a «Cerrar jornada» en el panel de operario.`}
+          </span>
+          <span className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-[44px] px-3 underline"
+              onClick={() => {
+                if (confirmarMerma) setConfirmarMerma(false)
+                else setAviso('')
+              }}
+            >
+              {confirmarMerma ? 'Volver' : 'Entendido'}
+            </button>
+            {kgSinMedir !== null && (
+              <button
+                type="button"
+                className="min-h-[44px] px-3 rounded-sm border border-kavana-danger text-kavana-danger font-semibold"
+                onClick={() => {
+                  if (!confirmarMerma) {
+                    setConfirmarMerma(true)
+                    return
+                  }
+                  setAviso('')
+                  setKgSinMedir(null)
+                  setConfirmarMerma(false)
+                  handleLogout(true)
+                }}
+              >
+                {confirmarMerma
+                  ? 'Sí, mandar a merma y salir'
+                  : `Mandar ${kgSinMedir.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg a merma y salir`}
+              </button>
+            )}
+          </span>
         </div>
       )}
       <main className="p-4">

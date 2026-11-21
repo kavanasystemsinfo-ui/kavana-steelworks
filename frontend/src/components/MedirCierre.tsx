@@ -2,14 +2,24 @@ import { useEffect, useState } from 'react'
 import { api, type MedicionPendiente } from '../lib/api'
 import { MedidaBobina } from './MedidaBobina'
 
-/** Medición obligatoria del cierre de turno (Jorge, 28-10).
+const UMBRAL_MERMA_DIRECTA_KG = 20
+const kgDe = (p: MedicionPendiente) => p.kg_restantes ?? 0
+// Sin el dato de kg se pide medir: nunca se manda a merma a ciegas
+const hayQueElegir = (p: MedicionPendiente) =>
+  p.kg_restantes === undefined || p.kg_restantes >= UMBRAL_MERMA_DIRECTA_KG
+const textoKg = (kg: number) => kg.toLocaleString('es-ES', { maximumFractionDigits: 1 })
+
+/** Medición del cierre de turno (Jorge, 28-10 y 21-11).
  *
  *  Por cada bobina montada con la que el operario ha producido sin medirla,
  *  pide los milímetros de radio. El sistema apunta la chatarra (lo que creía
  *  que quedaba menos lo medido) y deja la bobina en la máquina para el
- *  relevo. Mientras quede alguna, no se puede cerrar la jornada ni la sesión.
+ *  relevo. Con menos de 20 kg no pregunta: van a merma al cerrar. Desde 20 kg
+ *  el operario elige entre medir o mandarlos a merma.
+ *
+ *  onPendientes recibe cuántas bobinas exigen elegir y los kg que irían a merma.
  */
-export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => void }) {
+export function MedirCierre({ onPendientes }: { onPendientes: (n: number, kg: number) => void }) {
   const [pendientes, setPendientes] = useState<MedicionPendiente[] | null>(null)
   const [hechas, setHechas] = useState<string[]>([])
   const [error, setError] = useState('')
@@ -19,7 +29,7 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
       .getMedicionesPendientes()
       .then((p) => {
         setPendientes(p)
-        onPendientes(p.length)
+        onPendientes(p.filter(hayQueElegir).length, p.reduce((t, x) => t + kgDe(x), 0))
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Error de conexión'))
   }, [onPendientes])
@@ -35,7 +45,7 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
       })
       const quedan = (pendientes ?? []).filter((x) => x.stock_item_id !== p.stock_item_id)
       setPendientes(quedan)
-      onPendientes(quedan.length)
+      onPendientes(quedan.filter(hayQueElegir).length, quedan.reduce((t, x) => t + kgDe(x), 0))
       setHechas((h) => [
         ...h,
         `${p.coil_code ?? 'Bobina'}: quedan ${res.peso_restante_kg.toLocaleString('es-ES')} kg montados · chatarra ${res.chatarra_kg.toLocaleString('es-ES')} kg`,
@@ -51,11 +61,18 @@ export function MedirCierre({ onPendientes }: { onPendientes: (n: number) => voi
 
   return (
     <div className="space-y-2">
-      {(pendientes ?? []).map((p) => (
+      {(pendientes ?? []).filter((p) => !hayQueElegir(p)).map((p) => (
+        <p key={p.stock_item_id} className="text-sm text-kavana-warn">
+          {`La bobina ${p.coil_code ?? ''} tiene ${textoKg(kgDe(p))} kg sin medir: se anotarán como merma al cerrar.`}
+        </p>
+      ))}
+      {(pendientes ?? []).filter(hayQueElegir).map((p) => (
         <div key={p.stock_item_id} className="bg-kavana-dark border border-kavana-warn rounded-xl p-3 space-y-2">
           <p className="text-sm">
             Mide la bobina <span className="mono-data">{p.coil_code}</span>
-            {p.puesto ? ` en ${p.puesto}` : ''}. Seguirá montada para el relevo.
+            {p.puesto ? ` en ${p.puesto}` : ''}
+            {p.kg_restantes !== undefined ? ` (quedan ${textoKg(p.kg_restantes)} kg)` : ''}. Seguirá
+            montada para el relevo.
           </p>
           <MedidaBobina
             stockItemId={p.stock_item_id}

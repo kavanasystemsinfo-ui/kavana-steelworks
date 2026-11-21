@@ -151,8 +151,17 @@ def _extraer_bearer(authorization: str | None) -> str | None:
     return None
 
 
+class CierreRequest(BaseModel):
+    # El operario elige mandar a merma los kg de las bobinas que no ha medido
+    mermar_sin_medir: bool = False
+
+
 @router.post("/logout", status_code=204)
-def logout(authorization: Annotated[str | None, Header()] = None, db: DbDep = None):
+def logout(
+    body: CierreRequest | None = None,
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+):
     """Revoca el token server-side (Bearer en header Authorization)."""
     token = _extraer_bearer(authorization)
     if token is None:
@@ -160,14 +169,18 @@ def logout(authorization: Annotated[str | None, Header()] = None, db: DbDep = No
     from app.services.medicion import MedicionPendiente
 
     try:
-        auth_service.logout(db, token)
+        auth_service.logout(db, token, mermar_sin_medir=bool(body and body.mermar_sin_medir))
     except MedicionPendiente as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=exc.detalle) from exc
     return None
 
 
 @router.post("/close-shift")
-def close_shift(authorization: Annotated[str | None, Header()] = None, db: DbDep = None):
+def close_shift(
+    body: CierreRequest | None = None,
+    authorization: Annotated[str | None, Header()] = None,
+    db: DbDep = None,
+):
     """Cierra el turno activo: total_hours y turno A/B/C (spec 02 3.11)."""
     token = _extraer_bearer(authorization)
     if token is None:
@@ -175,9 +188,11 @@ def close_shift(authorization: Annotated[str | None, Header()] = None, db: DbDep
     from app.services.medicion import MedicionPendiente
 
     try:
-        return auth_service.close_shift(db, token)
+        return auth_service.close_shift(
+            db, token, mermar_sin_medir=bool(body and body.mermar_sin_medir)
+        )
     except MedicionPendiente as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=exc.detalle) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
