@@ -148,13 +148,17 @@ function esReintentable(err: unknown): boolean {
 }
 
 /**
- * Guarda el parte en la cola y lo intenta enviar ya. Devuelve si el servidor
- * lo aceptó (salió de la cola con su respuesta) o sigue pendiente (sin red
- * o error reintentable).
+ * Guarda el parte en la cola y lo intenta enviar ya. Devuelve 4 resultados:
+ * - 'aceptado': éxito o duplicate (sale de la cola con respuesta)
+ * - 'pendiente': error de red / timeout / 5xx / 429 (reintentará)
+ * - 'rechazado': 400 / 409 / 422 (pasa a fallido con mensaje, cola sigue)
+ * - 'pausada': 401 (cola pausada, nada se borra)
  */
 export type ResultadoEnvio =
   | { tipo: 'aceptado'; respuesta: unknown }
   | { tipo: 'pendiente' }
+  | { tipo: 'rechazado'; mensaje: string }
+  | { tipo: 'pausada' }
 
 export async function encolarYEnviar(
   el: ElementoCola,
@@ -176,15 +180,15 @@ async function enviarYRegistrar(el: ElementoCola, enviar: EnviarFn): Promise<Res
   } catch (err) {
     if (esReintentable(err)) {
       actualizar(el.client_request_id, (e) => ({ ...e, intentos: e.intentos + 1 }))
+      return { tipo: 'pendiente' }
     } else if (err instanceof ApiError && err.status === 401) {
       // Pausa: queda pendiente; se reanuda al volver a entrar el mismo usuario
+      return { tipo: 'pausada' }
     } else {
-      marcarFallido(
-        el.client_request_id,
-        err instanceof Error ? err.message : 'Error al registrar',
-      )
+      const mensaje = err instanceof Error ? err.message : 'Error al registrar'
+      marcarFallido(el.client_request_id, mensaje)
+      return { tipo: 'rechazado', mensaje }
     }
-    return { tipo: 'pendiente' }
   }
 }
 

@@ -22,6 +22,7 @@ import {
   procesarCola,
   reintentar,
   reintentarTodos,
+  esperaSiguienteReintento,
   type ElementoCola,
   type ResumenCola,
 } from '../lib/colaProduccion'
@@ -157,7 +158,7 @@ export function OperarioPage() {
     )
   }, [userSub])
 
-  const hayPendientesMios = resumenCola.pendientesMios > 0 || resumenCola.fallidosMios > 0
+  const hayPendientesMios = resumenCola.pendientesMios > 0
 
   /** Sin red: las acciones que no van a la cola avisan y no se intentan. */
   const requireConexion = useCallback(
@@ -184,6 +185,28 @@ export function OperarioPage() {
     window.addEventListener('online', enLinea)
     return () => window.removeEventListener('online', enLinea)
   }, [userSub, sincronizarCola, reenviarCola])
+
+  // R4: temporizador con esperaSiguienteReintento() para reintento automático
+  useEffect(() => {
+    if (!hayPendientesMios || !navigator.onLine) return
+    const intervalo = esperaSiguienteReintento()
+    const timer = setInterval(() => {
+      reenviarCola()
+    }, intervalo)
+    return () => clearInterval(timer)
+  }, [hayPendientesMios, reenviarCola])
+
+  // R6: beforeunload si hay pendientes
+  useEffect(() => {
+    if (!hayPendientesMios) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hayPendientesMios])
 
   // Recordatorios de autocontrol NO bloqueantes (spec 04 §3.2.5): el
   // backend expone el estado; aquí se calculan los 15 min del primer aviso
@@ -800,12 +823,7 @@ export function OperarioPage() {
       setDesglose(null)
       sincronizarCola()
       refrescarFicha()
-      if (resultado.tipo === 'pendiente') {
-        showToast(
-          'error',
-          `Sin conexión: ${qty} piezas guardados en esta tablet; se enviarán al volver la red.`,
-        )
-      } else {
+      if (resultado.tipo === 'aceptado') {
         const r = resultado.respuesta as {
           incremental_quantity?: number
           consumed_amount?: number
@@ -813,10 +831,22 @@ export function OperarioPage() {
         }
         showToast(
           'success',
-          `${r.incremental_quantity ?? qty} piezas registradas · ${Number(
+          `${r.incremental_quantity ?? qty} pieza${qty === 1 ? '' : 's'} registrada${qty === 1 ? '' : 's'} · ${Number(
             r.consumed_amount ?? 0,
-          ).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${r.consumption_unit ?? ''} consumidos`,
+          ).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${r.consumption_unit ?? ''} consumid${r.consumed_amount === 1 ? 'a' : 'as'}`,
         )
+      } else if (resultado.tipo === 'pendiente') {
+        showToast(
+          'error',
+          `Sin conexión: ${qty} parte${qty === 1 ? '' : 's'} guardada${qty === 1 ? '' : 's'} en esta tablet; se enviarán al volver la red.`,
+        )
+      } else if (resultado.tipo === 'pausada') {
+        showToast(
+          'error',
+          'Sesión expirada: vuelve a entrar para reenviar los partes guardados.',
+        )
+      } else if (resultado.tipo === 'rechazado') {
+        showToast('error', `Rechazado: ${resultado.mensaje}`)
       }
     } catch (err) {
       clientRequestIdRef.current = null
@@ -990,15 +1020,17 @@ export function OperarioPage() {
           </div>
         ))}
       </div>
-      {/* Aviso fijo: partes guardadas en esta tablet sin red (T-159, auditoría H8) */}
-      {(hayPendientesMios || !navigator.onLine) && (
+      {/* Aviso fijo: partes guardadas en esta tablet SIN red (T-159, auditoría H8).
+          Solo aparece cuando NO hay red (navigator.onLine = false).
+          Con red, solo aparece toast puntual. */}
+      {!navigator.onLine && hayPendientesMios && (
         <div
           role="status"
           className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] border border-amber-400 bg-amber-50 text-amber-900 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
         >
-          {!navigator.onLine
-            ? 'Sin conexión: los partes se guardan en esta tablet y se envían solos al volver la red.'
-            : `Sin conexión: ${resumenCola.pendientesMios} partes guardados en esta tablet`}
+          {resumenCola.pendientesMios === 1
+            ? 'Sin conexión: 1 parte guardada en esta tablet; se enviará sola al volver la red.'
+            : `Sin conexión: ${resumenCola.pendientesMios} partes guardadas en esta tablet; se enviarán solas al volver la red.`}
         </div>
       )}
       {/* Recordatorio de autocontrol NO bloqueante (spec 04 §3.2.5): toast

@@ -2,12 +2,15 @@
  *
  * Contrato:
  * - Al registrar: se guarda primero en la cola y después se intenta enviar.
- * - Éxito o duplicate: sale de la cola.
+ * - Éxito o duplicate: sale de la cola (aceptado).
  * - Error de red / timeout / 5xx / 429: sigue pendiente (reintenta el mismo id).
  * - 401: la cola se PAUSA (no se borra).
  * - 400 / 409 / 422: pasa a «fallido» con el mensaje del servidor y la cola SIGUE.
  * - Solo se envían los elementos del user_sub conectado.
  * - «Reintentar» devuelve el elemento a pendiente.
+ *
+ * R2 (auditoría 20-11): ResultadoEnvio debe tener 4 tipos:
+ *   'aceptado' | 'pendiente' | 'rechazado' | 'pausada'
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from '../lib/api'
@@ -22,6 +25,7 @@ import {
   descartar,
   CLAVE_COLA,
   type ElementoCola,
+  type ResultadoEnvio,
 } from '../lib/colaProduccion'
 
 function elemento(parcial: Partial<ElementoCola> = {}): ElementoCola {
@@ -224,5 +228,57 @@ describe('colaProduccion', () => {
     console.log('RESULTADO API:', JSON.stringify(res))
     expect(res.incremental_quantity).toBe(5)
     vi.unstubAllGlobals()
+  })
+
+  // ===== R2: 4 resultados de envío (aceptado/pendiente/rechazado/pausada) =====
+  it('R2: éxito → resultado "aceptado" con respuesta del servidor', async () => {
+    const enviar = vi.fn().mockResolvedValue({ success: true, incremental_quantity: 5 })
+    const res = await encolarYEnviar(elemento(), enviar)
+    expect(res.tipo).toBe('aceptado')
+    expect(res.respuesta).toEqual({ success: true, incremental_quantity: 5 })
+    expect(cargarCola()).toEqual([])
+  })
+
+  it('R2: duplicate del servidor → resultado "aceptado" (duplicate true)', async () => {
+    const enviar = vi.fn().mockResolvedValue({ success: true, duplicate: true })
+    const res = await encolarYEnviar(elemento(), enviar)
+    expect(res.tipo).toBe('aceptado')
+    expect((res.respuesta as { duplicate?: boolean }).duplicate).toBe(true)
+  })
+
+  it('R2: fallo de red → resultado "pendiente" (sin respuesta)', async () => {
+    const enviar = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    const res = await encolarYEnviar(elemento(), enviar)
+    expect(res.tipo).toBe('pendiente')
+    expect(cargarCola()).toHaveLength(1)
+    expect(cargarCola()[0].estado).toBe('pendiente')
+  })
+
+  it('R2: 401 → resultado "pausada" (cola pausada, nada borrado)', async () => {
+    const enviar = vi.fn().mockRejectedValue(new ApiError('Token requerido', 401))
+    const res = await encolarYEnviar(elemento(), enviar)
+    expect(res.tipo).toBe('pausada')
+    expect(cargarCola()).toHaveLength(1)
+    expect(cargarCola()[0].estado).toBe('pendiente')
+  })
+
+  it('R2: 400 → resultado "rechazado" con mensaje y la cola SIGUE con el siguiente', async () => {
+    const malo = elemento({ incremental_quantity: 999 })
+    const bueno = elemento()
+    // Insertamos ambos en la cola; procesarCola enviará ambos
+    localStorage.setItem(CLAVE_COLA, JSON.stringify([malo, bueno]))
+    const enviar = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError('No hay bobina vinculada', 400))
+      .mockResolvedValueOnce({ success: true })
+    // Probamos con procesarCola que itera sobre toda la cola
+    const res = await procesarCola('user-1', enviar)
+    expect(res.enviados).toBe(1)
+    expect(res.pausada).toBe(false)
+    const cola = cargarCola()
+    expect(cola).toHaveLength(1)
+    expect(cola[0].client_request_id).toBe(malo.client_request_id)
+    expect(cola[0].estado).toBe('fallido')
+    expect(cola[0].ultimo_error).toBe('No hay bobina vinculada')
   })
 })

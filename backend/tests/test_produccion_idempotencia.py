@@ -113,14 +113,14 @@ def test_mismo_client_request_id_no_duplica(db_session, tenant, user):
 
 
 def test_producir_en_orden_cancelada_rechaza(db_session, tenant, user):
-    """No se produce en órdenes canceladas (hallazgo H2)."""
+    """No se produce en órdenes canceladas (hallazgo H2, R1)."""
     from app.services.production import record_production
 
     _, _, order, line = _setup(db_session, tenant, user)
     order.estado = "cancelled"
     db_session.commit()
 
-    with pytest.raises(ValueError, match="cancelled|activa|estado"):
+    with pytest.raises(ValueError, match="cancelada"):
         record_production(
             db_session,
             tenant.id,
@@ -132,22 +132,11 @@ def test_producir_en_orden_cancelada_rechaza(db_session, tenant, user):
 
 
 def test_producir_en_orden_draft_rechaza(db_session, tenant, user):
-    """Tampoco en borrador: solo active (o in_progress si existiera)."""
-    from app.services.production import record_production
-
-    _, _, order, line = _setup(db_session, tenant, user)
-    order.estado = "draft"
-    db_session.commit()
-
-    with pytest.raises(ValueError, match="draft|activa|estado"):
-        record_production(
-            db_session,
-            tenant.id,
-            user.id,
-            order_id=order.id,
-            line_id=line.id,
-            incremental_quantity=1,
-        )
+    """ANTES de R1: draft rechazaba. Tras R1: draft PERMITIDO (test mantenido como referencia histórica)."""
+    # Este test verifica el comportamiento ANTERIOR a R1.
+    # Tras R1, draft SÍ permite producir (ver test_producir_en_orden_draft_permitida).
+    import pytest
+    pytest.skip("Comportamiento cambiado por R1: draft ahora permitido")
 
 
 def test_incremental_quantity_decimal_rechazado_en_router(db_session, tenant, user, client):
@@ -200,6 +189,55 @@ def test_ocurrido_en_muy_antiguo_rechazado_en_router(db_session, tenant, user, c
         },
     )
     assert res.status_code == 422
+
+
+def test_producir_en_orden_completada_permitida(db_session, tenant, user):
+    """Orden completed permite sobreproducción (fin de bobina, decisión de Jorge)."""
+    from app.services.production import record_production
+
+    _, _, order, line = _setup(db_session, tenant, user)
+    order.estado = "completed"
+    db_session.commit()
+
+    # No debe lanzar ValueError; debe registrar la producción
+    resp = record_production(
+        db_session,
+        tenant.id,
+        user.id,
+        order_id=order.id,
+        line_id=line.id,
+        incremental_quantity=1,
+    )
+    assert resp["success"] is True
+    assert resp["incremental_quantity"] == 1
+
+
+def test_producir_en_orden_draft_permitida(db_session, tenant, user):
+    """Orden draft permite iniciar producción (cambio R1: solo cancelled se rechaza)."""
+    from app.services.production import record_production
+
+    _, _, order, line = _setup(db_session, tenant, user)
+    order.estado = "draft"
+    db_session.commit()
+
+    resp = record_production(
+        db_session,
+        tenant.id,
+        user.id,
+        order_id=order.id,
+        line_id=line.id,
+        incremental_quantity=1,
+    )
+    assert resp["success"] is True
+    assert resp["incremental_quantity"] == 1
+
+
+def test_estado_in_progress_no_existe_en_ordenes(db_session, tenant, user):
+    """El modelo Order no tiene estado 'in_progress' (es de línea); validación no lo usa."""
+    from app.models.order import ESTADOS_ORDEN
+
+    assert "in_progress" not in ESTADOS_ORDEN
+    assert ESTADOS_ORDEN == ("draft", "active", "completed", "cancelled")
 
 
 def test_ocurrido_en_llega_a_production_logs(db_session, tenant, user):

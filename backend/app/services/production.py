@@ -116,12 +116,12 @@ def record_production(
     order = db.get(Order, order_id)
     if order is None or order.tenant_id != tenant_id:
         raise ValueError(f"Orden {order_id} no encontrada")
-    # H2: solo se produce en órdenes activas o en curso (ni borrador,
-    # canceladas ni completadas). La sobreproducción sobre una línea
-    # completada se sigue permitiendo (fin de bobina, decisión de Jorge).
-    if order.estado not in ("active", "in_progress"):
+    # H2: solo se rechaza 'cancelled'. 'draft' y 'active' permiten iniciar;
+    # 'completed' permite sobreproducción (fin de bobina, decisión de Jorge).
+    # 'in_progress' NO es estado de orden (es de línea); no aparece aquí.
+    if order.estado == "cancelled":
         raise ValueError(
-            f"La orden {order.numero} está {order.estado}: no se puede registrar producción"
+            f"La orden {order.numero} está cancelada: no se puede registrar producción"
         )
     # H5: bloqueo de fila para que dos peticiones a la vez no pierdan piezas
     linea = db.get(OrderLine, line_id, with_for_update=True)
