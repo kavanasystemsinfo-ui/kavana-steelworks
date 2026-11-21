@@ -12,14 +12,16 @@ Portado de OrderService.recordProduction del legacy al v2:
 - WIP waterfall entre líneas en cascada.
 """
 
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Order, OrderLine, StockItem, User
+from app.models import Order, OrderLine, ProductionRequest, StockItem, User
 
 DENSIDAD_CALIBRADA_KAVANA_KG_DM3 = Decimal("7.7807")
 
@@ -83,14 +85,30 @@ def record_production(
     observaciones: str = "",
     desglose: dict | None = None,
     ocurrido_en: datetime | None = None,
+    client_request_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Registra producción incremental en una línea con auto-consumo FIFO.
 
     ``ocurrido_en`` fija la hora del evento de trazabilidad (la demo recupera así el
     hueco de un turno con horas pasadas). Sin él, el evento lleva la hora actual.
+
+    ``client_request_id`` (T-159) es la clave de idempotencia del cliente:
+    si ya existe una petición con ese id en el tenant, se devuelve la
+    respuesta guardada con ``duplicate: True`` sin registrar nada.
     """
     qty = Decimal(str(incremental_quantity))
     hours = Decimal(str(hours_worked))
+
+    # 0) Idempotencia: ¿esta petición ya se atendió? (antes de tocar nada)
+    if client_request_id is not None:
+        previa = db.scalar(
+            select(ProductionRequest).where(
+                ProductionRequest.tenant_id == tenant_id,
+                ProductionRequest.client_request_id == client_request_id,
+            )
+        )
+        if previa is not None:
+            return {**previa.response, "duplicate": True}
 
     # 1) Contexto y seguridad
     user_id = _resolver_usuario(db, tenant_id, user_id)
@@ -98,7 +116,15 @@ def record_production(
     order = db.get(Order, order_id)
     if order is None or order.tenant_id != tenant_id:
         raise ValueError(f"Orden {order_id} no encontrada")
-    linea = db.get(OrderLine, line_id)
+    # H2: solo se rechaza 'cancelled'. 'draft' y 'active' permiten iniciar;
+    # 'completed' permite sobreproducción (fin de bobina, decisión de Jorge).
+    # 'in_progress' NO es estado de orden (es de línea); no aparece aquí.
+    if order.estado == "cancelled":
+        raise ValueError(
+            f"La orden {order.numero} está cancelada: no se puede registrar producción"
+        )
+    # H5: bloqueo de fila para que dos peticiones a la vez no pierdan piezas
+    linea = db.get(OrderLine, line_id, with_for_update=True)
     if linea is None or linea.order_id != order.id:
         raise ValueError("Línea no encontrada para la orden")
 
@@ -226,9 +252,7 @@ def record_production(
                 material_consumo_ids = [c["stock_item_id"] for c in resultado["consumos"]]
             except ValueError as exc:
                 # D-018: siempre bloquea, no hay modo simple tolerante
-                raise ValueError(
-                    f"Error en deducción de material: {exc}"
-                ) from exc
+                raise ValueError(f"Error en deducción de material: {exc}") from exc
         else:
             # Sin consumo calculable (sin dimensiones ni BOM): no descuenta
             calculation_method = "none"
@@ -285,6 +309,46 @@ def record_production(
         else order.estado
     )
 
+    respuesta = {
+        "success": True,
+        "produced_quantity": float(nueva_producida),
+        "incremental_quantity": float(qty),
+        "consumed_amount": float(consumed_amount),
+        "consumption_unit": consumption_unit,
+        "calculation_method": calculation_method,
+        "kg_por_pieza": float(kg_por_pieza),
+        "incremental_material_cost": float(incremental_material_cost),
+        "incremental_labor_cost": float(incremental_labor_cost),
+        "estado": nuevo_estado,
+        "material_consumo_ids": [str(i) for i in material_consumo_ids],
+    }
+
+    # 8b) Idempotencia (T-159): la petición queda guardada con su respuesta
+    #     en la MISMA transacción. Si dos peticiones con el mismo id llegan a
+    #     la vez, la segunda choca con el UNIQUE: rollback, releer y devolver.
+    if client_request_id is not None:
+        db.add(
+            ProductionRequest(
+                tenant_id=tenant_id,
+                client_request_id=client_request_id,
+                user_id=user_id,
+                response=respuesta,
+            )
+        )
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            ganadora = db.scalar(
+                select(ProductionRequest).where(
+                    ProductionRequest.tenant_id == tenant_id,
+                    ProductionRequest.client_request_id == client_request_id,
+                )
+            )
+            if ganadora is None:  # no debería ocurrir; fail closed
+                raise
+            return {**ganadora.response, "duplicate": True}
+
     db.commit()
     db.refresh(linea)
 
@@ -322,16 +386,4 @@ def record_production(
         shift=turno_desde(ocurrido_en or datetime.now(UTC)),
     )
 
-    return {
-        "success": True,
-        "produced_quantity": float(linea.produced_quantity),
-        "incremental_quantity": float(qty),
-        "consumed_amount": float(consumed_amount),
-        "consumption_unit": consumption_unit,
-        "calculation_method": calculation_method,
-        "kg_por_pieza": float(kg_por_pieza),
-        "incremental_material_cost": float(incremental_material_cost),
-        "incremental_labor_cost": float(incremental_labor_cost),
-        "estado": linea.estado,
-        "material_consumo_ids": material_consumo_ids,
-    }
+    return respuesta

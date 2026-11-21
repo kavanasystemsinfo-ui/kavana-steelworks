@@ -1,11 +1,12 @@
 """Router de producción: registro de piezas con auto-consumo FIFO (spec 02 3.4)."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
@@ -46,12 +47,33 @@ class Desglose(BaseModel):
 class RecordProductionRequest(BaseModel):
     order_id: uuid.UUID
     line_id: uuid.UUID
-    incremental_quantity: Decimal = Field(ge=0)
+    # H4: las piezas son enteras (nada de 2.5 piezas)
+    incremental_quantity: int = Field(ge=0)
     # Sin horas (0), se cuentan solas desde el último registro del operario en
     # la línea o desde que inició sesión (rediseño del panel, 28-10)
     hours_worked: Decimal = Field(default=0, ge=0)
     observaciones: str | None = Field(default=None, max_length=2000)
     desglose: Desglose | None = None
+    # H1: clave de idempotencia que genera la tablet una sola vez por parte
+    client_request_id: uuid.UUID | None = None
+    # H8: hora real del parte en la tablet (cola sin conexión)
+    ocurrido_en: datetime | None = None
+
+    @field_validator("ocurrido_en")
+    @classmethod
+    def _ocurrido_en_plausible(cls, v: datetime | None) -> datetime | None:
+        """La hora de la tablet no puede ser de ciencia ficción: se acepta un
+        adelanto de 5 min (reloj desajustado) y hasta 24 h de retraso (cola
+        offline de un turno largo)."""
+        if v is None:
+            return v
+        ahora = datetime.now(UTC)
+        v_utc = v if v.tzinfo else v.replace(tzinfo=UTC)
+        if v_utc > ahora + timedelta(minutes=5):
+            raise ValueError("ocurrido_en no puede ser posterior a ahora (+5 min)")
+        if v_utc < ahora - timedelta(hours=24):
+            raise ValueError("ocurrido_en no puede ser anterior a ahora (-24 h)")
+        return v_utc
 
 
 @router.post("/record")
@@ -75,7 +97,7 @@ def record_production(
 
     horas = body.hours_worked
     if horas == 0 and body.incremental_quantity > 0:
-        horas = horas_automaticas(db, current_user.id, body.line_id)
+        horas = horas_automaticas(db, current_user.id, body.line_id, ahora=body.ocurrido_en)
     try:
         return record_service(
             db,
@@ -87,6 +109,8 @@ def record_production(
             hours_worked=horas,
             observaciones=body.observaciones or "",
             desglose=body.desglose.model_dump() if body.desglose else None,
+            ocurrido_en=body.ocurrido_en,
+            client_request_id=body.client_request_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -244,9 +268,13 @@ def parar(
     try:
         return parada_dict(
             iniciar_parada(
-                db, current_user.tenant_id, current_user.id,
-                puesto=body.puesto, motivo=body.motivo,
-                order_id=body.order_id, line_id=body.line_id,
+                db,
+                current_user.tenant_id,
+                current_user.id,
+                puesto=body.puesto,
+                motivo=body.motivo,
+                order_id=body.order_id,
+                line_id=body.line_id,
             )
         )
     except ValueError as exc:

@@ -15,6 +15,7 @@ from app.models.material import Material, StockItem  # noqa: F401
 from app.models.order import Order, OrderLine  # noqa: F401
 from app.models.parada import Parada  # noqa: F401
 from app.models.product import Product, ProductComponent  # noqa: F401
+from app.models.production_request import ProductionRequest  # noqa: F401
 from app.models.quality import (  # noqa: F401
     ManufacturingModel,
     ModelWorkstationMaterial,
@@ -43,6 +44,7 @@ __all__ = [
     "OrderLine",
     "Product",
     "ProductComponent",
+    "ProductionRequest",
     "Tenant",
     "User",
     "TenantFeature",

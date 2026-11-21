@@ -1,6 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, ApiError, getJwtPayload, getTenantId, type Desglose, type MotivoSaltoPico, type EventData, type FichaOrden as FichaOrdenData, type OrderItem, type Parada, type WorkstationItem } from '../lib/api'
+import {
+  api,
+  ApiError,
+  getJwtPayload,
+  getTenantId,
+  type Desglose,
+  type MotivoSaltoPico,
+  type EventData,
+  type FichaOrden as FichaOrdenData,
+  type OrderItem,
+  type Parada,
+  type WorkstationItem,
+} from '../lib/api'
+import {
+  descartar,
+  encolarYEnviar,
+  estadoCola,
+  cargarCola,
+  enviarPorApi,
+  procesarCola,
+  reintentar,
+  reintentarTodos,
+  esperaSiguienteReintento,
+  type ElementoCola,
+  type ResumenCola,
+} from '../lib/colaProduccion'
 import { usePlantEvents, type ConexionEstado } from '../hooks/usePlantEvents'
 import { useQualityReminders } from '../lib/useQualityReminders'
 import { Numpad } from '../components/Numpad'
@@ -93,6 +118,11 @@ function useTemaOperario() {
   return { oscuro, alternar }
 }
 
+/** «1 parte sin enviar en esta tablet» / «N partes sin enviar en esta tablet» (el parte). */
+function textoSinEnviar(n: number): string {
+  return `${n} ${n === 1 ? 'parte' : 'partes'} sin enviar en esta tablet`
+}
+
 export function OperarioPage() {
   const { oscuro, alternar: alternarTema } = useTemaOperario()
   const [coilId, setCoilId] = useState('')
@@ -108,6 +138,80 @@ export function OperarioPage() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 5000);
   };
+
+  // ---------- Cola de producción sin conexión (T-159, auditoría H8) ----------
+  const payload = getJwtPayload()
+  const userSub = payload?.sub ?? null
+  const [enviando, setEnviando] = useState(false)
+  // client_request_id del registro en curso: se genera UNA vez al pulsar y el
+  // reintento reutiliza el mismo (se guarda en la cola con ese id).
+  const clientRequestIdRef = useRef<string | null>(null)
+  const [resumenCola, setResumenCola] = useState<ResumenCola>({
+    pendientesMios: 0,
+    fallidosMios: 0,
+    pendientesOtros: 0,
+  })
+  const [bandejaFallidos, setBandejaFallidos] = useState<ElementoCola[]>([])
+  const [idDescartar, setIdDescartar] = useState<string | null>(null)
+  const [abiertaDescartar, setAbiertaDescartar] = useState(false)
+
+  const sincronizarCola = useCallback(() => {
+    const r = estadoCola(userSub)
+    setResumenCola(r)
+    setBandejaFallidos(
+      cargarCola().filter((e) => e.user_sub === userSub && e.estado === 'fallido'),
+    )
+  }, [userSub])
+
+  const hayPendientesMios = resumenCola.pendientesMios > 0
+
+  /** Sin red: las acciones que no van a la cola avisan y no se intentan. */
+  const requireConexion = useCallback(
+    (accion: string): boolean => {
+      if (navigator.onLine) return true
+      showToast('error', `Necesita conexión para ${accion}.`)
+      return false
+    },
+    [],
+  )
+
+  /** Intenta enviar la cola del operario conectado (al volver la red). */
+  const reenviarCola = useCallback(async () => {
+    if (!userSub) return
+    await procesarCola(userSub, enviarPorApi)
+    sincronizarCola()
+  }, [userSub, sincronizarCola])
+
+  useEffect(() => {
+    sincronizarCola()
+    const enLinea = () => {
+      reenviarCola()
+    }
+    window.addEventListener('online', enLinea)
+    return () => window.removeEventListener('online', enLinea)
+  }, [userSub, sincronizarCola, reenviarCola])
+
+  // R4: temporizador con esperaSiguienteReintento() para reintento automático
+  useEffect(() => {
+    if (!hayPendientesMios || !navigator.onLine) return
+    const intervalo = esperaSiguienteReintento()
+    const timer = setInterval(() => {
+      reenviarCola()
+    }, intervalo)
+    return () => clearInterval(timer)
+  }, [hayPendientesMios, reenviarCola])
+
+  // R6: beforeunload si hay pendientes
+  useEffect(() => {
+    if (!hayPendientesMios) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hayPendientesMios])
 
   // Recordatorios de autocontrol NO bloqueantes (spec 04 §3.2.5): el
   // backend expone el estado; aquí se calculan los 15 min del primer aviso
@@ -158,8 +262,9 @@ export function OperarioPage() {
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
-    showToast("error", '')
+    showToast('error', '')
     setScan(null)
+    if (!requireConexion('escaneear una bobina')) return
     try {
       const res = await api.scanCoil(coilId.trim(), '')
       if (!res) {
@@ -246,6 +351,7 @@ export function OperarioPage() {
       showToast("error", 'No se pudo obtener la línea de la orden activa')
       return
     }
+    if (!requireConexion('vincular la bobina')) return
     try {
       await api.linkCoil({
         stock_item_id: scan.id,
@@ -269,6 +375,7 @@ export function OperarioPage() {
   const handleUnlink = async () => {
     showToast("error", '')
     if (!scan || !ordenDetalle || !ordenDetalle.line_id) return
+    if (!requireConexion('desvincular la bobina')) return
     try {
       await api.unlinkCoil({
         stock_item_id: scan.id,
@@ -294,7 +401,8 @@ export function OperarioPage() {
 
   const handleCerrarJornada = async () => {
     setCerrandoJornada(true)
-    try {
+     if (!requireConexion('cerrar la jornada')) return
+     try {
       const res = await api.closeShift()
       setJornadaCerrada({ total_hours: res.total_hours, turno: res.turno })
       setConfirmarCierre(false)
@@ -555,6 +663,7 @@ export function OperarioPage() {
     // Toast clearing removed - toasts now persist until next operation
 
     if (!modelo || !ordenDetalle || !scan) return
+    if (!requireConexion('registrar el autocontrol')) return
     const lista = Object.entries(mediciones)
       .filter(([, v]) => v !== '' && v !== undefined)
       .map(([name, value]) => ({ check_name: name, value_entered: value }))
@@ -605,6 +714,7 @@ export function OperarioPage() {
     setIncStatus('creating')
     setIncSession(null)
     setIncPhotoUrl(null)
+    if (!requireConexion('adjuntar la foto')) return
     api.createIncidenciaUploadSession()
       .then((sesion) => {
         setIncSession(sesion)
@@ -661,6 +771,7 @@ export function OperarioPage() {
       showToast("error", 'Describe el problema antes de reportar.')
       return
     }
+    if (!requireConexion('reportar la incidencia')) return
     setIncStatus('submitting')
     try {
       await api.createIncidencia({
@@ -680,31 +791,74 @@ export function OperarioPage() {
 
   const handleRecordProduction = async (e: React.FormEvent) => {
     e.preventDefault()
-    showToast("success", '')
+    showToast('success', '')
     if (!scan) return
     if (!ordenDetalle || !ordenDetalle.line_id) {
-      showToast("error", 'No se pudo obtener la orden activa')
+      showToast('error', 'No se pudo obtener la orden activa')
       return
     }
+    const qty = Number(piezas)
+    if (!qty || qty < 1) {
+      showToast('error', 'Indica al menos una pieza.')
+      return
+    }
+    // client_request_id: se genera UNA vez al pulsar y el reintento reutiliza
+    // el mismo (H1: cero duplicados por doble toque ni por reintento).
+    if (!clientRequestIdRef.current) {
+      clientRequestIdRef.current = crypto.randomUUID()
+    }
+    const client_request_id = clientRequestIdRef.current
+    const el: ElementoCola = {
+      client_request_id,
+      user_sub: userSub ?? '',
+      order_id: ordenDetalle.id,
+      line_id: ordenDetalle.line_id,
+      incremental_quantity: qty,
+      desglose,
+      ocurrido_en: new Date().toISOString(),
+      intentos: 0,
+      ultimo_error: null,
+      estado: 'pendiente',
+    }
+    setEnviando(true)
     try {
-      const res = await api.recordProduction({
-        order_id: ordenDetalle.id,
-        line_id: ordenDetalle.line_id,
-        incremental_quantity: Number(piezas),
-        // Sin horas: el servidor cuenta el tiempo desde el último registro
-        observaciones: '',
-        desglose,
-      })
-      showToast("success", 
-        `${res.incremental_quantity ?? 0} piezas registradas · ${Number(res.consumed_amount ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${res.consumption_unit ?? ''} consumidos`,
-      )
+      const resultado = await encolarYEnviar(el, enviarPorApi)
+      clientRequestIdRef.current = null
       setPiezas('')
       setDesglose(null)
+      sincronizarCola()
       refrescarFicha()
+      if (resultado.tipo === 'aceptado') {
+        const r = resultado.respuesta as {
+          incremental_quantity?: number
+          consumed_amount?: number
+          consumption_unit?: string
+        }
+        showToast(
+          'success',
+          `${r.incremental_quantity ?? qty} pieza${qty === 1 ? '' : 's'} registrada${qty === 1 ? '' : 's'} · ${Number(
+            r.consumed_amount ?? 0,
+          ).toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${r.consumption_unit ?? ''} consumid${r.consumed_amount === 1 ? 'a' : 'as'}`,
+        )
+      } else if (resultado.tipo === 'pendiente') {
+        showToast(
+          'error',
+          'Sin conexión: parte guardado en esta tablet; se enviará solo al volver la red.',
+        )
+      } else if (resultado.tipo === 'pausada') {
+        showToast(
+          'error',
+          'Sesión expirada: vuelve a entrar para reenviar los partes guardados.',
+        )
+      } else if (resultado.tipo === 'rechazado') {
+        showToast('error', `Rechazado: ${resultado.mensaje}`)
+      }
     } catch (err) {
-      showToast("error", 
-        err instanceof Error ? err.message : 'Error al registrar producción',
-      )
+      clientRequestIdRef.current = null
+      sincronizarCola()
+      showToast('error', err instanceof Error ? err.message : 'Error al registrar producción')
+    } finally {
+      setEnviando(false)
     }
   }
 
@@ -715,6 +869,7 @@ export function OperarioPage() {
       showToast("error", 'No se pudo obtener la orden activa')
       return
     }
+    if (!requireConexion('cerrar la bobina')) return
     try {
       const res = await api.finBobina({
         stock_item_id: scan.id,
@@ -744,6 +899,7 @@ export function OperarioPage() {
       showToast("error", 'No se pudo obtener la orden activa')
       return
     }
+    if (!requireConexion('retirar el pico')) return
     try {
       const res = await api.retirarPico({ stock_item_id: scan.id })
       showToast("success", res.msg)
@@ -869,6 +1025,19 @@ export function OperarioPage() {
           </div>
         ))}
       </div>
+      {/* Aviso fijo: partes guardados en esta tablet SIN red (T-159, auditoría H8).
+          Solo aparece cuando NO hay red (navigator.onLine = false).
+          Con red, solo aparece toast puntual. */}
+      {!navigator.onLine && hayPendientesMios && (
+        <div
+          role="status"
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] border border-amber-400 bg-amber-50 text-amber-900 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
+        >
+          {resumenCola.pendientesMios === 1
+            ? 'Sin conexión: 1 parte guardado en esta tablet; se enviará solo al volver la red.'
+            : `Sin conexión: ${resumenCola.pendientesMios} partes guardados en esta tablet; se enviarán solos al volver la red.`}
+        </div>
+      )}
       {/* Recordatorio de autocontrol NO bloqueante (spec 04 §3.2.5): toast
           fijo visible, no interrumpe el flujo ni detiene la línea. */}
       {reminderToast && (
@@ -920,6 +1089,20 @@ export function OperarioPage() {
       ) : (
       <>
       <FichaOrden ficha={ficha} numero={ordenNumero} />
+      {resumenCola.pendientesMios > 0 && (
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <p className="label-industrial text-xs text-amber-700 font-bold">
+            {textoSinEnviar(resumenCola.pendientesMios)}
+          </p>
+          <button
+            type="button"
+            onClick={() => reenviarCola()}
+            className="min-h-[44px] rounded-xl border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+          >
+            Enviar ahora
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] items-start">
         {/* Izquierda: la acción principal (vincular o registrar) */}
@@ -1068,9 +1251,10 @@ export function OperarioPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 min-h-[60px] rounded-xl bg-kavana-orange text-white text-lg font-extrabold hover:opacity-90 transition-opacity"
+                  disabled={enviando || !piezas}
+                  className="flex-1 min-h-[60px] rounded-xl bg-kavana-orange text-white text-lg font-extrabold disabled:opacity-40 hover:opacity-90 transition-opacity"
                 >
-                  {piezas ? `Registrar ${piezas} piezas` : 'Registrar piezas'}
+                  {enviando ? 'Guardando…' : piezas ? `Registrar ${piezas} piezas` : 'Registrar piezas'}
                 </button>
               </div>
             </form>
@@ -1272,6 +1456,95 @@ export function OperarioPage() {
             </div>
           )}
 
+      {/* Bandeja de fallidos de la cola offline (T-159, auditoría H8) */}
+      {bandejaFallidos.length > 0 && (
+        <section aria-label="Partes pendientes de reenvío" className="bg-p-tarjeta border border-p-mal-borde rounded-2xl p-5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-p-mal">Partes no enviados</h2>
+            <button
+              type="button"
+              onClick={() => {
+                reintentarTodos()
+                reenviarCola()
+              }}
+              className="min-h-[44px] rounded-xl border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+            >
+              Reintentar todos
+            </button>
+          </div>
+          <ul className="divide-y divide-p-borde">
+            {bandejaFallidos.map((el) => (
+              <li key={el.client_request_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="mono-data text-sm">
+                    {el.incremental_quantity} piezas · Orden {el.order_id.slice(0, 8)}…
+                  </p>
+                  <p className="text-xs text-p-texto2">{el.ultimo_error ?? 'Error de conexión'}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      reintentar(el.client_request_id)
+                      reenviarCola()
+                    }}
+                    className="min-h-[44px] rounded-xl border border-p-borde bg-p-tarjeta px-3 text-sm font-semibold hover:border-p-plan"
+                  >
+                    Reintentar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdDescartar(el.client_request_id)
+                      setAbiertaDescartar(true)
+                    }}
+                    className="min-h-[44px] text-xs text-p-mal underline decoration-p-mal/40 hover:text-p-mal"
+                  >
+                    Descartar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Modal propio de confirmación para descartar (sin confirm()) */}
+      {abiertaDescartar && idDescartar && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-p-borde bg-p-tarjeta p-6 space-y-4">
+            <h2 className="text-lg font-bold">¿Descartar este parte?</h2>
+            <p className="text-sm text-p-texto2">
+              Se borrará de esta tablet y no se reenviará al servidor.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  descartar(idDescartar)
+                  setAbiertaDescartar(false)
+                  setIdDescartar(null)
+                  sincronizarCola()
+                }}
+                className="flex-1 min-h-[52px] bg-kavana-orange text-black font-bold rounded-xl"
+              >
+                Descartar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAbiertaDescartar(false)
+                  setIdDescartar(null)
+                }}
+                className="flex-1 min-h-[52px] border border-p-borde text-p-texto font-bold rounded-xl hover:border-p-plan"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
       {ordenDetalle?.workstation_id && (
         <div className="space-y-3">
@@ -1299,6 +1572,11 @@ export function OperarioPage() {
             <p className="text-sm text-kavana-text-dim">
               ¿Cerrar turno? Se registrará la hora de salida y las horas trabajadas.
             </p>
+            {resumenCola.pendientesMios > 0 && (
+              <p className="text-sm font-semibold text-amber-700">
+                {`Quedan ${textoSinEnviar(resumenCola.pendientesMios)}; se enviarán cuando vuelvas a entrar.`}
+              </p>
+            )}
             <MedirCierre onPendientes={setSinMedir} />
             <div className="grid grid-cols-2 gap-2">
               <button
