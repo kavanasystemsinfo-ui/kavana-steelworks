@@ -4,13 +4,19 @@ import type { EstadoOrdenTurno, EstadoPuestoTurno, PanelTurno } from '../lib/api
 import { fmtDuracion, fmtNum, plural } from './formato'
 import type { Tono } from './tokens'
 
-/** Datos de la vista Turno, refrescados cada 30 s (los comparten la vista y el modo TV). */
+/** Datos de la vista Turno, refrescados cada 60 s (los comparten la vista y el modo TV).
+ *  El sondeo se pausa cuando la pestaña está oculta (visibilitychange) y al volver
+ *  carga una vez de inmediato.
+ */
 export function useTurno() {
   const [datos, setDatos] = useState<PanelTurno | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let vivo = true
+    let timer: ReturnType<typeof setInterval> | null = null
+    const INTERVALO_MS = 60000 // 60 s
+
     const cargar = () =>
       api
         .getTurno()
@@ -20,11 +26,35 @@ export function useTurno() {
           setError('')
         })
         .catch((e) => vivo && setError(e instanceof Error ? e.message : 'Error de conexión'))
-    cargar()
-    const timer = setInterval(cargar, 30000)
+
+    const iniciar = () => {
+      cargar()
+      timer = setInterval(cargar, INTERVALO_MS)
+    }
+
+    const parar = () => {
+      if (timer) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+
+    // Pausar/reanudar con visibilitychange
+    const manejarVisibilidad = () => {
+      if (document.hidden) {
+        parar()
+      } else {
+        iniciar()
+      }
+    }
+
+    document.addEventListener('visibilitychange', manejarVisibilidad)
+    iniciar()
+
     return () => {
       vivo = false
-      clearInterval(timer)
+      document.removeEventListener('visibilitychange', manejarVisibilidad)
+      parar()
     }
   }, [])
 

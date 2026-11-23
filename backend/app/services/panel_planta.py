@@ -30,6 +30,7 @@ from app.services.objetivos import objetivos_tenant
 from app.services.panel_turno import _utc, resumen_turno
 from app.services.paradas import paradas_en
 from app.services.shifts import TZ_PLANTA
+from app.services.cache import cached_20s
 
 PERIODOS = ("hoy", "semana", "8semanas")
 SEMANAS_TENDENCIA = 8
@@ -77,8 +78,15 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
     )
     kg_material = 0.0
     kg_chatarra = 0.0
+    # Optimizado: solo columnas necesarias
     filas = db.execute(
-        select(ProductionLog, OrderLine.workstation_id)
+        select(
+            ProductionLog.timestamp,
+            ProductionLog.action,
+            ProductionLog.quantity,
+            ProductionLog.metadata_,
+            OrderLine.workstation_id,
+        )
         .join(OrderLine, OrderLine.id == ProductionLog.line_id)
         .where(
             ProductionLog.tenant_id == tenant_id,
@@ -87,9 +95,9 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
             ProductionLog.action.in_(("produce", "scrap")),
         )
     ).all()
-    for log, puesto in filas:
+    for log in filas:
         cantidad = float(log.quantity or 0)
-        p = por_puesto[puesto or "—"]
+        p = por_puesto[log.workstation_id or "—"]
         if log.action == "scrap":
             kg_chatarra += cantidad
             p["kg_chatarra"] += cantidad
@@ -249,6 +257,7 @@ def _semanas(db: Session, tenant_id: uuid.UUID, ahora: datetime) -> list[dict]:
     return serie
 
 
+@cached_20s("planta")
 def resumen_planta(
     db: Session, tenant_id: uuid.UUID, periodo: str, ahora: datetime | None = None
 ) -> dict:

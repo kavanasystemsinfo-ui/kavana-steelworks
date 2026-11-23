@@ -18,7 +18,7 @@ de inventar un objetivo.
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -42,6 +42,7 @@ from app.services.shifts import (
     proximo_arranque,
     semana_produccion,
 )
+from app.services.cache import cached_20s
 
 DURACION_TURNO_MIN = 480
 INICIO_TURNO = {"A": 6, "B": 14, "C": 22}
@@ -91,6 +92,7 @@ def _pct(parte: float, total: float) -> float | None:
     return round(parte / total * 100, 1) if total > 0 else None
 
 
+@cached_20s("turno")
 def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = None) -> dict:
     ahora = _utc(ahora or datetime.now(UTC))
     # Fuera de la semana de producción (vie 22:00 a dom 22:00) no hay turno en curso: se
@@ -121,8 +123,14 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         return float(ws.piezas_hora_nominal) if ws and ws.piezas_hora_nominal else None
 
     # --- Producción del turno -------------------------------------------------
-    logs = db.scalars(
-        select(ProductionLog)
+    # Optimizado: solo seleccionar las columnas necesarias en lugar de ORM completo
+    logs_query = (
+        select(
+            ProductionLog.timestamp,
+            ProductionLog.action,
+            ProductionLog.quantity,
+            ProductionLog.metadata_,
+        )
         .where(
             ProductionLog.tenant_id == tenant_id,
             ProductionLog.timestamp >= inicio,
@@ -130,7 +138,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
             ProductionLog.action.in_(("produce", "scrap")),
         )
         .order_by(ProductionLog.timestamp.asc())
-    ).all()
+    )
+    logs = db.execute(logs_query).all()
     piezas = 0.0
     piezas_ultima_hora = 0.0
     kg_consumidos = 0.0
@@ -382,11 +391,11 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
                         f"Necesita {o['horas_faltan']:g} h de trabajo y quedan "
                         f"{max(o['horas_quedan'], 0):g} h hasta la entrega."
                     ),
-                    "minutos": None,
-                    "accion": "orden",
-                    "ref": o["numero"],
-                }
-            )
+                "minutos": None,
+                "accion": "orden",
+                "ref": o["numero"],
+            }
+        )
     for p in puestos:
         if p["estado"] == "sin_registrar":
             pendientes.append(

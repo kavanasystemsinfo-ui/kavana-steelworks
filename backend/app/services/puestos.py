@@ -18,16 +18,18 @@ fila 9: pospuesto).
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.models import Incidencia, Order, OrderLine, ProductionLog, User, Workstation
+from app.services.cache import cached_20s
 
 ESTADOS_INCIDENCIA_ABIERTA = ("abierta", "en_revision")
 PRIORIDAD_LINEA = {"in_progress": 0, "stopped": 1, "pending": 2}
 ESTADO_PUESTO = {"in_progress": "en_curso", "stopped": "parado", "pending": "pendiente"}
 
 
+@cached_20s("puestos")
 def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
     puestos = {
         w.code: w
@@ -38,8 +40,20 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
         )
     }
 
+    # Optimizado: solo columnas necesarias
     filas = db.execute(
-        select(OrderLine, Order)
+        select(
+            OrderLine.id,
+            OrderLine.workstation_id,
+            OrderLine.estado,
+            OrderLine.total_quantity,
+            OrderLine.produced_quantity,
+            OrderLine.active_coil_code,
+            Order.id,
+            Order.numero,
+            Order.cliente,
+            Order.created_at,
+        )
         .join(Order, Order.id == OrderLine.order_id)
         .where(
             Order.tenant_id == tenant_id,
@@ -49,13 +63,28 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
         )
         .order_by(Order.created_at.asc(), OrderLine.linea_numero.asc())
     ).all()
-    linea_por_puesto: dict[str, tuple[OrderLine, Order]] = {}
-    for linea, orden in filas:
-        actual = linea_por_puesto.get(linea.workstation_id)
-        if actual is None or PRIORIDAD_LINEA[linea.estado] < PRIORIDAD_LINEA[actual[0].estado]:
-            linea_por_puesto[linea.workstation_id] = (linea, orden)
+    linea_por_puesto: dict[str, tuple[dict, dict]] = {}
+    for fila in filas:
+        # Reconstruir objetos simples con lo necesario
+        linea_data = {
+            "id": fila.id,
+            "workstation_id": fila.workstation_id,
+            "estado": fila.estado,
+            "total_quantity": fila.total_quantity,
+            "produced_quantity": fila.produced_quantity,
+            "active_coil_code": fila.active_coil_code,
+        }
+        orden_data = {
+            "id": fila.id_1,
+            "numero": fila.numero,
+            "cliente": fila.cliente,
+            "created_at": fila.created_at,
+        }
+        actual = linea_por_puesto.get(linea_data["workstation_id"])
+        if actual is None or PRIORIDAD_LINEA[linea_data["estado"]] < PRIORIDAD_LINEA[actual[0]["estado"]]:
+            linea_por_puesto[linea_data["workstation_id"]] = (linea_data, orden_data)
 
-    incidencias: dict[str, list[Incidencia]] = {}
+    incidencias: dict[str, list] = {}
     for inc in db.scalars(
         select(Incidencia)
         .where(
@@ -74,10 +103,15 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
         abiertas = incidencias.get(code, [])
 
         ultima = None
-        if linea is not None:
-            log = db.scalars(
-                select(ProductionLog)
-                .where(ProductionLog.line_id == linea.id)
+        if linea is not None and orden is not None:
+            # Optimizado: solo columnas necesarias
+            log = db.execute(
+                select(
+                    ProductionLog.action,
+                    ProductionLog.timestamp,
+                    ProductionLog.operator_id,
+                )
+                .where(ProductionLog.line_id == linea["id"])
                 .order_by(ProductionLog.timestamp.desc())
                 .limit(1)
             ).first()
@@ -92,7 +126,7 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
         if abiertas:
             estado = "incidencia"
         elif linea is not None:
-            estado = ESTADO_PUESTO[linea.estado]
+            estado = ESTADO_PUESTO[linea["estado"]]
         else:
             estado = "libre"
 
@@ -104,13 +138,13 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
                 "estado": estado,
                 "orden": (
                     {
-                        "id": str(orden.id),
-                        "numero": orden.numero,
-                        "cliente": orden.cliente,
-                        "linea_id": str(linea.id),
-                        "piezas": float(linea.produced_quantity or 0),
-                        "objetivo": float(linea.total_quantity or 0),
-                        "bobina": linea.active_coil_code,
+                        "id": str(orden["id"]),
+                        "numero": orden["numero"],
+                        "cliente": orden["cliente"],
+                        "linea_id": str(linea["id"]),
+                        "piezas": float(linea["produced_quantity"] or 0),
+                        "objetivo": float(linea["total_quantity"] or 0),
+                        "bobina": linea["active_coil_code"],
                     }
                     if linea is not None
                     else None

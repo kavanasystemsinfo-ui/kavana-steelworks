@@ -36,6 +36,7 @@ mismos servicios que un operario, así que stock, kardex y costes cuadran.
 """
 
 import asyncio
+import hashlib
 import logging
 import random
 import uuid
@@ -43,7 +44,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
 from app.services.seed_planta import operario_de
@@ -71,14 +72,19 @@ logger = logging.getLogger(__name__)
 
 
 def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
-    """Lanza órdenes nuevas copiando completadas hasta tener el mínimo activo."""
+    """Lanza órdenes nuevas copiando completadas hasta tener el mínimo activo.
+
+    Optimizado: usa COUNT para órdenes activas, y para plantillas elige una
+    con LIMIT 1 + ORDER BY RANDOM() en SQL, cargando solo sus líneas.
+    """
     from app.services.sequences import next_sequence
 
-    activas = db.scalars(
-        select(Order).where(
-            Order.tenant_id == tenant_id, Order.estado == "active", _es_orden_de_demo()
-        )
-    ).all()
+    # Contar activas (no cargarlas)
+    n_activas = db.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.tenant_id == tenant_id, Order.estado == "active", _es_orden_de_demo())
+    )
     activos = {
         w.code
         for w in db.scalars(
@@ -87,9 +93,34 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
             )
         )
     }
-    plantillas = [
-        o
+    # Contar plantillas disponibles (no cargarlas todas)
+    n_plantillas = db.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(
+            Order.tenant_id == tenant_id,
+            Order.estado == "completed",
+            Order.cliente != "Cliente demo",
+            _es_orden_de_demo(),
+        )
+    )
+    ocupados = {
+        ln.workstation_id
         for o in db.scalars(
+            select(Order)
+            .where(Order.tenant_id == tenant_id, Order.estado == "active", _es_orden_de_demo())
+            .options(selectinload(Order.lines))
+        )
+        for ln in o.lines
+        if ln.estado != "completed"
+    }
+    acciones = []
+    for _ in range(ORDENES_ACTIVAS_MIN - (n_activas or 0)):
+        if (n_plantillas or 0) == 0:
+            break
+        # Elegir plantilla aleatoria entre las que menos puestos ocupados pisan
+        # Query optimizada: una sola plantilla con sus líneas
+        plantilla = db.scalar(
             select(Order)
             .where(
                 Order.tenant_id == tenant_id,
@@ -97,21 +128,32 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
                 Order.cliente != "Cliente demo",
                 _es_orden_de_demo(),
             )
-            .order_by(Order.created_at.asc())
+            .options(selectinload(Order.lines))
+            .order_by(func.random())
+            .limit(1)
         )
-        if o.lines and all(ln.workstation_id in activos for ln in o.lines)
-    ]
-    ocupados = {
-        ln.workstation_id for o in activas for ln in o.lines if ln.estado != "completed"
-    }
-    acciones = []
-    for _ in range(ORDENES_ACTIVAS_MIN - len(activas)):
-        if not plantillas:
+        if plantilla is None:
             break
-        # La plantilla que menos puestos ya ocupados pisa (así se reparte el trabajo por la planta)
-        pisados = {id(o): sum(ln.workstation_id in ocupados for ln in o.lines) for o in plantillas}
-        minimo = min(pisados.values())
-        plantilla = rng.choice([o for o in plantillas if pisados[id(o)] == minimo])
+        # Verificar que todos sus puestos están activos
+        if not all(ln.workstation_id in activos for ln in plantilla.lines):
+            # Si no sirve, intentar otra (máx 3 intentos)
+            for _ in range(2):
+                plantilla = db.scalar(
+                    select(Order)
+                    .where(
+                        Order.tenant_id == tenant_id,
+                        Order.estado == "completed",
+                        Order.cliente != "Cliente demo",
+                        _es_orden_de_demo(),
+                    )
+                    .options(selectinload(Order.lines))
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                if plantilla and all(ln.workstation_id in activos for ln in plantilla.lines):
+                    break
+            else:
+                break
         ocupados |= {ln.workstation_id for ln in plantilla.lines}
         orden = Order(
             tenant_id=tenant_id,
@@ -335,6 +377,7 @@ def _gestionar_incidencias(
         select(Incidencia).where(
             Incidencia.tenant_id == tenant.id, Incidencia.estado.in_(ESTADOS_INCIDENCIA_ABIERTA)
         )
+        .order_by(Incidencia.created_at.asc())
     ).all()
     for inc in list(abiertas):
         minutos = (_aware(ahora) - _aware(inc.created_at)).total_seconds() / 60
@@ -784,23 +827,67 @@ def _relleno_en_sesion() -> dict:
 
 
 async def bucle_simulador(minutos: int) -> None:
-    """Relleno al despertar y un tick cada `minutos` en horario laboral. Nunca tumba la API."""
+    """Relleno al despertar y un tick cada `minutos` en horario laboral. Nunca tumba la API.
+
+    Solo una máquina a la vez ejecuta rellenar_hueco y cada tick, usando
+    pg_try_advisory_lock (si no obtiene el bloqueo, se salta ese ciclo).
+    """
+    # Clave única para el advisory lock (hash del tenant demo + "simulador")
+    LOCK_KEY = int(hashlib.md5(b"steelworks-demo-simulador").hexdigest(), 16) % (2**31)
+
     while True:
         try:
-            relleno = await asyncio.to_thread(_relleno_en_sesion)
-            if relleno["pasos"]:
-                logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
+            # Intentar obtener el lock para el relleno
+            from app.core.database import SessionLocal
+            from sqlalchemy import text
+
+            db = SessionLocal()
+            got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            db.close()
+
+            if got_lock:
+                try:
+                    relleno = await asyncio.to_thread(_relleno_en_sesion)
+                    if relleno["pasos"]:
+                        logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
+                except Exception:
+                    logger.exception("[simulador] relleno fallido; se reintenta en el siguiente ciclo")
+                finally:
+                    # Liberar el lock
+                    db = SessionLocal()
+                    db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
+                    db.close()
+            else:
+                logger.debug("[simulador] relleno: otra máquina tiene el lock, se salta")
         except Exception:
-            logger.exception("[simulador] relleno fallido; se reintenta en el siguiente ciclo")
+            logger.exception("[simulador] relleno fallido (excepción general); se reintenta en el siguiente ciclo")
+
         await asyncio.sleep(minutos * 60)
         if not en_horario_laboral():
             continue
+
         try:
-            resultado = await asyncio.to_thread(_tick_en_sesion, minutos)
-            logger.info(
-                "[simulador] %d acciones, %d saltos",
-                len(resultado["acciones"]),
-                len(resultado["saltos"]),
-            )
+            # Intentar obtener el lock para el tick
+            db = SessionLocal()
+            got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            db.close()
+
+            if got_lock:
+                try:
+                    resultado = await asyncio.to_thread(_tick_en_sesion, minutos)
+                    logger.info(
+                        "[simulador] %d acciones, %d saltos",
+                        len(resultado["acciones"]),
+                        len(resultado["saltos"]),
+                    )
+                except Exception:
+                    logger.exception("[simulador] tick fallido; se reintenta en el siguiente")
+                finally:
+                    # Liberar el lock
+                    db = SessionLocal()
+                    db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
+                    db.close()
+            else:
+                logger.debug("[simulador] tick: otra máquina tiene el lock, se salta")
         except Exception:
-            logger.exception("[simulador] tick fallido; se reintenta en el siguiente")
+            logger.exception("[simulador] tick fallido (excepción general); se reintenta en el siguiente ciclo")
