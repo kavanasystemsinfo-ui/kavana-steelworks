@@ -18,7 +18,7 @@ fila 9: pospuesto).
 
 import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Incidencia, Order, OrderLine, ProductionLog, User, Workstation
@@ -81,7 +81,9 @@ def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
             "created_at": fila.created_at,
         }
         actual = linea_por_puesto.get(linea_data["workstation_id"])
-        if actual is None or PRIORIDAD_LINEA[linea_data["estado"]] < PRIORIDAD_LINEA[actual[0]["estado"]]:
+        prio_actual = PRIORIDAD_LINEA[linea_data["estado"]]
+        prio_existente = PRIORIDAD_LINEA[actual[0]["estado"]] if actual else None
+        if actual is None or prio_actual < prio_existente:
             linea_por_puesto[linea_data["workstation_id"]] = (linea_data, orden_data)
 
     incidencias: dict[str, list] = {}

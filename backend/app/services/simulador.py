@@ -838,8 +838,9 @@ async def bucle_simulador(minutos: int) -> None:
     while True:
         try:
             # Intentar obtener el lock para el relleno
-            from app.core.database import SessionLocal
             from sqlalchemy import text
+
+            from app.core.database import SessionLocal
 
             db = SessionLocal()
             got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
@@ -851,7 +852,7 @@ async def bucle_simulador(minutos: int) -> None:
                     if relleno["pasos"]:
                         logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
                 except Exception:
-                    logger.exception("[simulador] relleno fallido; se reintenta en el siguiente ciclo")
+                    logger.exception("[simulador] relleno fallido; se reintenta")
                 finally:
                     # Liberar el lock
                     db = SessionLocal()
@@ -860,7 +861,7 @@ async def bucle_simulador(minutos: int) -> None:
             else:
                 logger.debug("[simulador] relleno: otra máquina tiene el lock, se salta")
         except Exception:
-            logger.exception("[simulador] relleno fallido (excepción general); se reintenta en el siguiente ciclo")
+            logger.exception("[simulador] relleno fallido (excepcion general)")
 
         await asyncio.sleep(minutos * 60)
         if not en_horario_laboral():
@@ -890,4 +891,4 @@ async def bucle_simulador(minutos: int) -> None:
             else:
                 logger.debug("[simulador] tick: otra máquina tiene el lock, se salta")
         except Exception:
-            logger.exception("[simulador] tick fallido (excepción general); se reintenta en el siguiente ciclo")
+            logger.exception("[simulador] tick fallido (excepcion general)")

@@ -1,12 +1,13 @@
 """Caché en memoria TTL 20s por (tenant, endpoint, params) - thread-safe."""
-import time
-import threading
 import json
+import threading
+import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Tuple
+from typing import Any
 
 # Caché global: {cache_key: (timestamp, value)}
-_cache: Dict[str, Tuple[float, Any]] = {}
+_cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = threading.Lock()
 TTL_SECONDS = 20
 

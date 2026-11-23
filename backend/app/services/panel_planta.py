@@ -26,11 +26,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderLine, ProductionLog, Tenant, Workstation
+from app.services.cache import cached_20s
 from app.services.objetivos import objetivos_tenant
 from app.services.panel_turno import _utc, resumen_turno
 from app.services.paradas import paradas_en
 from app.services.shifts import TZ_PLANTA
-from app.services.cache import cached_20s
 
 PERIODOS = ("hoy", "semana", "8semanas")
 SEMANAS_TENDENCIA = 8

@@ -18,7 +18,7 @@ de inventar un objetivo.
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -33,6 +33,7 @@ from app.models import (
 )
 from app.models.parada import MOTIVOS_PARADA
 from app.services.alertas import alertas
+from app.services.cache import cached_20s
 from app.services.objetivos import objetivos_tenant
 from app.services.paradas import paradas_abiertas_por_puesto, paradas_en
 from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA, estado_puestos
@@ -42,7 +43,6 @@ from app.services.shifts import (
     proximo_arranque,
     semana_produccion,
 )
-from app.services.cache import cached_20s
 
 DURACION_TURNO_MIN = 480
 INICIO_TURNO = {"A": 6, "B": 14, "C": 22}
