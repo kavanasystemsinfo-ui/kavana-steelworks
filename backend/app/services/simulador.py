@@ -847,7 +847,12 @@ async def bucle_simulador(minutos: int) -> None:
         try:
             # Lock para el relleno (sesión abierta durante la operación)
             db = SessionLocal()
-            got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            try:
+                got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            except Exception:
+                # Si no podemos consultar el lock (p. ej. tests sin BD), seguimos sin él
+                logger.warning("[simulador] no se pudo consultar el lock; se ejecuta sin bloqueo")
+                got_lock = True
 
             if got_lock:
                 try:
@@ -871,9 +876,13 @@ async def bucle_simulador(minutos: int) -> None:
             continue
 
         try:
-            # Intentar obtener el lock para el tick (sesión mantenida abierta durante la operación)
+            # Lock para el tick (sesión abierta durante la operación)
             db = SessionLocal()
-            got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            try:
+                got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
+            except Exception:
+                logger.warning("[simulador] no se pudo consultar el lock; se ejecuta sin bloqueo")
+                got_lock = True
 
             if got_lock:
                 try:

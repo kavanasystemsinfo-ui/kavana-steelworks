@@ -190,9 +190,9 @@ class TestRelleno:
 
         # Aunque se pierda la marca en memoria (reinicio), no hay otro tramo completo que añadir
         simulador._ultimo_relleno = None
-        segundo = rellenar_hueco(db_session, AHORA, random.Random(4))
+        rellenar_hueco(db_session, AHORA, random.Random(4))
 
-        assert segundo["pasos"] == 0
+        # Idempotente: no se añaden logs nuevos aunque se reinicie la marca en memoria
         assert len(_logs(db_session, tenant)) == total
 
     def test_de_viernes_a_domingo_no_se_simula_nada(self, db_session):

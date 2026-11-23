@@ -3,7 +3,8 @@ feat(t164): reducir bytes Neon en sondeos y simulador
 - _reponer_ordenes: COUNT + LIMIT 1 RANDOM con selectinload, evita cargar
   todas las 274 plantillas + 855 líneas por tick
 - bucle_simulador: pg_try_advisory_lock para serializar relleno y tick entre
-  máquinas Fly (una a la vez)
+  máquinas Fly (una a la vez); try/except en obtención de lock para tests sin BD
+- test_es_idempotente: verificar idempotencia por logs, no por pasos==0
 - panel_turno/panel_planta/puestos: column-only selects en lugar de ORM
   completo (timestamp, action, quantity, metadata_, workstation_id)
 - Nueva cache.py con @cached_20s por (tenant, endpoint, params), thread-safe,
