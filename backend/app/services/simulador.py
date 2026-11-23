@@ -714,14 +714,16 @@ def simular_tick(
     return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
 
 
-def _tick_en_sesion(minutos: int) -> dict:
+def _tick_en_sesion(minutos: int, db: Session | None = None) -> dict:
     from app.core.database import SessionLocal
 
-    db = SessionLocal()
-    try:
-        return simular_tick(db, minutos_tick=minutos)
-    finally:
-        db.close()
+    if db is None:
+        db = SessionLocal()
+        try:
+            return simular_tick(db, minutos_tick=minutos)
+        finally:
+            db.close()
+    return simular_tick(db, minutos_tick=minutos)
 
 
 PASO_RECIENTE_MIN = 15  # tramos de la última jornada de 8 h
@@ -816,14 +818,16 @@ def rellenar_hueco(
     return {"tenant": str(tenant.id), "pasos": pasos, "acciones": acciones, "saltos": saltos}
 
 
-def _relleno_en_sesion() -> dict:
+def _relleno_en_sesion(db: Session | None = None) -> dict:
     from app.core.database import SessionLocal
 
-    db = SessionLocal()
-    try:
-        return rellenar_hueco(db)
-    finally:
-        db.close()
+    if db is None:
+        db = SessionLocal()
+        try:
+            return rellenar_hueco(db)
+        finally:
+            db.close()
+    return rellenar_hueco(db)
 
 
 async def bucle_simulador(minutos: int) -> None:
@@ -832,33 +836,32 @@ async def bucle_simulador(minutos: int) -> None:
     Solo una máquina a la vez ejecuta rellenar_hueco y cada tick, usando
     pg_try_advisory_lock (si no obtiene el bloqueo, se salta ese ciclo).
     """
+    from sqlalchemy import text
+
+    from app.core.database import SessionLocal
+
     # Clave única para el advisory lock (hash del tenant demo + "simulador")
     LOCK_KEY = int(hashlib.md5(b"steelworks-demo-simulador").hexdigest(), 16) % (2**31)
 
     while True:
         try:
-            # Intentar obtener el lock para el relleno
-            from sqlalchemy import text
-
-            from app.core.database import SessionLocal
-
+            # Lock para el relleno (sesión abierta durante la operación)
             db = SessionLocal()
             got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
-            db.close()
 
             if got_lock:
                 try:
-                    relleno = await asyncio.to_thread(_relleno_en_sesion)
+                    relleno = await asyncio.to_thread(_relleno_en_sesion, db)
                     if relleno["pasos"]:
                         logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
                 except Exception:
                     logger.exception("[simulador] relleno fallido; se reintenta")
                 finally:
-                    # Liberar el lock
-                    db = SessionLocal()
+                    # Liberar el lock en la misma sesión que lo adquirió
                     db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
                     db.close()
             else:
+                db.close()
                 logger.debug("[simulador] relleno: otra máquina tiene el lock, se salta")
         except Exception:
             logger.exception("[simulador] relleno fallido (excepcion general)")
@@ -868,14 +871,13 @@ async def bucle_simulador(minutos: int) -> None:
             continue
 
         try:
-            # Intentar obtener el lock para el tick
+            # Intentar obtener el lock para el tick (sesión mantenida abierta durante la operación)
             db = SessionLocal()
             got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
-            db.close()
 
             if got_lock:
                 try:
-                    resultado = await asyncio.to_thread(_tick_en_sesion, minutos)
+                    resultado = await asyncio.to_thread(_tick_en_sesion, minutos, db)
                     logger.info(
                         "[simulador] %d acciones, %d saltos",
                         len(resultado["acciones"]),
@@ -884,11 +886,11 @@ async def bucle_simulador(minutos: int) -> None:
                 except Exception:
                     logger.exception("[simulador] tick fallido; se reintenta en el siguiente")
                 finally:
-                    # Liberar el lock
-                    db = SessionLocal()
+                    # Liberar el lock en la misma sesión que lo adquirió
                     db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
                     db.close()
             else:
+                db.close()
                 logger.debug("[simulador] tick: otra máquina tiene el lock, se salta")
         except Exception:
             logger.exception("[simulador] tick fallido (excepcion general)")

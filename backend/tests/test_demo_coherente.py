@@ -170,7 +170,7 @@ class TestPlantaViva:
 def test_el_bucle_rellena_el_hueco_al_arrancar(monkeypatch):
     llamadas = []
 
-    def falso_relleno():
+    def falso_relleno(db=None):
         llamadas.append("relleno")
         return {"pasos": 3}
 
