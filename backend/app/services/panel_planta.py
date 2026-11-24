@@ -26,7 +26,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderLine, ProductionLog, Tenant, Workstation
-from app.services.cache import cached_20s
 from app.services.objetivos import objetivos_tenant
 from app.services.panel_turno import _utc, resumen_turno
 from app.services.paradas import paradas_en
@@ -84,7 +83,10 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
             ProductionLog.timestamp,
             ProductionLog.action,
             ProductionLog.quantity,
-            ProductionLog.metadata_,
+            # Del JSON solo se leen estas claves (el JSON entero pesaba ~400 B por registro)
+            ProductionLog.metadata_["consumedMaterial"].as_string().label("consumo_tipo"),
+            ProductionLog.metadata_["consumedAmount"].as_string().label("consumo_cantidad"),
+            ProductionLog.metadata_["efficiency"].as_string().label("eficiencia"),
             OrderLine.workstation_id,
         )
         .join(OrderLine, OrderLine.id == ProductionLog.line_id)
@@ -102,15 +104,14 @@ def _medir(db: Session, tenant_id: uuid.UUID, desde: datetime, hasta: datetime) 
             kg_chatarra += cantidad
             p["kg_chatarra"] += cantidad
             continue
-        meta = log.metadata_ or {}
-        if meta.get("consumedMaterial") == "kg":
-            consumo = float(meta.get("consumedAmount") or 0)
+        if log.consumo_tipo == "kg":
+            consumo = float(log.consumo_cantidad or 0)
             kg_material += consumo
             p["kg_material"] += consumo
         p["piezas"] += cantidad
-        eficiencia = meta.get("efficiency")
+        eficiencia = float(log.eficiencia) if log.eficiencia else 0.0
         if eficiencia:
-            p["horas"] += cantidad / float(eficiencia)
+            p["horas"] += cantidad / eficiencia
             p["piezas_medidas"] += cantidad
 
     # Incidencias y paradas del operario (avería, ajustes, limpieza...)
@@ -257,7 +258,6 @@ def _semanas(db: Session, tenant_id: uuid.UUID, ahora: datetime) -> list[dict]:
     return serie
 
 
-@cached_20s("planta")
 def resumen_planta(
     db: Session, tenant_id: uuid.UUID, periodo: str, ahora: datetime | None = None
 ) -> dict:

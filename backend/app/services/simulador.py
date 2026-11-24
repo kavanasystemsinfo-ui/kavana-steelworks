@@ -39,11 +39,12 @@ import asyncio
 import hashlib
 import logging
 import random
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Order, OrderLine, ProductionLog, StockItem, User, Workstation
@@ -71,20 +72,63 @@ def _es_orden_de_demo():
 logger = logging.getLogger(__name__)
 
 
+# Estructura de las plantillas (qué puestos pisa cada orden completada). Se guarda en memoria
+# porque es casi estática: se vuelve a leer si caduca o si cambia el número de plantillas.
+# Evita traer cientos de órdenes y líneas en cada tick (la transferencia de Neon es limitada).
+PLANTILLAS_TTL_S = 3600
+# tenant_id -> (instante, n_plantillas, {order_id: frozenset(puestos)})
+_plantillas_cache: dict = {}
+
+
+def _condicion_plantilla(tenant_id):
+    return (
+        Order.tenant_id == tenant_id,
+        Order.estado == "completed",
+        Order.cliente != "Cliente demo",
+        _es_orden_de_demo(),
+    )
+
+
+def _estructura_plantillas(db: Session, tenant_id) -> dict:
+    """{order_id: frozenset(workstation_id)} de las plantillas, con una caché de 1 h."""
+    n_plantillas = db.scalar(
+        select(func.count()).select_from(Order).where(*_condicion_plantilla(tenant_id))
+    )
+    ahora = time.monotonic()
+    hit = _plantillas_cache.get(tenant_id)
+    if hit and hit[1] == n_plantillas and ahora - hit[0] < PLANTILLAS_TTL_S:
+        return hit[2]
+    filas = db.execute(
+        select(Order.id, OrderLine.workstation_id)
+        .join(OrderLine, OrderLine.order_id == Order.id)
+        .where(*_condicion_plantilla(tenant_id))
+        .order_by(Order.created_at.asc(), Order.id)
+    ).all()
+    puestos: dict = {}
+    for order_id, puesto in filas:
+        puestos.setdefault(order_id, set()).add(puesto)
+    estructura = {oid: frozenset(ws) for oid, ws in puestos.items()}
+    _plantillas_cache[tenant_id] = (ahora, n_plantillas, estructura)
+    return estructura
+
+
 def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
     """Lanza órdenes nuevas copiando completadas hasta tener el mínimo activo.
 
-    Optimizado: usa COUNT para órdenes activas, y para plantillas elige una
-    con LIMIT 1 + ORDER BY RANDOM() en SQL, cargando solo sus líneas.
+    Ligera con la base: en régimen normal (ya hay órdenes activas de sobra) solo hace un
+    COUNT. Si hay que reponer, elige la plantilla con la estructura en memoria y carga
+    únicamente la elegida.
     """
     from app.services.sequences import next_sequence
 
-    # Contar activas (no cargarlas)
     n_activas = db.scalar(
         select(func.count())
         .select_from(Order)
         .where(Order.tenant_id == tenant_id, Order.estado == "active", _es_orden_de_demo())
     )
+    faltan = ORDENES_ACTIVAS_MIN - (n_activas or 0)
+    if faltan <= 0:
+        return []
     activos = {
         w.code
         for w in db.scalars(
@@ -93,17 +137,9 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
             )
         )
     }
-    # Contar plantillas disponibles (no cargarlas todas)
-    n_plantillas = db.scalar(
-        select(func.count())
-        .select_from(Order)
-        .where(
-            Order.tenant_id == tenant_id,
-            Order.estado == "completed",
-            Order.cliente != "Cliente demo",
-            _es_orden_de_demo(),
-        )
-    )
+    plantillas = {
+        oid: ws for oid, ws in _estructura_plantillas(db, tenant_id).items() if ws and ws <= activos
+    }
     ocupados = {
         ln.workstation_id
         for o in db.scalars(
@@ -115,45 +151,19 @@ def _reponer_ordenes(db: Session, tenant_id, rng: random.Random) -> list[str]:
         if ln.estado != "completed"
     }
     acciones = []
-    for _ in range(ORDENES_ACTIVAS_MIN - (n_activas or 0)):
-        if (n_plantillas or 0) == 0:
+    for _ in range(faltan):
+        if not plantillas:
             break
-        # Elegir plantilla aleatoria entre las que menos puestos ocupados pisan
-        # Query optimizada: una sola plantilla con sus líneas
+        # La plantilla que menos puestos ya ocupados pisa (así se reparte el trabajo por la planta)
+        pisados = {oid: len(ws & ocupados) for oid, ws in plantillas.items()}
+        minimo = min(pisados.values())
+        elegida = rng.choice([oid for oid, n in pisados.items() if n == minimo])
         plantilla = db.scalar(
-            select(Order)
-            .where(
-                Order.tenant_id == tenant_id,
-                Order.estado == "completed",
-                Order.cliente != "Cliente demo",
-                _es_orden_de_demo(),
-            )
-            .options(selectinload(Order.lines))
-            .order_by(func.random())
-            .limit(1)
+            select(Order).where(Order.id == elegida).options(selectinload(Order.lines))
         )
-        if plantilla is None:
+        if plantilla is None or not plantilla.lines:
+            _plantillas_cache.pop(tenant_id, None)  # la plantilla ya no existe: releer
             break
-        # Verificar que todos sus puestos están activos
-        if not all(ln.workstation_id in activos for ln in plantilla.lines):
-            # Si no sirve, intentar otra (máx 3 intentos)
-            for _ in range(2):
-                plantilla = db.scalar(
-                    select(Order)
-                    .where(
-                        Order.tenant_id == tenant_id,
-                        Order.estado == "completed",
-                        Order.cliente != "Cliente demo",
-                        _es_orden_de_demo(),
-                    )
-                    .options(selectinload(Order.lines))
-                    .order_by(func.random())
-                    .limit(1)
-                )
-                if plantilla and all(ln.workstation_id in activos for ln in plantilla.lines):
-                    break
-            else:
-                break
         ocupados |= {ln.workstation_id for ln in plantilla.lines}
         orden = Order(
             tenant_id=tenant_id,
@@ -377,7 +387,6 @@ def _gestionar_incidencias(
         select(Incidencia).where(
             Incidencia.tenant_id == tenant.id, Incidencia.estado.in_(ESTADOS_INCIDENCIA_ABIERTA)
         )
-        .order_by(Incidencia.created_at.asc())
     ).all()
     for inc in list(abiertas):
         minutos = (_aware(ahora) - _aware(inc.created_at)).total_seconds() / 60
@@ -527,6 +536,7 @@ def simular_tick(
             select(ProductionLog)
             .where(ProductionLog.line_id == linea.id, ProductionLog.action == "produce")
             .order_by(ProductionLog.timestamp.desc())
+            .limit(1)
         )
         coil = str(linea.active_coil_id)
         if ultima is None or (ultima.metadata_ or {}).get("activeCoilId") != coil:
@@ -714,16 +724,14 @@ def simular_tick(
     return {"tenant": str(tenant.id), "acciones": acciones, "saltos": saltos}
 
 
-def _tick_en_sesion(minutos: int, db: Session | None = None) -> dict:
+def _tick_en_sesion(minutos: int) -> dict:
     from app.core.database import SessionLocal
 
-    if db is None:
-        db = SessionLocal()
-        try:
-            return simular_tick(db, minutos_tick=minutos)
-        finally:
-            db.close()
-    return simular_tick(db, minutos_tick=minutos)
+    db = SessionLocal()
+    try:
+        return simular_tick(db, minutos_tick=minutos)
+    finally:
+        db.close()
 
 
 PASO_RECIENTE_MIN = 15  # tramos de la última jornada de 8 h
@@ -818,88 +826,103 @@ def rellenar_hueco(
     return {"tenant": str(tenant.id), "pasos": pasos, "acciones": acciones, "saltos": saltos}
 
 
-def _relleno_en_sesion(db: Session | None = None) -> dict:
+def _relleno_en_sesion() -> dict:
     from app.core.database import SessionLocal
 
-    if db is None:
-        db = SessionLocal()
+    db = SessionLocal()
+    try:
+        return rellenar_hueco(db)
+    finally:
+        db.close()
+
+
+# Con dos máquinas de Fly despiertas a la vez, solo una simula (si no, se duplica el trabajo y
+# el tráfico con Neon). Se usa un bloqueo consultivo de Postgres sobre una conexión PROPIA
+# (autocommit), distinta de la sesión de trabajo: la sesión hace commit y suelta su conexión
+# al pool, y con ella se perdería el bloqueo.
+LOCK_KEY = int(hashlib.md5(b"steelworks-demo-simulador").hexdigest(), 16) % (2**31)
+
+
+class BloqueoSimulador:
+    def __init__(self, engine=None):
+        self._engine = engine
+        self._conn = None
+        self._adquirido = False
+
+    def tomar(self) -> bool:
+        """True si esta máquina puede simular ahora. Si no hay forma de consultarlo, simula."""
         try:
-            return rellenar_hueco(db)
-        finally:
-            db.close()
-    return rellenar_hueco(db)
+            engine = self._engine
+            if engine is None:
+                from app.core.database import engine
+            if engine.dialect.name != "postgresql":
+                return True  # SQLite en tests: no hay bloqueos consultivos
+            self._conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+            resultado = self._conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": LOCK_KEY})
+            self._adquirido = bool(resultado.scalar())
+        except Exception:
+            logger.warning("[simulador] no se pudo consultar el bloqueo; se simula sin él")
+            self._cerrar(invalidar=True)
+            return True
+        if not self._adquirido:
+            self._cerrar()
+            return False
+        return True
+
+    def soltar(self) -> None:
+        if self._conn is None:
+            return
+        try:
+            if self._adquirido:
+                self._conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": LOCK_KEY})
+            self._cerrar()
+        except Exception:
+            logger.exception("[simulador] no se pudo soltar el bloqueo; se cierra la conexión")
+            self._cerrar(invalidar=True)
+
+    def _cerrar(self, invalidar: bool = False) -> None:
+        conn, self._conn, self._adquirido = self._conn, None, False
+        if conn is None:
+            return
+        try:
+            if invalidar:
+                conn.invalidate()  # cierra la conexión real: el servidor libera el bloqueo
+            conn.close()
+        except Exception:
+            logger.debug("[simulador] cierre de la conexión del bloqueo", exc_info=True)
+
+
+async def _con_bloqueo(trabajo, *args):
+    """Ejecuta `trabajo` en un hilo si esta máquina obtiene el bloqueo; si no, devuelve None."""
+    bloqueo = BloqueoSimulador()
+    if not await asyncio.to_thread(bloqueo.tomar):
+        logger.debug("[simulador] otra máquina tiene el bloqueo; se salta el ciclo")
+        return None
+    try:
+        return await asyncio.to_thread(trabajo, *args)
+    finally:
+        await asyncio.to_thread(bloqueo.soltar)
 
 
 async def bucle_simulador(minutos: int) -> None:
-    """Relleno al despertar y un tick cada `minutos` en horario laboral. Nunca tumba la API.
-
-    Solo una máquina a la vez ejecuta rellenar_hueco y cada tick, usando
-    pg_try_advisory_lock (si no obtiene el bloqueo, se salta ese ciclo).
-    """
-    from sqlalchemy import text
-
-    from app.core.database import SessionLocal
-
-    # Clave única para el advisory lock (hash del tenant demo + "simulador")
-    LOCK_KEY = int(hashlib.md5(b"steelworks-demo-simulador").hexdigest(), 16) % (2**31)
-
+    """Relleno al despertar y un tick cada `minutos` en horario laboral. Nunca tumba la API."""
     while True:
         try:
-            # Lock para el relleno (sesión abierta durante la operación)
-            db = SessionLocal()
-            try:
-                got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
-            except Exception:
-                # Si no podemos consultar el lock (p. ej. tests sin BD), seguimos sin él
-                logger.warning("[simulador] no se pudo consultar el lock; se ejecuta sin bloqueo")
-                got_lock = True
-
-            if got_lock:
-                try:
-                    relleno = await asyncio.to_thread(_relleno_en_sesion, db)
-                    if relleno["pasos"]:
-                        logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
-                except Exception:
-                    logger.exception("[simulador] relleno fallido; se reintenta")
-                finally:
-                    # Liberar el lock en la misma sesión que lo adquirió
-                    db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
-                    db.close()
-            else:
-                db.close()
-                logger.debug("[simulador] relleno: otra máquina tiene el lock, se salta")
+            relleno = await _con_bloqueo(_relleno_en_sesion)
+            if relleno and relleno["pasos"]:
+                logger.info("[simulador] relleno: %d tramos recuperados", relleno["pasos"])
         except Exception:
-            logger.exception("[simulador] relleno fallido (excepcion general)")
-
+            logger.exception("[simulador] relleno fallido; se reintenta en el siguiente ciclo")
         await asyncio.sleep(minutos * 60)
         if not en_horario_laboral():
             continue
-
         try:
-            # Lock para el tick (sesión abierta durante la operación)
-            db = SessionLocal()
-            try:
-                got_lock = db.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_KEY})
-            except Exception:
-                logger.warning("[simulador] no se pudo consultar el lock; se ejecuta sin bloqueo")
-                got_lock = True
-
-            if got_lock:
-                try:
-                    resultado = await asyncio.to_thread(_tick_en_sesion, minutos, db)
-                    logger.info(
-                        "[simulador] %d acciones, %d saltos",
-                        len(resultado["acciones"]),
-                        len(resultado["saltos"]),
-                    )
-                except Exception:
-                    logger.exception("[simulador] tick fallido; se reintenta en el siguiente")
-                finally:
-                    # Liberar el lock en la misma sesión que lo adquirió
-                    db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_KEY})
-                    db.close()
-            else:
-                db.close()
-                logger.debug("[simulador] tick: otra máquina tiene el lock, se salta")
+            resultado = await _con_bloqueo(_tick_en_sesion, minutos)
+            if resultado:
+                logger.info(
+                    "[simulador] %d acciones, %d saltos",
+                    len(resultado["acciones"]),
+                    len(resultado["saltos"]),
+                )
         except Exception:
-            logger.exception("[simulador] tick fallido (excepcion general)")
+            logger.exception("[simulador] tick fallido; se reintenta en el siguiente")

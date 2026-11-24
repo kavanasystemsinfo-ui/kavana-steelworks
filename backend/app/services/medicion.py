@@ -21,7 +21,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -248,16 +248,14 @@ def prever_medida(db: Session, tenant_id, *, stock_item_id, radio_mm: float) -> 
 
 def _ultima_medicion(db: Session, tenant_id, coil_id: str) -> datetime | None:
     """Último fin de bobina o cierre de turno de la bobina (evento scrap)."""
-    momentos = [
-        log.timestamp
-        for log in db.scalars(
-            select(ProductionLog).where(
-                ProductionLog.tenant_id == tenant_id, ProductionLog.action == "scrap"
-            )
+    # El filtro por bobina se hace en SQL: antes se traían todos los scrap del tenant
+    return db.scalar(
+        select(func.max(ProductionLog.timestamp)).where(
+            ProductionLog.tenant_id == tenant_id,
+            ProductionLog.action == "scrap",
+            ProductionLog.metadata_["activeCoilId"].as_string() == coil_id,
         )
-        if (log.metadata_ or {}).get("activeCoilId") == coil_id
-    ]
-    return max(momentos) if momentos else None
+    )
 
 
 def _utc(dt: datetime) -> datetime:
