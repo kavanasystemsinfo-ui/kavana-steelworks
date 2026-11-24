@@ -33,7 +33,6 @@ from app.models import (
 )
 from app.models.parada import MOTIVOS_PARADA
 from app.services.alertas import alertas
-from app.services.cache import cached_20s
 from app.services.objetivos import objetivos_tenant
 from app.services.paradas import paradas_abiertas_por_puesto, paradas_en
 from app.services.puestos import ESTADOS_INCIDENCIA_ABIERTA, estado_puestos
@@ -92,7 +91,6 @@ def _pct(parte: float, total: float) -> float | None:
     return round(parte / total * 100, 1) if total > 0 else None
 
 
-@cached_20s("turno")
 def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = None) -> dict:
     ahora = _utc(ahora or datetime.now(UTC))
     # Fuera de la semana de producción (vie 22:00 a dom 22:00) no hay turno en curso: se
@@ -129,7 +127,9 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
             ProductionLog.timestamp,
             ProductionLog.action,
             ProductionLog.quantity,
-            ProductionLog.metadata_,
+            # Del JSON solo se leen estas dos claves (el JSON entero pesaba ~400 B por registro)
+            ProductionLog.metadata_["consumedMaterial"].as_string().label("consumo_tipo"),
+            ProductionLog.metadata_["consumedAmount"].as_string().label("consumo_cantidad"),
         )
         .where(
             ProductionLog.tenant_id == tenant_id,
@@ -153,9 +153,8 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
         piezas += cantidad
         if _minutos(log.timestamp, ahora) <= 60:
             piezas_ultima_hora += cantidad
-        meta = log.metadata_ or {}
-        if meta.get("consumedMaterial") == "kg":
-            kg_consumidos += float(meta.get("consumedAmount") or 0)
+        if log.consumo_tipo == "kg":
+            kg_consumidos += float(log.consumo_cantidad or 0)
         indice = min(int(_minutos(inicio, log.timestamp) // TRAMO_SERIE_MIN), len(tramos) - 1)
         tramos[indice] += cantidad
 
@@ -391,11 +390,11 @@ def resumen_turno(db: Session, tenant_id: uuid.UUID, ahora: datetime | None = No
                         f"Necesita {o['horas_faltan']:g} h de trabajo y quedan "
                         f"{max(o['horas_quedan'], 0):g} h hasta la entrega."
                     ),
-                "minutos": None,
-                "accion": "orden",
-                "ref": o["numero"],
-            }
-        )
+                    "minutos": None,
+                    "accion": "orden",
+                    "ref": o["numero"],
+                }
+            )
     for p in puestos:
         if p["estado"] == "sin_registrar":
             pendientes.append(

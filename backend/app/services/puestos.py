@@ -22,14 +22,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Incidencia, Order, OrderLine, ProductionLog, User, Workstation
-from app.services.cache import cached_20s
 
 ESTADOS_INCIDENCIA_ABIERTA = ("abierta", "en_revision")
 PRIORIDAD_LINEA = {"in_progress": 0, "stopped": 1, "pending": 2}
 ESTADO_PUESTO = {"in_progress": "en_curso", "stopped": "parado", "pending": "pendiente"}
 
 
-@cached_20s("puestos")
 def estado_puestos(db: Session, tenant_id: uuid.UUID) -> list[dict]:
     puestos = {
         w.code: w

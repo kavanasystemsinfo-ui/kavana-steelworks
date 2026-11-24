@@ -89,9 +89,12 @@ def get_puestos(
     ] = None,
 ):
     """Monitor de puestos: orden, bobina, progreso, última actividad, incidencias."""
+    from app.services.cache import cached_call
     from app.services.puestos import estado_puestos
 
-    return estado_puestos(db, current_user.tenant_id)
+    return cached_call(
+        current_user.tenant_id, "puestos", (), lambda: estado_puestos(db, current_user.tenant_id)
+    )
 
 
 @router.get("/puestos/{codigo}/ficha")
@@ -124,9 +127,12 @@ def get_turno(
     ] = None,
 ):
     """Vista Turno del panel: plan, previsión, paradas, puestos, órdenes y pendientes."""
+    from app.services.cache import cached_call
     from app.services.panel_turno import resumen_turno
 
-    return resumen_turno(db, current_user.tenant_id)
+    return cached_call(
+        current_user.tenant_id, "turno", (), lambda: resumen_turno(db, current_user.tenant_id)
+    )
 
 
 @router.get("/planta")
@@ -139,10 +145,16 @@ def get_planta(
     ] = None,
 ):
     """Vista Planta del panel: eficiencia, paradas por causa, puestos y entregas."""
+    from app.services.cache import cached_call
     from app.services.panel_planta import resumen_planta
 
     try:
-        return resumen_planta(db, current_user.tenant_id, periodo)
+        return cached_call(
+            current_user.tenant_id,
+            "planta",
+            (periodo,),
+            lambda: resumen_planta(db, current_user.tenant_id, periodo),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
