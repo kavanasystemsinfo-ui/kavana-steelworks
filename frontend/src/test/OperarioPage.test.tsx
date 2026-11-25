@@ -84,11 +84,10 @@ describe('Panel de Operario (directriz no abrumar)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('los datos de apoyo están colapsados (no abruman al operario)', () => {
+  it('no enseña identificadores internos: orden, cliente y puesto ya están en la cabecera', () => {
     renderPage()
-    const detalles = screen.getByText('Detalles de la orden')
-    expect(detalles).toBeInTheDocument()
-    expect(detalles.closest('summary')).toBeTruthy()
+    expect(screen.queryByText('Detalles de la orden')).not.toBeInTheDocument()
+    expect(screen.queryByText(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)).not.toBeInTheDocument()
   })
 
   it('tras vincular, el fin de bobina pide radio en mm y hay botón Retirar', async () => {

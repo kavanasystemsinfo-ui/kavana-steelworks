@@ -1864,20 +1864,6 @@ export function OperarioPage() {
         </div>
       )}
 
-      {/* Datos de apoyo colapsados: solo si el operario los necesita */}
-      <details className="bg-kavana-surface border border-kavana-border rounded-xl p-4">
-        <summary className="label-industrial text-xs text-kavana-text-dim cursor-pointer">
-          Detalles de la orden
-        </summary>
-        {ordenDetalle && (
-          <div className="mt-2 space-y-1 text-sm text-kavana-text-dim">
-            <p><strong>Orden:</strong> {ficha?.numero ?? ordenNumero ?? '—'}</p>
-            {ficha?.cliente && <p><strong>Cliente:</strong> {ficha.cliente}</p>}
-            <p><strong>Puesto:</strong> {wsSel ?? ordenDetalle.workstation_id ?? '—'}</p>
-          </div>
-        )}
-      </details>
-
       {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}
       <div data-tour-step="op-alertas" className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
