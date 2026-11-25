@@ -1174,7 +1174,7 @@ export function OperarioPage() {
         <form
           onSubmit={handleScan}
           data-tour-step="op-bobina"
-          className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
+          className="bg-p-tarjeta border border-p-borde border-t-4 border-t-kavana-orange rounded-2xl p-6 space-y-4"
         >
           <label className="block">
             <span className="label-industrial text-xs text-kavana-text-dim">
@@ -1269,7 +1269,7 @@ export function OperarioPage() {
             <form
               onSubmit={handleRecordProduction}
               aria-label="Registrar piezas"
-              className="bg-p-tarjeta border border-p-borde rounded-2xl p-6 space-y-4"
+              className="bg-p-tarjeta border border-p-borde border-t-4 border-t-p-ok rounded-2xl p-6 space-y-4"
             >
               <h2 className="text-xl font-bold">Registrar producción</h2>
               <CalculadoraBotones puesto={wsSel ?? ordenDetalle?.workstation_id ?? null} onSumar={sumar} />
@@ -1326,7 +1326,7 @@ export function OperarioPage() {
         {/* Derecha: bobina montada, paradas, autocontrol, incidencias y jornada */}
         <div className="space-y-4">
           {vinculada && (
-            <section aria-label="Bobina montada" className="bg-p-tarjeta border border-p-borde rounded-2xl p-5 space-y-3">
+            <section aria-label="Bobina montada" className="bg-p-tarjeta border border-p-borde border-t-4 border-t-kavana-orange rounded-2xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold">Bobina montada</h2>
                 <span className="flex-1" />
@@ -1416,7 +1416,7 @@ export function OperarioPage() {
           )}
 
           {vinculada && puedeAutocontrol && (
-            <div className="bg-p-tarjeta border border-p-borde rounded-2xl p-5">
+            <div className="bg-p-tarjeta border border-p-borde border-t-4 border-t-p-gris rounded-2xl p-5">
           {/* Autocontrol de calidad (spec 04): no bloquea, solo informa */}
           {puedeAutocontrol && (
             <form
@@ -1607,6 +1607,8 @@ export function OperarioPage() {
         </div>
       )}
 
+      <section aria-label="Avisos y cierre" className="bg-p-tarjeta border border-p-borde border-t-4 border-t-p-mal rounded-2xl p-5 space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-p-etiqueta">Avisos y cierre</p>
       {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
       {ordenDetalle?.workstation_id && (
         <div className="space-y-3">
@@ -1704,6 +1706,7 @@ export function OperarioPage() {
         )}
       </div>
 
+      </section>
         </div>
       </div>
       </>
@@ -1860,20 +1863,6 @@ export function OperarioPage() {
           </div>
         </div>
       )}
-
-      {/* Datos de apoyo colapsados: solo si el operario los necesita */}
-      <details className="bg-kavana-surface border border-kavana-border rounded-xl p-4">
-        <summary className="label-industrial text-xs text-kavana-text-dim cursor-pointer">
-          Detalles de la orden
-        </summary>
-        {ordenDetalle && (
-          <div className="mt-2 space-y-1 text-sm text-kavana-text-dim">
-            <p><strong>Orden:</strong> {ordenDetalle.id}</p>
-            <p><strong>Línea:</strong> {ordenDetalle.line_id || '—'}</p>
-            <p><strong>Puesto:</strong> {ordenDetalle.workstation_id || '—'}</p>
-          </div>
-        )}
-      </details>
 
       {/* Alertas de almacén en tiempo real (ADR-014): WS con fallback REST */}
       <div data-tour-step="op-alertas" className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">

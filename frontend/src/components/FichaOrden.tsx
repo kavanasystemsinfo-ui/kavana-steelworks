@@ -42,7 +42,7 @@ export function FichaOrden({
   const pct = ficha && ficha.total > 0 ? Math.min((ficha.hechas / ficha.total) * 100, 100) : 0
 
   return (
-    <section aria-label="Orden en curso" className="bg-p-tarjeta border border-p-borde rounded-2xl px-6 py-4 space-y-3">
+    <section aria-label="Orden en curso" className="bg-p-tarjeta border border-p-borde border-t-4 border-t-p-plan rounded-2xl px-6 py-4 space-y-3">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h1 className="text-2xl font-extrabold">{ficha?.numero ?? numero ?? 'Sin orden'}</h1>
         {ficha?.cliente && <span className="text-base text-p-texto2">{ficha.cliente}</span>}

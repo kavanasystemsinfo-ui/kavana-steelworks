@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MotivosParada, PantallaParada } from '../components/ParadaMaquina'
@@ -25,6 +25,20 @@ describe('Paradas con un toque', () => {
       puesto: 'LINEA-1', motivo: 'averia', order_id: 'O1', line_id: 'L1',
     })
     expect(onParada).toHaveBeenCalledWith(parada)
+  })
+
+  it('los motivos se agrupan por tipo (el color no es la única pista)', () => {
+    render(<MotivosParada puesto="LINEA-1" onParada={vi.fn()} onError={vi.fn()} />)
+    const grupos: Record<string, string[]> = {
+      Imprevisto: ['Avería'],
+      'Producción': ['Ajustes', 'Cambio de modelo'],
+      Planificada: ['Limpieza', 'Mantenimiento'],
+      'Sin clasificar': ['Otros'],
+    }
+    for (const [grupo, botones] of Object.entries(grupos)) {
+      const g = screen.getByRole('group', { name: grupo })
+      expect(within(g).getAllByRole('button').map((b) => b.textContent)).toEqual(botones)
+    }
   })
 
   it('la pantalla de parada cuenta el tiempo y vuelve a producir con la nota', async () => {
