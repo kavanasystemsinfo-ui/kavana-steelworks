@@ -106,7 +106,7 @@ export function MotivosParada({
     }
   }
   return (
-    <section aria-label="Parar la máquina" className="bg-p-tarjeta border border-p-borde rounded-2xl p-5 space-y-3">
+    <section aria-label="Parar la máquina" className="bg-p-tarjeta border border-p-borde border-t-4 border-t-p-aviso rounded-2xl p-5 space-y-3">
       <h2 className="text-lg font-bold">¿Paras la máquina? Toca el motivo</h2>
       <Motivos onElegir={parar} />
     </section>

@@ -35,7 +35,7 @@ export function BobinasDisponibles({
   const hayNuevas = bobinas.some((b) => b.estado !== 'pico' && !b.en_puesto)
 
   return (
-    <div data-tour-step="op-disponibles" className="bg-kavana-surface border border-kavana-border rounded-xl p-4 space-y-2">
+    <div data-tour-step="op-disponibles" className="bg-kavana-surface border border-kavana-border border-t-4 border-t-kavana-orange rounded-xl p-4 space-y-2">
       <p className="label-industrial text-xs text-kavana-text-dim">
         Bobinas disponibles para esta orden · toca una para vincularla
       </p>
