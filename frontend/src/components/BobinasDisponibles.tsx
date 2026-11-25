@@ -3,6 +3,9 @@ import { api } from '../lib/api'
 
 type Bobina = Awaited<ReturnType<typeof api.bobinasDisponibles>>[number]
 
+/** Cuántas bobinas se enseñan de entrada; el resto, tras «Ver más». */
+const MAX_VISIBLES = 4
+
 /** Bobinas para tocar y vincular sin saberse el código (legacy MaterialScanner):
  *  las del material de la orden y las que ya están en el puesto. Primero lo
  *  que está en la máquina, luego picos y después la más antigua (FIFO). */
@@ -14,6 +17,7 @@ export function BobinasDisponibles({
   onElegir: (bobina: Bobina) => void
 }) {
   const [bobinas, setBobinas] = useState<Bobina[] | null>(null)
+  const [verTodas, setVerTodas] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -33,6 +37,11 @@ export function BobinasDisponibles({
   // Picos primero (D-019): se ven antes que la bobina nueva y se avisa de ello
   const hayPicosLibres = bobinas.some((b) => b.estado === 'pico' && !b.en_puesto)
   const hayNuevas = bobinas.some((b) => b.estado !== 'pico' && !b.en_puesto)
+  // La lista ya llega ordenada (en el puesto, picos y luego la más antigua):
+  // se enseñan las primeras y el resto queda tras un enlace discreto.
+  const visibles = verTodas ? bobinas : bobinas.slice(0, MAX_VISIBLES)
+  const ocultas = bobinas.length - visibles.length
+  const indiceMasAntigua = bobinas.findIndex((b) => !b.en_puesto && b.estado !== 'pico')
 
   return (
     <div data-tour-step="op-disponibles" className="bg-kavana-surface border border-kavana-border border-t-4 border-t-kavana-orange rounded-xl p-4 space-y-2">
@@ -49,7 +58,7 @@ export function BobinasDisponibles({
           No hay bobinas registradas de este material. Regístrala a mano con la etiqueta.
         </p>
       )}
-      {bobinas.map((b, i) => (
+      {visibles.map((b) => (
         <button
           key={b.id}
           type="button"
@@ -62,15 +71,22 @@ export function BobinasDisponibles({
                 : 'border-kavana-border bg-kavana-dark'
           }`}
         >
-          <span className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-black bg-kavana-surface">
-            {b.en_puesto ? '📍' : b.estado === 'pico' ? '⚡' : i + 1}
-          </span>
           <span className="flex-1 min-w-0">
             <span className="block mono-data font-bold truncate">
               {b.coil_id ?? b.lote}
+              {b.en_puesto && (
+                <span className="ml-2 text-[10px] uppercase tracking-wide text-kavana-ok">
+                  En tu puesto
+                </span>
+              )}
               {b.estado === 'pico' && !b.en_puesto && (
                 <span className="ml-2 text-[10px] uppercase tracking-wide text-kavana-warn">
                   Usar primero
+                </span>
+              )}
+              {bobinas.indexOf(b) === indiceMasAntigua && (
+                <span className="ml-2 text-[10px] uppercase tracking-wide text-kavana-text-dim">
+                  Más antigua
                 </span>
               )}
             </span>
@@ -91,6 +107,15 @@ export function BobinasDisponibles({
           </span>
         </button>
       ))}
+      {(ocultas > 0 || (verTodas && bobinas.length > MAX_VISIBLES)) && (
+        <button
+          type="button"
+          onClick={() => setVerTodas((v) => !v)}
+          className="w-full py-1 text-center text-xs text-kavana-text-dim underline-offset-2 hover:underline hover:text-kavana-orange"
+        >
+          {verTodas ? 'Ver menos' : `Ver ${ocultas} más`}
+        </button>
+      )}
     </div>
   )
 }

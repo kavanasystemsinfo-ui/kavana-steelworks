@@ -43,6 +43,48 @@ describe('Bobinas disponibles (sin saberse el código)', () => {
     expect(screen.getByText(/· en ALMACEN/i)).toBeInTheDocument()
   })
 
+  it('enseña solo las 4 primeras y el resto queda tras «Ver más»', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ['A', 'B', 'C', 'D', 'E', 'F'].map((l) => bobina(l)),
+      }),
+    )
+    const user = userEvent.setup()
+    render(<BobinasDisponibles lineId="L1" onElegir={vi.fn()} />)
+
+    expect(await screen.findByText('COIL-A')).toBeInTheDocument()
+    expect(screen.getByText('COIL-D')).toBeInTheDocument()
+    expect(screen.queryByText('COIL-E')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ver 2 más' }))
+    expect(screen.getByText('COIL-F')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ver menos' }))
+    expect(screen.queryByText('COIL-E')).not.toBeInTheDocument()
+  })
+
+  it('con 4 o menos no hay botón y las etiquetas sustituyen a los iconos', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          bobina('PUESTO', { en_puesto: true }),
+          bobina('PICO', { estado: 'pico' }),
+          bobina('VIEJA'),
+          bobina('NUEVA'),
+        ],
+      }),
+    )
+    render(<BobinasDisponibles lineId="L1" onElegir={vi.fn()} />)
+    expect(await screen.findByText('En tu puesto')).toBeInTheDocument()
+    expect(screen.getByText('Usar primero')).toBeInTheDocument()
+    expect(screen.getAllByText('Más antigua')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /ver .* más/i })).not.toBeInTheDocument()
+  })
+
   it('sin bobinas invita a registrarla a mano', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }))
     render(<BobinasDisponibles lineId="L1" onElegir={vi.fn()} />)
