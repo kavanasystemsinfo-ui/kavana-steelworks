@@ -1607,6 +1607,8 @@ export function OperarioPage() {
         </div>
       )}
 
+      <section aria-label="Avisos y cierre" className="space-y-3 border-t border-p-borde pt-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-p-etiqueta">Avisos y cierre</p>
       {/* Reportar incidencia (spec 04 §3.3): modal QR + móvil, siempre accesible */}
       {ordenDetalle?.workstation_id && (
         <div className="space-y-3">
@@ -1704,6 +1706,7 @@ export function OperarioPage() {
         )}
       </div>
 
+      </section>
         </div>
       </div>
       </>

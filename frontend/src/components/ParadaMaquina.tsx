@@ -11,23 +11,72 @@ export const MOTIVOS: { codigo: string; texto: string }[] = [
   { codigo: 'otros', texto: 'Otros' },
 ]
 
+/** Los motivos se agrupan por tipo y cada tipo lleva su color (más una etiqueta
+ *  de texto: el color solo nunca es la única pista). */
+const GRUPOS: {
+  etiqueta: string
+  codigos: string[]
+  columnas: string
+  tinte: string
+  barra: string
+  titulo: string
+}[] = [
+  {
+    etiqueta: 'Imprevisto',
+    codigos: ['averia'],
+    columnas: 'grid-cols-1',
+    tinte: 'border-p-aviso-borde bg-p-aviso-bg hover:border-p-aviso',
+    barra: 'border-l-p-aviso',
+    titulo: 'text-p-aviso',
+  },
+  {
+    etiqueta: 'Producción',
+    codigos: ['ajustes', 'cambio_modelo'],
+    columnas: 'grid-cols-2',
+    tinte: 'border-p-plan-borde bg-p-plan-bg hover:border-p-plan',
+    barra: 'border-l-p-plan',
+    titulo: 'text-p-plan',
+  },
+  {
+    etiqueta: 'Planificada',
+    codigos: ['limpieza', 'mantenimiento'],
+    columnas: 'grid-cols-2',
+    tinte: 'border-p-ok-borde bg-p-ok-bg hover:border-p-ok',
+    barra: 'border-l-p-ok',
+    titulo: 'text-p-ok',
+  },
+  {
+    etiqueta: 'Sin clasificar',
+    codigos: ['otros'],
+    columnas: 'grid-cols-1',
+    tinte: 'border-p-gris-borde bg-p-gris-bg hover:border-p-gris',
+    barra: 'border-l-p-gris',
+    titulo: 'text-p-etiqueta',
+  },
+]
+
 function Motivos({ onElegir, actual }: { onElegir: (codigo: string) => void; actual?: string }) {
   return (
-    <div className="grid grid-cols-3 gap-2.5">
-      {MOTIVOS.map((m) => (
-        <button
-          key={m.codigo}
-          type="button"
-          onClick={() => onElegir(m.codigo)}
-          aria-pressed={actual === m.codigo}
-          className={`min-h-[56px] rounded-xl border px-2 text-base font-semibold transition-colors ${
-            actual === m.codigo
-              ? 'border-p-mal bg-p-mal-bg text-p-mal'
-              : 'border-p-borde bg-p-tarjeta text-p-texto hover:border-p-mal'
-          }`}
-        >
-          {m.texto}
-        </button>
+    <div className="space-y-3">
+      {GRUPOS.map((g) => (
+        <div key={g.etiqueta} role="group" aria-label={g.etiqueta} className="space-y-1.5">
+          <p className={`text-xs font-bold uppercase tracking-wider ${g.titulo}`}>{g.etiqueta}</p>
+          <div className={`grid gap-2.5 ${g.columnas}`}>
+            {MOTIVOS.filter((m) => g.codigos.includes(m.codigo)).map((m) => (
+              <button
+                key={m.codigo}
+                type="button"
+                onClick={() => onElegir(m.codigo)}
+                aria-pressed={actual === m.codigo}
+                className={`min-h-[56px] rounded-xl border border-l-8 px-3 text-base font-semibold text-p-texto transition-colors ${g.tinte} ${g.barra} ${
+                  actual === m.codigo ? 'ring-2 ring-p-texto' : ''
+                }`}
+              >
+                {m.texto}
+              </button>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   )
